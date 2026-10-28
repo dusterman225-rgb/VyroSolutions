@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Tables - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>/* ---- table board (point of sale and host) ---- */
+.tbl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:10px;margin:12px 0}
+.tbl{aspect-ratio:1/1;border-radius:12px;background:rgba(255,255,255,.03);color:inherit;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px;border:1px solid transparent;min-width:0}
+.tbl b{font-size:1.2rem;line-height:1}
+.tbl small{font-size:.6rem;opacity:.9;letter-spacing:.02em;line-height:1.1;text-align:center}
+.tbl.open{border-color:#7fe3b0;box-shadow:0 0 0 2px #7fe3b0,0 0 10px 2px #7fe3b099}
+.tbl.reserved{border-color:#4B9CD3;box-shadow:0 0 0 2px #4B9CD3,0 0 10px 2px #4B9CD399}
+.tbl.occupied{border-color:#ff6b6b;box-shadow:0 0 0 2px #ff6b6b,0 0 10px 2px #ff6b6b99}
+.tbl.dirty{border-color:#ffb25c;box-shadow:0 0 0 2px #ffb25c,0 0 10px 2px #ffb25c99}
+.tbl.ready{animation:tblpulse 1.2s infinite}
+@keyframes tblpulse{50%{filter:brightness(1.6)}}
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:.72rem;opacity:.9;margin:6px 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style>
+<style>.tabs button{background:transparent;color:inherit}.tabs button.on{background:#4B9CD3;border-color:#4B9CD3;color:#05070A;font-weight:700}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Tables and seating</div>
+  </div>
+
+  <div class="strip">
+    <div><small>Open</small><b id="sOpen">-</b></div>
+    <div><small>Occupied</small><b id="sSeat">-</b></div>
+    <div><small>To clean</small><b id="sDirty">-</b></div>
+  </div>
+  <div class="legend"><span><i style="background:#7fe3b0"></i>Open</span><span><i style="background:#4B9CD3"></i>Reserved</span><span><i style="background:#ff6b6b"></i>Occupied</span><span><i style="background:#ffb25c"></i>Needs cleaning</span></div>
+  <div class="tabs" id="flt" style="flex-wrap:wrap">
+    <button type="button" class="on" data-f="all">All</button><button type="button" data-f="Open">Open</button><button type="button" data-f="Reserved">Reserved</button><button type="button" data-f="Seated">Occupied</button><button type="button" data-f="Needs cleaning">Needs cleaning</button>
+  </div>
+  <div class="tbl-grid" id="grid"></div>
+  <div class="note" id="empty"></div>
+  <details class="sec" id="bulkSec" style="display:none">
+    <summary>Set up all my tables</summary>
+    <div class="in">
+      <div class="note" style="text-align:left">Makes tables numbered 1 to however many you have. Tables you already have are left alone.</div>
+      <label class="field"><span>How many tables</span><input id="bulkN" type="number" inputmode="numeric" min="1" max="60" placeholder="30"></label>
+      <label class="field"><span>Seats at each (you can change single tables later)</span><input id="bulkSeats" type="number" inputmode="numeric" min="1" max="50" value="4"></label>
+      <button class="btn" id="bulk" type="button">Create tables</button>
+      <div class="note" id="bulkMsg"></div>
+    </div>
+  </details>
+  <details class="sec" id="addSec" style="display:none">
+    <summary>Add or change one table</summary>
+    <div class="in">
+      <label class="field"><span>Table name</span><input id="name" maxlength="20" placeholder="e.g. T4 or Patio 2"></label>
+      <label class="field"><span>Seats</span><input id="seats" type="number" inputmode="numeric" min="1" max="50"></label>
+      <label class="field"><span>Section (optional)</span><input id="section" maxlength="30" placeholder="e.g. Patio"></label>
+      <button class="btn" id="save" type="button">Save table</button>
+      <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <a class="btn ghost" href="reservations.html">Reservations</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var R = vroles, role = ctx.role;
+    if (!(R.isStaff(ctx) || role === 'host' || role === 'server')) { deny('Tables are for hosts, servers and managers.'); return; }
+    var layout = role !== 'host' && role !== 'server' && R.can(ctx, 'reservations'), col = ctx.bizRef.collection('tables'), rows = [], editing = null;
+    if (layout) { $('addSec').style.display = 'block'; $('bulkSec').style.display = 'block'; }
+    var flt = 'all';
+    Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (b) { b.addEventListener('click', function () { flt = b.getAttribute('data-f'); Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (x) { x.classList.toggle('on', x === b); }); draw(); }); });
+    var CLS = { 'Open': 'open', 'Reserved': 'reserved', 'Seated': 'occupied', 'Needs cleaning': 'dirty' };
+    function natural(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }); }
+    function mins(t) { return t.seatedAt ? Math.max(0, Math.round((Date.now() - t.seatedAt) / 60000)) : 0; }
+    col.onSnapshot(function (s) {
+      rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      rows.sort(function (a, b) { return natural((a.section || '') + '|' + (a.name || ''), (b.section || '') + '|' + (b.name || '')); });
+      draw();
+    }, function (e) { $('err').textContent = vyro.friendly(e); });
+    setInterval(function () { if (rows.length) draw(); }, 60000);
+    function draw() {
+      var g = $('grid'); g.textContent = ''; var o = 0, se = 0, d2 = 0;
+      rows.forEach(function (t) {
+        var st = t.status || 'Open'; if (st === 'Open') o++; if (st === 'Seated') se++; if (st === 'Needs cleaning') d2++;
+        if (flt !== 'all' && st !== flt) return;
+        var c = vyro.el('button', 'tbl ' + (CLS[st] || 'open')); c.type = 'button'; c.setAttribute('aria-label', 'Table ' + t.name + ', ' + (st === 'Seated' ? 'occupied' : st.toLowerCase()));
+        c.appendChild(vyro.el('b', '', t.name)); c.appendChild(vyro.el('small', '', st === 'Seated' ? mins(t) + ' min' : (st === 'Reserved' && t.party ? t.party : ((t.seats || '?') + ' seats'))));
+        c.addEventListener('click', function () { sheet(t); }); g.appendChild(c);
+      });
+      $('sOpen').textContent = o; $('sSeat').textContent = se; $('sDirty').textContent = d2; $('empty').textContent = rows.length ? '' : 'No tables yet.' + (layout ? ' Use "Set up all my tables" below.' : ' A manager adds them.');
+    }
+    async function setStatus(t, st, party) {
+      var d = { status: st, updatedAt: vyro.stamp() };
+      if (role !== 'server') { d.party = party || ''; d.seatedAt = st === 'Seated' ? Date.now() : 0; }
+      try { await col.doc(t.id).update(d); $('bg').classList.remove('open'); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    }
+    function sheet(t) {
+      var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', 'Table ' + t.name + ' \u00b7 ' + (t.status === 'Seated' ? 'Occupied' : (t.status || 'Open')) + (t.party ? ' \u00b7 ' + t.party : '')));
+      function btn(txt, fn, ghost) { var x = vyro.el('button', ghost ? 'btn ghost' : 'btn', txt); x.type = 'button'; x.addEventListener('click', fn); b.appendChild(x); }
+      if (role !== 'server') {
+        var nm = document.createElement('input'); nm.placeholder = 'Party name and size, e.g. Lee, 4'; nm.maxLength = 40; nm.value = t.party || ''; nm.style.width = '100%'; b.appendChild(nm);
+        btn('Seat guests here (occupied)', function () { setStatus(t, 'Seated', nm.value.trim()); });
+        btn('Hold for a reservation', function () { setStatus(t, 'Reserved', nm.value.trim()); }, true);
+      } else btn('Seat guests here (occupied)', function () { setStatus(t, 'Seated'); });
+      btn('Needs cleaning', function () { setStatus(t, 'Needs cleaning', ''); }, true);
+      btn('Clean and open', function () { setStatus(t, 'Open', ''); }, true);
+      if (layout) { btn('Edit this table', function () { $('bg').classList.remove('open'); edit(t); }, true); btn('Delete this table', async function () { if (!confirm('Delete ' + t.name + '?')) return; try { await col.doc(t.id).delete(); $('bg').classList.remove('open'); } catch (e) { $('err').textContent = vyro.friendly(e); } }, true); }
+      btn('Close', function () { $('bg').classList.remove('open'); }, true); $('bg').classList.add('open');
+    }
+    $('bg').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+    function edit(t) { editing = t ? t.id : null; t = t || {}; $('name').value = t.name || ''; $('seats').value = t.seats || ''; $('section').value = t.section || ''; $('cancel').style.display = editing ? 'block' : 'none'; $('addSec').open = true; $('addSec').scrollIntoView(); }
+    $('bulk').addEventListener('click', async function () {
+      var n = parseInt($('bulkN').value, 10), seats = parseInt($('bulkSeats').value, 10) || 4;
+      if (!(n >= 1 && n <= 60)) { $('bulkMsg').textContent = 'Enter a number of tables from 1 to 60.'; $('bulkMsg').className = 'note err'; return; }
+      var have = {}; rows.forEach(function (r) { have[String(r.name)] = 1; });
+      var batch = vyro.db.batch(), made = 0;
+      for (var i = 1; i <= n; i++) { if (have[String(i)]) continue; batch.set(col.doc(), { name: String(i), seats: seats, section: '', status: 'Open', party: '', seatedAt: 0, createdAt: vyro.stamp(), updatedAt: vyro.stamp() }); made++; }
+      if (!made) { $('bulkMsg').textContent = 'Those tables already exist.'; $('bulkMsg').className = 'note'; return; }
+      try { await batch.commit(); $('bulkMsg').textContent = 'Created ' + made + ' tables.'; $('bulkMsg').className = 'note ok'; } catch (e) { $('bulkMsg').textContent = vyro.friendly(e); $('bulkMsg').className = 'note err'; }
+    });
+    $('cancel').addEventListener('click', function () { edit(null); });
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(), s = parseInt($('seats').value, 10);
+      if (!n || !(s >= 1 && s <= 50)) { $('msg').textContent = 'Enter a name and the number of seats (1 to 50).'; $('msg').className = 'note err'; return; }
+      var d = { name: n, seats: s, section: $('section').value.trim(), updatedAt: vyro.stamp() };
+      try { if (editing) await col.doc(editing).set(d, { merge: true }); else { d.status = 'Open'; d.party = ''; d.seatedAt = 0; d.createdAt = vyro.stamp(); await col.add(d); } $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; edit(null); }
+      catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+  });
+</script>
+</body>
+</html>

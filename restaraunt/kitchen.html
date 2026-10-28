@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Kitchen screen - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Kitchen screen</div>
+  </div>
+
+  
+  <div class="note" style="margin-top:6px"><button class="btn ghost" id="sound" type="button" style="margin:0">Turn sound on</button></div>
+  <div class="tabs" id="cols"></div>
+  <div id="tickets"></div>
+  <div class="note" id="empty"></div>
+  <div class="note">For the cooks: new orders appear here by themselves. Tap an order to move it from New to Preparing to Ready. Keep this page open on the kitchen tablet or phone.</div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="ingBg"><div class="modal" id="ingBox"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var col = ctx.bizRef.collection('orders'), rows = [], tab = 'New', soundOn = false, known = null, audio = null, menuIng = {};
+    var STEPS = { New: 'Preparing', Preparing: 'Ready', Ready: 'Served' }, LABEL = { New: 'Start', Preparing: 'Mark ready', Ready: 'Served' };
+    try { var ms = await vcache.get(ctx, 'menu'); ms.forEach(function (d) { menuIng[d.id] = d.data().ingredients || []; }); } catch (e) {}
+    $('sound').addEventListener('click', function () {
+      soundOn = !soundOn; this.textContent = soundOn ? 'Sound on (tap to turn off)' : 'Turn sound on';
+      if (soundOn) { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); beep(); } catch (e) { soundOn = false; this.textContent = 'Sound is not available here'; } }
+    });
+    function beep() { if (!soundOn || !audio) return; var o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audio.destination); o.start(); setTimeout(function () { o.stop(); }, 250); }
+    function kstat(o) { return o.kitchenStatus || 'New'; }
+    function mins(o) { var t = o.createdAt && o.createdAt.toMillis ? o.createdAt.toMillis() : Date.now(); return Math.max(0, Math.round((Date.now() - t) / 60000)); }
+    function draw() {
+      var live = rows.filter(function (o) { return o.status !== 'Voided' && kstat(o) !== 'Served' && kstat(o) !== 'Hold'; });
+      var tabs = $('cols'); tabs.textContent = '';
+      ['New', 'Preparing', 'Ready'].forEach(function (k) {
+        var n = live.filter(function (o) { return kstat(o) === k; }).length, b = vyro.el('button', k === tab ? 'tab on' : 'tab', k + ' (' + n + ')'); b.type = 'button';
+        b.addEventListener('click', function () { tab = k; draw(); }); tabs.appendChild(b);
+      });
+      var box = $('tickets'); box.textContent = '';
+      var mine = live.filter(function (o) { return kstat(o) === tab; }); mine.sort(function (a, b) { return (a.number || '') < (b.number || '') ? -1 : 1; });
+      $('empty').textContent = mine.length ? '' : 'Nothing in ' + tab + '.';
+      mine.forEach(function (o) {
+        var card = vyro.el('div', 'card'); card.style.marginTop = '10px';
+        var top = vyro.el('div', 'row'); var big = vyro.el('b', '', o.tableName ? 'TABLE ' + o.tableName : (o.number || '') + (o.label ? ' \u00b7 ' + o.label : '')); if (o.tableName) big.style.fontSize = '1.5rem'; top.appendChild(big); top.appendChild(vyro.el('span', mins(o) > 15 ? 'late' : '', mins(o) + ' min')); card.appendChild(top);
+        (o.items || []).forEach(function (i) { var r = vyro.el('div', 'item'); r.appendChild(vyro.el('b', '', i.qty + ' x')); var nm = vyro.el('div', 'grow', i.name); if (i.modText) { var mm = vyro.el('div', '', i.modText); mm.style.cssText = 'color:#ffb25c;font-weight:700;font-size:.85rem'; nm.appendChild(mm); } r.appendChild(nm); if ((o.lastRound || 1) > 1 && i.round === o.lastRound) r.appendChild(vyro.el('span', 'pill New', 'NEW')); else if ((o.lastRound || 1) > 1) r.appendChild(vyro.el('small', '', 'sent before')); card.appendChild(r); });
+        if (o.status === 'Open') card.appendChild(vyro.el('small', '', 'Not paid yet'));
+        var viewOnly = ctx.role === 'server' && tab !== 'Ready';
+        var go = vyro.el('button', 'btn', LABEL[tab]); go.type = 'button';
+        go.addEventListener('click', async function () { go.disabled = true; try { await col.doc(o.id).update({ kitchenStatus: STEPS[tab], updatedAt: vyro.stamp() }); } catch (e) { $('err').textContent = vyro.friendly(e); go.disabled = false; } });
+        if (viewOnly) card.appendChild(vyro.el('small', '', 'View only. The kitchen moves this one.')); else card.appendChild(go);
+        var ing = vyro.el('button', 'btn ghost', 'Ingredients'); ing.type = 'button';
+        ing.addEventListener('click', function () {
+          var b = $('ingBox'); b.textContent = ''; b.appendChild(vyro.el('h2', '', 'Ingredients'));
+          (o.items || []).forEach(function (i) { b.appendChild(vyro.el('b', '', i.qty + ' x ' + i.name)); var l = menuIng[i.menuId] || []; if (l.length) { var ul = document.createElement('ul'); l.forEach(function (x) { ul.appendChild(vyro.el('li', '', x)); }); b.appendChild(ul); } else b.appendChild(vyro.el('div', 'note', 'No recipe saved for this item.')); });
+          var c = vyro.el('button', 'btn', 'Close'); c.type = 'button'; c.addEventListener('click', function () { $('ingBg').classList.remove('open'); }); b.appendChild(c); $('ingBg').classList.add('open');
+        });
+        card.appendChild(ing); box.appendChild(card);
+      });
+    }
+    $('ingBg').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+    col.where('dateKey', '==', vutil.todayStr()).onSnapshot(function (s) {
+      rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      var ids = {}; rows.forEach(function (o) { ids[o.id + ':' + kstat(o)] = 1; });
+      if (known) { var fresh = Object.keys(ids).some(function (k) { return !known[k] && /:New$/.test(k); }); if (fresh) beep(); }
+      known = ids; draw();
+    }, function (e) { $('err').textContent = vyro.friendly(e); });
+    setInterval(draw, 30000);
+  });
+</script>
+</body>
+</html>

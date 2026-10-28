@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Colours - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Brand colours</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <div class="note" style="text-align:left">Pick your restaurant's colours. Every restaurant page changes to match. Try them out first. Nothing is saved until you tap Save.</div>
+    <div class="tabs" id="presets" style="flex-wrap:wrap"></div>
+    <label class="field"><span>Accent colour (buttons, highlights)</span><input id="accent" type="color"></label>
+    <label class="field"><span>Background colour</span><input id="bg" type="color"></label>
+    <label class="field"><span>Text colour</span><input id="text" type="color"></label>
+    <div class="note err" id="warn"></div>
+    <button class="btn" id="save" type="button">Save colours</button>
+    <button class="btn ghost" id="reset" type="button">Back to Vyro colours</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="card">
+    <h2>Preview</h2>
+    <div class="item"><div class="grow"><b>Margherita pizza</b><small>Mains &middot; $12.00</small></div><b>$12.00</b></div>
+    <div class="strip"><div><small>Open</small><b>3</b></div><div><small>Orders</small><b>24</b></div><div><small>Sales</small><b>$812</b></div></div>
+    <a class="btn" href="#" onclick="return false">Example button</a>
+    <a class="btn ghost" href="#" onclick="return false">Example ghost button</a>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.can(ctx, 'colors')) { deny('You do not have permission to change colours.'); return; }
+    var ref = ctx.bizRef.collection('settings').doc('theme');
+    var cur = { accent: '#4B9CD3', bg: '#05070A', text: '#E6EBF0' };
+    try { var s = await ref.get(); if (s.exists) { var d = s.data(); cur = { accent: d.accent, bg: d.bg, text: d.text }; } } catch (e) {}
+    function set(t) { $('accent').value = t.accent; $('bg').value = t.bg; $('text').value = t.text; preview(); }
+    function read() { return { accent: $('accent').value, bg: $('bg').value, text: $('text').value }; }
+    function preview() { var t = read(); vtheme.apply(t); var w = vtheme.check(t); $('warn').textContent = w.join(' '); $('save').disabled = w.length > 0; }
+    var box = $('presets');
+    Object.keys(vtheme.PRESETS).forEach(function (n) { var b = vyro.el('button', 'tab', n); b.type = 'button'; b.addEventListener('click', function () { set(vtheme.PRESETS[n]); }); box.appendChild(b); });
+    ['accent', 'bg', 'text'].forEach(function (id) { $(id).addEventListener('input', preview); });
+    set(cur);
+    $('save').addEventListener('click', async function () {
+      var t = read(); if (vtheme.check(t).length) return;
+      try { await ref.set({ accent: t.accent, bg: t.bg, text: t.text, updatedAt: vyro.stamp() }); vtheme.remember(t); $('msg').textContent = 'Saved. Your team will see the new colours the next time they open a page.'; $('msg').className = 'note ok'; }
+      catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    $('reset').addEventListener('click', async function () {
+      if (!confirm('Go back to the standard Vyro colours?')) return;
+      try { await ref.delete(); vtheme.remember(null); location.reload(); } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+  });
+</script>
+</body>
+</html>

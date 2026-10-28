@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Team - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Team and permissions</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <details class="sec" id="addSec" open>
+    <summary id="formTitle">Add a team member</summary>
+    <div class="in">
+      <label class="field"><span>Name</span><input id="name" maxlength="80"></label>
+      <label class="field"><span>Email (they get a link to set their password)</span><input id="email" type="email" maxlength="120"></label>
+      <label class="field"><span>Role</span><select id="role"></select></label>
+      <div id="roleNote" class="note" style="text-align:left"></div>
+      <label class="field"><span>Job title (change it for a promotion or a new job)</span><input id="title" maxlength="40" placeholder="e.g. Lead server, Shift manager"></label>
+      <div id="supBox" style="display:none">
+        <div class="tabs" id="presets" style="flex-wrap:wrap"></div>
+        <div id="perms"></div>
+      </div>
+      <button class="btn" id="save" type="button">Add</button>
+      <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var R = vroles, owner = R.isOwnerLevel(ctx), trueOwner = ctx.role === 'owner';
+    if (!R.can(ctx, 'team')) { deny('Only the owner, or a supervisor allowed to manage the team, can use this page.'); return; }
+    var col = ctx.bizRef.collection('members'), rows = [], editing = null, perms = {};
+    var NOTES = {
+      cook: 'Cooks see the kitchen screen, ingredient supply and recipe ingredients.',
+      server: 'Servers use the point of sale and orders, see tables and reservations, and get an alert when their order is ready.',
+      host: 'Hosts manage tables and reservations.',
+      employee: 'A general team member can use the point of sale, kitchen and orders.',
+      kiosk: 'A kiosk login is for the customer ordering tablet. It can only show the menu and place orders that wait for the cashier.',
+      gm: 'A general manager has the same powers as the owner, for this one restaurant only. They cannot see your other locations or remove you.',
+      supervisor: 'Supervisors can do everything the roles above can. Choose what else they may do.'
+    };
+    var sel = $('role'); [['cook', 'Cook'], ['server', 'Server'], ['host', 'Host'], ['employee', 'Team member'], ['kiosk', 'Customer kiosk']].concat(owner ? [['supervisor', 'Supervisor']] : []).concat(trueOwner ? [['gm', 'General manager']] : []).forEach(function (r) { var o = document.createElement('option'); o.value = r[0]; o.textContent = r[1]; sel.appendChild(o); });
+    function drawPerms() {
+      var box = $('perms'); box.textContent = '';
+      R.PERMS.forEach(function (p) {
+        var l = document.createElement('label'); l.style.cssText = 'display:flex;gap:10px;align-items:center;margin:8px 0';
+        var c = document.createElement('input'); c.type = 'checkbox'; c.style.width = 'auto'; c.checked = perms[p[0]] !== false; c.addEventListener('change', function () { perms[p[0]] = c.checked; });
+        l.appendChild(c); l.appendChild(document.createTextNode(p[1])); box.appendChild(l);
+      });
+    }
+    function setPerms(p) { perms = {}; R.PERMS.forEach(function (x) { perms[x[0]] = p[x[0]] !== false; }); drawPerms(); }
+    var pb = $('presets'); Object.keys(R.PRESETS).forEach(function (n) { var b = vyro.el('button', 'tab', n); b.type = 'button'; b.addEventListener('click', function () { $('title').value = n; setPerms(R.PRESETS[n]); }); pb.appendChild(b); });
+    function roleChange() { var r = sel.value; $('roleNote').textContent = NOTES[r] || ''; $('supBox').style.display = r === 'supervisor' ? 'block' : 'none'; }
+    sel.addEventListener('change', roleChange); setPerms(R.PRESETS['Manager']); roleChange();
+    function reset() { editing = null; $('name').value = ''; $('email').value = ''; $('email').disabled = false; $('title').value = ''; sel.value = 'cook'; setPerms(R.PRESETS['Manager']); roleChange(); $('save').textContent = 'Add'; $('formTitle').textContent = 'Add a team member'; $('cancel').style.display = 'none'; }
+    $('cancel').addEventListener('click', reset);
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      var order = { owner: 0, supervisor: 1 }; rows.sort(function (a, b) { var x = (order[a.role] != null ? order[a.role] : 2) - (order[b.role] != null ? order[b.role] : 2); return x || ((a.name || '') < (b.name || '') ? -1 : 1); });
+      var box = $('list'); box.textContent = '';
+      rows.forEach(function (m) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', vyro.nameOf(m) + (m.id === ctx.user.uid ? ' (you)' : '')));
+        left.appendChild(vyro.el('small', '', R.label(m.role) + (m.title ? ' \u00b7 ' + m.title : '') + ' \u00b7 ' + (m.email || '')));
+        row.appendChild(left);
+        var canTouch = m.role !== 'owner' && m.id !== ctx.user.uid && (trueOwner || (m.role !== 'gm' && (owner || m.role !== 'supervisor')));
+        if (canTouch) { var e = vyro.el('button', 'btn ghost', 'Edit / change title'); e.type = 'button'; e.style.marginTop = '0'; e.addEventListener('click', function () { startEdit(m); }); row.appendChild(e); }
+        if (canTouch) { var x = vyro.el('button', 'btn ghost', 'Remove'); x.type = 'button'; x.style.marginTop = '0';
+          x.addEventListener('click', async function () { if (!confirm('Remove ' + vyro.nameOf(m) + '? They will no longer be able to open the restaurant.')) return; try { await col.doc(m.id).delete(); vcache.bump(ctx, 'members'); vyro.audit(ctx, 'member removed', m.email); load(); } catch (er) { $('err').textContent = vyro.friendly(er); } });
+          row.appendChild(x); }
+        box.appendChild(row);
+      });
+    }
+    function startEdit(m) {
+      editing = m.id; $('name').value = m.name || ''; $('email').value = m.email || ''; $('email').disabled = true; sel.value = m.role; $('title').value = m.title || '';
+      setPerms(m.perms || (m.role === 'supervisor' ? R.PRESETS['General manager'] : {})); roleChange();
+      $('save').textContent = 'Save changes'; $('formTitle').textContent = 'Edit ' + vyro.nameOf(m); $('cancel').style.display = 'block'; $('addSec').open = true; $('addSec').scrollIntoView();
+    }
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(), em = $('email').value.trim().toLowerCase(), role = sel.value, btn = this;
+      if (!n || (!editing && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))) { $('msg').textContent = 'Enter a name and a valid email.'; $('msg').className = 'note err'; return; }
+      var extra = { title: $('title').value.trim().slice(0, 40) }; if (role === 'supervisor') { extra.perms = {}; R.PERMS.forEach(function (p) { extra.perms[p[0]] = perms[p[0]] !== false; }); }
+      btn.disabled = true; $('msg').textContent = 'Saving...'; $('msg').className = 'note';
+      try {
+        if (editing) {
+          var upd = { name: n, role: role, title: extra.title }; if (owner) upd.perms = role === 'supervisor' ? extra.perms : {};
+          await col.doc(editing).update(upd); vcache.bump(ctx, 'members'); vyro.audit(ctx, 'member changed', em + ' ' + role); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok';
+        } else {
+          var r = await vyro.addMember(ctx.bizId, em, n, role, extra); vcache.bump(ctx, 'members'); vyro.audit(ctx, 'member added', em + ' ' + role);
+          $('msg').textContent = r.invited ? 'That email already has a Vyro login. They were sent an invitation: when they sign in, they will see it on their home screen and can accept it. They keep their other job.' : r.emailSent ? 'Added. They were emailed a link to set their password.' : 'Added, but the email could not be sent. Ask them to use "Forgot password" on the sign-in page.'; $('msg').className = 'note ok';
+        }
+        reset(); load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      btn.disabled = false;
+    });
+    load();
+  });
+</script>
+</body>
+</html>

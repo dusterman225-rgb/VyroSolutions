@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>All locations - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">All locations</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>Period</span><select id="per"><option value="0">Today</option><option value="6">Last 7 days</option><option value="29">Last 30 days</option></select></label>
+    <div class="strip"><div><small>Sales</small><b id="tS">-</b></div><div><small>Orders</small><b id="tO">-</b></div><div><small>Open now</small><b id="tP">-</b></div></div>
+  </div>
+  <div class="card"><h2>By location</h2><div id="rows"></div><div class="note" id="e"></div></div>
+  <div class="note" style="font-size:.78rem;text-align:left">Sales count paid orders only. Cancelled orders are left out. Tips are not included.</div>
+  <a class="back" href="locations.html">Locations</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role !== 'owner') { $('err').textContent = 'Only the owner can see all locations together.'; return; }
+    var locs = (await vyro.myWorkplaces(ctx)).filter(function (w) { return w.role === 'owner' && w.product === 'restaurant'; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    function dkey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    async function load() {
+      var d = new Date(); d.setDate(d.getDate() - parseInt($('per').value, 10)); var from = dkey(d);
+      var box = $('rows'); box.textContent = 'Loading...'; var tS = 0, tO = 0, tP = 0, out = [];
+      await Promise.all(locs.map(async function (w) {
+        var r = { w: w, sales: 0, n: 0, open: 0, voids: 0, err: '' };
+        try {
+          var s = await db.collection('businesses').doc(w.id).collection('orders').where('dateKey', '>=', from).get();
+          s.forEach(function (z) { var o = z.data(); if (o.status === 'Voided') { r.voids++; return; } r.n++; if (o.status === 'Paid') r.sales += o.totalCents || 0; if (o.status === 'Open') r.open++; });
+        } catch (e) { r.err = 'Could not load'; }
+        out.push(r);
+      }));
+      out.sort(function (a, b) { return b.sales - a.sales; }); box.textContent = '';
+      out.forEach(function (r) {
+        tS += r.sales; tO += r.n; tP += r.open;
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', r.w.name));
+        left.appendChild(vyro.el('small', '', r.err || (r.n + ' orders \u00b7 ' + r.open + ' open' + (r.voids ? ' \u00b7 ' + r.voids + ' voided' : '') + (r.n ? ' \u00b7 avg ' + vutil.fmt(Math.round(r.sales / Math.max(1, r.n))) : '')))); row.appendChild(left);
+        row.appendChild(vyro.el('b', '', vutil.fmt(r.sales)));
+        var b = vyro.el('button', 'btn ghost', 'Open'); b.type = 'button'; b.style.marginTop = '0'; b.addEventListener('click', async function () { b.disabled = true; try { await vyro.switchWorkplace(r.w.id, ctx.bizId); location.href = 'index.html'; } catch (e) { b.disabled = false; } }); row.appendChild(b);
+        box.appendChild(row);
+      });
+      $('tS').textContent = vutil.fmt(tS); $('tO').textContent = tO; $('tP').textContent = tP; $('e').textContent = locs.length ? '' : 'No locations found.';
+    }
+    var db = vyro.db; $('per').addEventListener('change', load); load();
+  });
+</script>
+</body>
+</html>

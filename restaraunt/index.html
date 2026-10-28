@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Home - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>/* ---- table board (point of sale and host) ---- */
+.tbl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:10px;margin:12px 0}
+.tbl{aspect-ratio:1/1;border-radius:12px;background:rgba(255,255,255,.03);color:inherit;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px;border:1px solid transparent;min-width:0}
+.tbl b{font-size:1.2rem;line-height:1}
+.tbl small{font-size:.6rem;opacity:.9;letter-spacing:.02em;line-height:1.1;text-align:center}
+.tbl.open{border-color:#7fe3b0;box-shadow:0 0 0 2px #7fe3b0,0 0 10px 2px #7fe3b099}
+.tbl.reserved{border-color:#4B9CD3;box-shadow:0 0 0 2px #4B9CD3,0 0 10px 2px #4B9CD399}
+.tbl.occupied{border-color:#ff6b6b;box-shadow:0 0 0 2px #ff6b6b,0 0 10px 2px #ff6b6b99}
+.tbl.dirty{border-color:#ffb25c;box-shadow:0 0 0 2px #ffb25c,0 0 10px 2px #ffb25c99}
+.tbl.ready{animation:tblpulse 1.2s infinite}
+@keyframes tblpulse{50%{filter:brightness(1.6)}}
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:.72rem;opacity:.9;margin:6px 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.big a{display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:92px;padding:14px;border-radius:16px;text-decoration:none;background:var(--blue,#4B9CD3);color:#05070A}
+.big a b{font-size:1.1rem}.big a small{opacity:.8;font-size:.78rem;line-height:1.25}
+.big.odd a:first-child{grid-column:1/-1}
+.chk a{display:flex;gap:10px;align-items:flex-start;padding:10px 2px;border-bottom:1px solid var(--line,rgba(201,209,217,.14));text-decoration:none;color:inherit}
+.chk i{font-style:normal;width:24px;height:24px;border-radius:50%;border:2px solid #8B96A3;display:flex;align-items:center;justify-content:center;flex:none;font-size:.8rem}
+.chk .done i{background:#7fe3b0;border-color:#7fe3b0;color:#05070A}.chk .done span{opacity:.6;text-decoration:line-through}
+.chk small{display:block;opacity:.75}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Restaurant</div>
+  </div>
+
+  <div class="strip" id="strip">
+    <div><small>Unpaid orders</small><b id="sOpen">-</b></div>
+    <div><small>Orders today</small><b id="sCount">-</b></div>
+    <div><small id="s3l">Sales today</small><b id="sSales">-</b></div>
+  </div>
+  <a class="note" id="notifStrip" href="notifications.html" style="display:none;font-weight:700;color:#ffb25c"></a>
+  <div class="note" id="who"></div>
+  <div class="note err" id="qBanner" style="display:none"></div>
+  <div id="wpBox"></div>
+  <div class="card" id="setup" style="display:none"><h2 style="margin:0 0 4px">Get set up</h2><div class="note" id="setupSub"></div><div class="chk" id="chk"></div></div>
+  <div class="big" id="big"></div>
+  <div class="qa" id="tiles" style="display:none"></div>
+  <details class="sec" id="boardBox" style="display:none"><summary>Display tables <small id="tblSum"></small></summary>
+    <div class="legend"><span><i style="background:#7fe3b0"></i>Open</span><span><i style="background:#4B9CD3"></i>Reserved</span><span><i style="background:#ff6b6b"></i>Occupied</span><span><i style="background:#ffb25c"></i>Needs cleaning</span></div>
+    <div class="tbl-grid" id="tgrid"></div>
+  </details>
+  <h2 style="margin:18px 0 0">Everything else</h2>
+  <div id="all"></div>
+  <div class="card">
+    <button class="btn ghost" id="out" type="button">Sign out</button>
+  </div>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/notify.js"></script>
+<script src="js/offline.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = 'login.html'; });
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var R = vroles, role = ctx.role, staff = R.isStaff(ctx);
+    document.querySelector('.tag').textContent = ctx.biz.name || 'Restaurant';
+    $('who').textContent = (vyro.who(ctx)) + ' \u00b7 ' + ((ctx.me && ctx.me.title) || R.label(role));
+    if (role === 'kiosk') {
+      ['strip', 'who', 'setup', 'tiles', 'boardBox', 'wpBox', 'all'].forEach(function (id) { if ($(id)) $(id).style.display = 'none'; });
+      var h2 = document.querySelector('h2[style*="18px"]'); if (h2) h2.style.display = 'none';
+      $('who').style.display = 'block'; $('who').textContent = 'Customer screens';
+      vnav.items(ctx).forEach(function (x) { var a = vyro.el('a'); a.href = x.href; a.appendChild(vyro.el('b', '', x.label)); a.appendChild(vyro.el('small', '', x.desc)); $('big').appendChild(a); });
+      return;
+    }
+    try { if (window.vqueue && vqueue.count(ctx)) await vqueue.flush(ctx); } catch (e) {}
+    document.addEventListener('vyro-notif', function (e) { var n = e.detail.n; $('notifStrip').style.display = n ? 'block' : 'none'; $('notifStrip').textContent = n + (n === 1 ? ' new notification' : ' new notifications') + ' - tap to read'; });
+    if (window.vnav && vnav.unread) document.dispatchEvent(new CustomEvent('vyro-notif', { detail: { n: vnav.unread } }));
+    // at work: clock in, or carry on without clocking in
+    if (role !== 'owner' && role !== 'gm') {
+      var askKey = 'vyroAsked:' + ctx.bizId + ':' + ctx.user.uid, asked = false; try { asked = sessionStorage.getItem(askKey) === '1'; } catch (e) {}
+      if (!asked) {
+        try { sessionStorage.setItem(askKey, '1'); } catch (e) {}
+        vnav.clockGet(ctx).then(function (c) {
+          if (c) return;
+          var bg = vyro.el('div', 'modal-bg open'), bx = vyro.el('div', 'modal'); bg.appendChild(bx);
+          bx.appendChild(vyro.el('h2', '', 'Starting your shift?')); bx.appendChild(vyro.el('div', 'note', 'Clock in now, or go on without clocking in.'));
+          var yes = vyro.el('button', 'btn', 'Clock in'), no = vyro.el('button', 'btn ghost', 'Continue without clocking in'), m = vyro.el('div', 'note err');
+          yes.type = no.type = 'button';
+          yes.addEventListener('click', async function () { yes.disabled = true; try { await vnav.clockIn(ctx); bg.remove(); } catch (e) { m.textContent = vyro.friendly(e); yes.disabled = false; } });
+          no.addEventListener('click', function () { bg.remove(); });
+          bg.style.zIndex = 1000; bx.appendChild(yes); bx.appendChild(no); bx.appendChild(m); document.body.appendChild(bg);
+        });
+      }
+    }
+
+    var isCook = role === 'cook', isServer = role === 'server', isHost = role === 'host';
+    var svc = ctx.biz.service || 'restaurant', tables = svc !== 'quick';
+    var list = vnav.items(ctx);
+    // the few big buttons for this role
+    var big = $('big'); var pri = vnav.primary(ctx, list);
+    if (pri.length % 2 === 1) big.classList.add('odd');
+    pri.forEach(function (x) { var a = vyro.el('a'); a.href = x.href; a.appendChild(vyro.el('b', '', x.label)); a.appendChild(vyro.el('small', '', x.desc)); big.appendChild(a); });
+    // everything else, folded into groups with a search box
+    vnav.renderAll($('all'), ctx);
+    // first-time setup checklist (owner and general manager only)
+    if (R.isOwnerLevel(ctx)) {
+      var key = 'vsetup_' + ctx.bizRef.id, skip = false; try { skip = localStorage.getItem(key) === '1'; } catch (e) {}
+      if (!skip) {
+        (async function () {
+          var one = async function (c) { try { var s = await ctx.bizRef.collection(c).limit(2).get(); return s.size; } catch (e) { return 0; } };
+          var tax = false; try { var sd = await ctx.bizRef.collection('settings').doc('pos').get(); tax = !!(sd.exists && sd.data().taxPct != null); } catch (e) {}
+          var steps = [
+            [!!ctx.biz.service, 'Choose how you serve customers', 'Restaurant, fast food, or both.', 'service.html'],
+            [(await one('menu')) > 0, 'Add your menu', 'Add at least one item with a price.', 'menu.html']
+          ];
+          if (tables) steps.push([(await one('tables')) > 0, 'Add your tables', 'So servers can see who is seated where.', 'tables.html']);
+          steps.push([(await one('members')) > 1, 'Add your team', 'Invite servers, cooks and hosts.', 'team.html']);
+          steps.push([tax, 'Set your sales tax', 'Check your tax rate so receipts are right.', 'menu.html']);
+          steps.push([!!ctx.biz.payWallet, 'Turn on Pay with Vyro (optional)', 'Let customers pay with crypto.', 'paysettings.html']);
+          var req = steps.slice(0, steps.length - 1), left = req.filter(function (s) { return !s[0]; }).length;
+          if (!left) { try { localStorage.setItem(key, '1'); } catch (e) {} return; }
+          $('setup').style.display = 'block'; $('setupSub').textContent = left + ' step' + (left === 1 ? '' : 's') + ' left. Tap one to do it.';
+          steps.forEach(function (s) { var a = vyro.el('a', s[0] ? 'done' : ''); a.href = s[3]; a.appendChild(vyro.el('i', '', s[0] ? '\u2713' : '')); var d = vyro.el('div'); d.appendChild(vyro.el('span', '', s[1])); d.appendChild(vyro.el('small', '', s[2])); a.appendChild(d); $('chk').appendChild(a); });
+        })();
+      }
+    }
+
+    vyro.mountSwitcher(ctx, $('wpBox'), { chainUrl: 'chain.html' });
+    // live table board on the home screen
+    if ((staff || isServer || isHost) && (ctx.biz.service || 'restaurant') !== 'quick') {
+      var CLS = { 'Open': 'open', 'Reserved': 'reserved', 'Seated': 'occupied', 'Needs cleaning': 'dirty' };
+      var go = isHost && !staff ? 'tables.html' : 'pos.html';
+      var unsub = null;
+      function startBoard() {
+      unsub = ctx.bizRef.collection('tables').onSnapshot(function (snap) {
+        var rows = []; snap.forEach(function (d) { var t = d.data(); t.id = d.id; rows.push(t); });
+        rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
+        var g = $('tgrid'); g.textContent = ''; var cnt = { open: 0, occ: 0 }; rows.forEach(function (t) { if ((t.status || 'Open') === 'Open') cnt.open++; if (t.status === 'Seated') cnt.occ++; }); $('tblSum').textContent = cnt.open + ' open, ' + cnt.occ + ' seated';
+        rows.forEach(function (t) {
+          var st = t.status || 'Open', a = vyro.el('a', 'tbl ' + (CLS[st] || 'open')); a.href = go;
+          a.appendChild(vyro.el('b', '', t.name));
+          a.appendChild(vyro.el('small', '', st === 'Seated' ? Math.max(0, Math.round((Date.now() - (t.seatedAt || Date.now())) / 60000)) + ' min' : (st === 'Reserved' && t.party ? t.party : (t.seats || '?') + ' seats')));
+          g.appendChild(a);
+        });
+      }, function () {});
+      }
+      $('boardBox').style.display = 'block'; $('tblSum').textContent = 'tap to open';
+      $('boardBox').addEventListener('toggle', function () { if ($('boardBox').open) { if (!unsub) startBoard(); } else if (unsub) { unsub(); unsub = null; } });
+    }
+
+    // server alerts: your order is ready
+    if (isServer || role === 'employee') {
+      vnotify.start(ctx, function (n) { if (n) { $('who').textContent = n + ' of your orders ' + (n === 1 ? 'is' : 'are') + ' READY to pick up'; } });
+    }
+    // numbers
+    if (!staff) { $('s3l').textContent = 'Your orders'; }
+    try {
+      var s = await ctx.bizRef.collection('orders').where('dateKey', '==', vutil.todayStr()).get();
+      var open = 0, n = 0, sales = 0, mine = 0;
+      s.forEach(function (d) { var o = d.data(); if (o.status === 'Voided') return; n++; if (o.status === 'Open') open++; if (o.status === 'Paid') sales += o.totalCents || 0; if (o.byUid === ctx.user.uid) mine++; });
+      $('sOpen').textContent = open; $('sCount').textContent = n; $('sSales').textContent = staff ? vutil.fmt(sales) : mine;
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+  });
+</script>
+</body>
+</html>

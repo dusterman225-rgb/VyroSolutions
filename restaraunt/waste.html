@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Waste log - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Waste log</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>What was wasted</span><input id="what" list="sup" maxlength="60" placeholder="e.g. Tomatoes, burnt pizza"></label><datalist id="sup"></datalist>
+    <label class="field"><span>How much (number)</span><input id="qty" type="number" inputmode="decimal" step="0.01" min="0" value="1"></label>
+    <label class="field"><span>Unit (lb, each, ...)</span><input id="unit" maxlength="12" placeholder="each"></label>
+    <label class="field"><span>Why</span><select id="why"><option>Spoiled</option><option>Dropped or spilled</option><option>Cooked wrong</option><option>Sent back</option><option>Over-prepared</option><option>Other</option></select></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="take" style="width:auto"><span>Also take it off my ingredient supply count</span></label>
+    <button class="btn" id="add" type="button">Log it</button><div class="note" id="msg"></div>
+  </div>
+  <div class="card"><h2>Last 14 days</h2><div id="sum"></div><div id="list"></div><div class="note" id="e"></div></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role === 'kiosk') { $('err').textContent = 'Not available on the kiosk login.'; return; }
+    var col = ctx.bizRef.collection('waste'), sup = [], mgr = vroles.isStaff(ctx);
+    try { var ss = await ctx.bizRef.collection('supply').get(); sup = ss.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); sup.forEach(function (s) { var o = document.createElement('option'); o.value = s.name; $('sup').appendChild(o); }); } catch (e) {}
+    $('what').addEventListener('change', function () { var s = sup.filter(function (x) { return String(x.name).toLowerCase() === $('what').value.trim().toLowerCase(); })[0]; if (s && s.unit) $('unit').value = s.unit; });
+    async function load() {
+      var cut = Date.now() - 14 * 86400000, rows = [];
+      try { var s = await col.where('byUid', '==', ctx.user.uid).get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); if (mgr) { var s2 = await col.where('at', '>=', cut).get(); rows = s2.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } } catch (e) { $('err').textContent = vyro.friendly(e); }
+      rows = rows.filter(function (x) { return x.at >= cut; }).sort(function (a, b) { return b.at - a.at; });
+      var by = {}; rows.forEach(function (x) { by[x.why] = (by[x.why] || 0) + 1; });
+      $('sum').textContent = Object.keys(by).map(function (k) { return k + ': ' + by[k]; }).join('  \u00b7  '); $('list').textContent = '';
+      rows.forEach(function (x) { var r = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', x.qty + ' ' + (x.unit || '') + ' ' + x.what)); l.appendChild(vyro.el('small', '', x.why + ' \u00b7 ' + x.byName + ' \u00b7 ' + new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))); r.appendChild(l); $('list').appendChild(r); });
+      $('e').textContent = rows.length ? '' : 'Nothing logged in the last 14 days.';
+    }
+    $('add').addEventListener('click', async function () {
+      var w = $('what').value.trim(), q = parseFloat($('qty').value);
+      if (!w || !(q > 0)) { $('msg').textContent = 'Enter what was wasted and how much.'; $('msg').className = 'note err'; return; }
+      this.disabled = true;
+      try {
+        await col.add({ what: w, qty: q, unit: $('unit').value.trim(), why: $('why').value, byUid: ctx.user.uid, byName: vyro.who(ctx), at: Date.now(), createdAt: vyro.stamp() });
+        var s = sup.filter(function (x) { return String(x.name).toLowerCase() === w.toLowerCase(); })[0], note = '';
+        if ($('take').checked && s) { try { var nv = Math.max(0, (s.onHand || 0) - q); await ctx.bizRef.collection('supply').doc(s.id).update({ onHand: nv, updatedAt: vyro.stamp(), updatedBy: vyro.who(ctx) }); s.onHand = nv; vcache.bump(ctx, 'supply'); note = ' Supply is now ' + nv + '.'; } catch (e) { note = ' (Could not change supply: ' + vyro.friendly(e) + ')'; } }
+        $('msg').textContent = 'Logged.' + note; $('msg').className = 'note ok'; $('what').value = ''; $('qty').value = '1'; await load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      this.disabled = false;
+    });
+    load();
+  });
+</script>
+</body>
+</html>

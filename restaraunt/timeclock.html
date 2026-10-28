@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Time clock - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Time clock</div>
+  </div>
+
+  <div class="card" style="margin-top:0;text-align:center">
+    <div class="note" id="state">Loading...</div>
+    <div id="timer" style="font-size:2rem;font-weight:700;margin:6px 0"></div>
+    <button class="btn" id="go" type="button">Clock in</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="card">
+    <h2>My last 14 days</h2>
+    <div id="mine"></div>
+    <div class="total-row big"><span>Total</span><b id="myTot">0 h</b></div>
+  </div>
+  <div class="card" id="allCard" style="display:none">
+    <h2>Everyone</h2>
+    <label class="field"><span>From</span><input id="from" type="date"></label>
+    <div id="all"></div>
+    <div class="note" id="allEmpty"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var col = ctx.bizRef.collection('shifts'), me = ctx.user.uid, name = vyro.who(ctx), open = null, mine = [], all = [], tick = null;
+    var seeAll = vroles.can(ctx, 'timekeeping');
+    function dkey(ms) { var d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function hrs(ms) { return Math.round(ms / 36000) / 100; }
+    function clock(ms) { var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h + 'h ' + String(m).padStart(2, '0') + 'm'; }
+    function when(ms) { return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    async function load() {
+      try {
+        var cut = Date.now() - 14 * 86400000;
+        var s = await col.where('uid', '==', me).get();
+        var all2 = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+        open = all2.filter(function (x) { return !x.endMs; })[0] || null;
+        mine = all2.filter(function (x) { return x.startMs >= cut; }).sort(function (a, b) { return b.startMs - a.startMs; });
+      } catch (e) { $('err').textContent = vyro.friendly(e); }
+      draw();
+    }
+    function draw() {
+      try { if (window.vnav && vnav.setClock) vnav.setClock(ctx, open ? { id: open.id, startMs: open.startMs } : null); } catch (e) {}
+      $('go').textContent = open ? 'Clock out' : 'Clock in';
+      $('state').textContent = open ? 'Clocked in since ' + when(open.startMs) : 'You are clocked out.';
+      if (tick) clearInterval(tick); $('timer').textContent = '';
+      if (open) { var f = function () { $('timer').textContent = clock(Date.now() - open.startMs); }; f(); tick = setInterval(f, 30000); }
+      var box = $('mine'); box.textContent = ''; var tot = 0;
+      mine.forEach(function (x) { var end = x.endMs || Date.now(), row = vyro.el('div', 'row'); tot += end - x.startMs; row.appendChild(vyro.el('span', '', when(x.startMs) + ' \u2192 ' + (x.endMs ? when(x.endMs) : 'now'))); row.appendChild(vyro.el('b', '', hrs(end - x.startMs) + ' h')); box.appendChild(row); });
+      $('myTot').textContent = hrs(tot) + ' h';
+    }
+    $('go').addEventListener('click', async function () {
+      this.disabled = true;
+      try {
+        if (open) { await col.doc(open.id).update({ endMs: Date.now(), updatedAt: vyro.stamp() }); }
+        else { await col.add({ uid: me, name: name, startMs: Date.now(), endMs: 0, date: vutil.todayStr(), createdAt: vyro.stamp() }); }
+        $('msg').textContent = ''; await load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      this.disabled = false;
+    });
+    if (seeAll) {
+      $('allCard').style.display = 'block';
+      var d = new Date(); d.setDate(d.getDate() - 6); $('from').value = dkey(d.getTime());
+      var loadAll = async function () {
+        try { var s = await col.where('date', '>=', $('from').value).get(); all = s.docs.map(function (z) { var x = z.data(); x.id = z.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+        var by = {}; all.forEach(function (x) { var k = x.name || x.uid; (by[k] = by[k] || { ms: 0, n: 0, shifts: [] }); by[k].ms += (x.endMs || Date.now()) - x.startMs; by[k].n++; by[k].shifts.push(x); });
+        var box = $('all'); box.textContent = '';
+        Object.keys(by).sort().forEach(function (k) {
+          var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', k)); left.appendChild(vyro.el('small', '', by[k].n + ' shifts'));
+          row.appendChild(left); row.appendChild(vyro.el('b', '', hrs(by[k].ms) + ' h'));
+          var x = vyro.el('button', 'btn ghost', 'Fix'); x.type = 'button'; x.style.marginTop = '0';
+          x.addEventListener('click', function () {
+            var list = by[k].shifts.sort(function (a, b) { return b.startMs - a.startMs; }).slice(0, 8).map(function (s, i) { return (i + 1) + ') ' + when(s.startMs) + ' \u2192 ' + (s.endMs ? when(s.endMs) : 'open'); }).join('\n');
+            var v = prompt(k + ' recent shifts:\n' + list + '\n\nType the number of a shift to DELETE it, or leave blank:'); var i = parseInt(v, 10); var s = by[k].shifts[i - 1];
+            if (s && confirm('Delete shift ' + i + '?')) col.doc(s.id).delete().then(loadAll).catch(function (e) { $('err').textContent = vyro.friendly(e); });
+          });
+          row.appendChild(x); box.appendChild(row);
+        });
+        $('allEmpty').textContent = all.length ? '' : 'No shifts in this range.';
+      };
+      $('from').addEventListener('change', loadAll); loadAll();
+    }
+    load();
+  });
+</script>
+</body>
+</html>

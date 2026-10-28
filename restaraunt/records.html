@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Employee records - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Employee records</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>Employee</span><select id="who"></select></label>
+    <label class="field"><span>Since</span><input id="from" type="date"></label>
+    <div class="strip"><div><small>Hours</small><b id="kH">-</b></div><div><small>Orders</small><b id="kO">-</b></div><div><small>Sales</small><b id="kS">-</b></div></div>
+  </div>
+  <div class="card"><h2>Hours worked</h2><div id="sh"></div><div class="note" id="shE"></div></div>
+  <div class="card"><h2>Orders they placed</h2><div id="od"></div><div class="note" id="odE"></div></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.can(ctx, 'timekeeping')) { $('err').textContent = 'You do not have access to employee records.'; return; }
+    var members = [];
+    try { var ms = await vcache.get(ctx, 'members'); ms.forEach(function (d) { var m = d.data(); m.id = d.id; if (m.role !== 'kiosk') members.push(m); }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    members.sort(function (a, b) { return vyro.nameOf(a).localeCompare(vyro.nameOf(b)); });
+    var sel = $('who'); members.forEach(function (m) { var o = document.createElement('option'); o.value = m.id; o.textContent = vyro.nameOf(m) + ' \u00b7 ' + vroles.label(m.role); sel.appendChild(o); });
+    var d = new Date(); d.setDate(d.getDate() - 13); $('from').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    function when(ms) { return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    async function load() {
+      var uid = sel.value; if (!uid) return;
+      var fromMs = new Date($('from').value + 'T00:00:00').getTime(), ms = 0, n = 0, sales = 0;
+      $('sh').textContent = ''; $('od').textContent = '';
+      try {
+        var s1 = await ctx.bizRef.collection('shifts').where('uid', '==', uid).get();
+        var sh = s1.docs.map(function (z) { return z.data(); }).filter(function (x) { return x.startMs >= fromMs; }).sort(function (a, b) { return b.startMs - a.startMs; });
+        sh.forEach(function (x) { var end = x.endMs || Date.now(); ms += end - x.startMs; var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', when(x.startMs) + ' \u2192 ' + (x.endMs ? when(x.endMs) : 'still clocked in'))); r.appendChild(vyro.el('b', '', (Math.round((end - x.startMs) / 36000) / 100) + ' h')); $('sh').appendChild(r); });
+        $('shE').textContent = sh.length ? '' : 'No shifts in this period.';
+        var s2 = await ctx.bizRef.collection('orders').where('byUid', '==', uid).get();
+        var od = s2.docs.map(function (z) { var x = z.data(); x.id = z.id; return x; }).filter(function (x) { return (x.clientAt || 0) >= fromMs; }).sort(function (a, b) { return (b.clientAt || 0) - (a.clientAt || 0); });
+        od.forEach(function (x) {
+          n++; if (x.status === 'Paid') sales += x.totalCents || 0;
+          var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', when(x.clientAt || 0) + ' \u00b7 ' + (x.label || x.number || 'Order') + ' \u00b7 ' + x.status)); r.appendChild(vyro.el('b', '', vutil.fmt(x.totalCents || 0))); $('od').appendChild(r);
+        });
+        $('odE').textContent = od.length ? '' : 'No orders in this period.';
+      } catch (e) { $('err').textContent = vyro.friendly(e); }
+      $('kH').textContent = (Math.round(ms / 36000) / 100) + ' h'; $('kO').textContent = n; $('kS').textContent = vutil.fmt(sales);
+    }
+    sel.addEventListener('change', load); $('from').addEventListener('change', load); load();
+  });
+</script>
+</body>
+</html>
