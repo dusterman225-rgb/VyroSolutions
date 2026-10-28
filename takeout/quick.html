@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Quick order - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>.tabs button{background:transparent;color:inherit}.tabs button.on{background:#4B9CD3;border-color:#4B9CD3;color:#05070A;font-weight:700}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Quick order</div>
+  </div>
+  <div class="tabs" id="cats" style="flex-wrap:wrap"></div>
+  <div class="pos-grid" id="items"></div>
+  <div class="note" id="none"></div>
+  <div class="card" id="cartCard">
+    <div id="cart"></div>
+    <div class="note" id="cartEmpty">Tap items to add them.</div>
+    <div class="total-row" id="dRow" style="display:none"><span id="dLbl">Discount</span><b id="tDisc"></b></div>
+    <div class="total-row big"><span>Total</span><b id="tot">$0.00</b></div>
+    <button class="btn ghost" id="discBtn" type="button">Discount or free item</button>
+    <div class="note" id="taxNote" style="font-size:.75rem"></div>
+    <div class="row" style="gap:8px;border:0;flex-wrap:wrap">
+      <button class="btn" id="payCash" type="button" style="flex:1">Cash</button>
+      <button class="btn" id="payCard" type="button" style="flex:1">Card</button>
+      <button class="btn ghost" id="payOther" type="button" style="flex:1">Other</button>
+      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyro (crypto QR)</button>
+    </div>
+    <button class="btn ghost" id="clear" type="button">Clear order</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="note err" id="qBanner" style="display:none"></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script src="js/notify.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/mods.js"></script>
+<script src="js/discount.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="../shared/chain-config.js"></script>
+<script src="js/chain.js"></script>
+<script src="js/vpay.js"></script>
+<script src="js/avail.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var R = vroles, role = ctx.role, staff = R.isStaff(ctx), who = vyro.who(ctx);
+    if (!(staff || role === 'host' || role === 'server' || role === 'employee')) { $('err').textContent = 'Quick order is for the host, servers and managers.'; $('cartCard').style.display = 'none'; return; }
+    var ocol = ctx.bizRef.collection('orders'), menu = [], cat = '', cart = [], taxPct = 0, busy = false, disc = null, serverPct = 0, outSet = {};
+    try {
+      var ts = await ctx.bizRef.collection('settings').doc('pos').get(); if (ts.exists) { taxPct = Number(ts.data().taxPct) || 0; serverPct = Number(ts.data().serverDiscountPct) || 0; }
+      var ms = await vcache.get(ctx, 'menu');
+      menu = ms.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (m) { return m.active !== false; });
+      menu.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true }); });
+      try { var sp = await vcache.get(ctx, 'supply'); outSet = vavail.outSet(sp.docs.map(function (d) { return d.data(); })); } catch (e) {}
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('taxNote').textContent = taxPct ? 'Includes ' + taxPct + '% tax' : '';
+    var cats = []; menu.forEach(function (m) { var c = m.category || 'Other'; if (cats.indexOf(c) < 0) cats.push(c); }); cats.sort();
+    cat = cats[0] || '';
+    function drawCats() {
+      var box = $('cats'); box.textContent = '';
+      cats.forEach(function (c) { var b = vyro.el('button', c === cat ? 'on' : '', c); b.type = 'button'; b.addEventListener('click', function () { cat = c; drawCats(); drawItems(); }); box.appendChild(b); });
+    }
+    function drawItems() {
+      var g = $('items'); g.textContent = ''; var list = menu.filter(function (m) { return (m.category || 'Other') === cat; });
+      $('none').textContent = menu.length ? '' : 'No menu items yet. A manager adds them under Menu and recipes.';
+      list.forEach(function (m) {
+        var b = vyro.el('button', 'pos-item'); b.type = 'button'; b.appendChild(vyro.el('b', '', m.name)); b.appendChild(vyro.el('small', '', vutil.fmt(m.priceCents || 0)));
+        var nope = vavail.why(m, outSet); if (nope) { b.style.opacity = '.4'; b.appendChild(vyro.el('small', '', nope)); b.addEventListener('click', function () { say(m.name + ': ' + nope + '.', 'err'); }); } else b.addEventListener('click', function () { addItem(m, 1, []); });
+        g.appendChild(b);
+      });
+    }
+    function addItem(m, n, mods) {
+      var sg = vmods.sig(mods), l = cart.filter(function (x) { return x.menuId === m.id && vmods.sig(x.mods) === sg; })[0];
+      if (l) l.qty += n; else cart.push({ menuId: m.id, name: m.name, qty: n, priceCents: (m.priceCents || 0) + vmods.add(mods), mods: mods, modText: vmods.text(mods) });
+      drawCart();
+    }
+    function byMenu(id) { return menu.filter(function (x) { return x.id === id; })[0]; }
+    function totals() { var sub = 0; cart.forEach(function (l) { sub += l.priceCents * l.qty; }); var d = vdisc.amount(disc, sub), tax = Math.round((sub - d) * taxPct / 100); return { sub: sub, disc: d, tax: tax, total: sub - d + tax }; }
+    function drawCart() {
+      var box = $('cart'); box.textContent = ''; $('cartEmpty').style.display = cart.length ? 'none' : 'block';
+      cart.forEach(function (l, i) {
+        var r = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', l.name));
+        if (l.modText) { var mt = vyro.el('small', '', l.modText); mt.style.color = '#ffb25c'; mt.style.display = 'block'; left.appendChild(mt); }
+        left.appendChild(vyro.el('small', '', vutil.fmt(l.priceCents) + ' each'));
+        var mi = byMenu(l.menuId); if (mi && (mi.ingredients || []).length) { var vi = vyro.el('button', 'link', 'View ingredients (extra / no)'); vi.type = 'button'; vi.style.display = 'block'; vi.addEventListener('click', function () { vmods.open(mi, l.mods, function (mods) { if (l.qty > 1) l.qty--; else cart.splice(cart.indexOf(l), 1); addItem(mi, 1, mods); }); }); left.appendChild(vi); }
+        r.appendChild(left);
+        var q = vyro.el('div', 'qty'); var m = vyro.el('button', '', '−'), n = vyro.el('b', '', String(l.qty)), p = vyro.el('button', '', '+'); m.type = p.type = 'button';
+        m.addEventListener('click', function () { l.qty--; if (l.qty <= 0) cart.splice(cart.indexOf(l), 1); drawCart(); }); p.addEventListener('click', function () { l.qty++; drawCart(); });
+        q.appendChild(m); q.appendChild(n); q.appendChild(p); r.appendChild(q); box.appendChild(r);
+      });
+      var tt = totals(); $('dRow').style.display = tt.disc ? 'flex' : 'none'; $('tDisc').textContent = '-' + vutil.fmt(tt.disc); $('dLbl').textContent = 'Discount' + (disc && disc.reason ? ' (' + disc.reason + ')' : ''); $('tot').textContent = vutil.fmt(tt.total);
+    }
+    function say(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
+    async function finish(method, tenderedCents) {
+      if (busy) return; busy = true;
+      var t = totals(), change = method === 'Cash' ? Math.max(0, tenderedCents - t.total) : 0;
+      var number = '#' + String(Date.now() % 10000).padStart(4, '0');
+      var d = { items: cart.map(function (l) { return { menuId: l.menuId, name: l.name, qty: l.qty, priceCents: l.priceCents, round: 1, mods: l.mods || [], modText: l.modText || '' }; }), subtotalCents: t.sub, discountCents: t.disc, discountPct: disc ? disc.pct || 0 : 0, discountReason: disc ? disc.reason : '', discountBy: disc ? who : '', taxPct: taxPct, taxCents: t.tax, totalCents: t.total,
+        status: 'Paid', method: method, payments: [{ method: method, amountCents: t.total }], tipCents: 0, changeCents: change, paidAt: vyro.stamp(), paidBy: who,
+        lastRound: 1, kitchenStatus: 'New', number: number, label: 'Takeout', dateKey: vutil.todayStr(), byUid: ctx.user.uid, byName: who, createdAt: vyro.stamp(), clientAt: Date.now(), updatedAt: vyro.stamp() };
+      try {
+        var id = ocol.doc().id, res = await vqueue.save(ctx, 'set', id, d);
+        cart = []; disc = null; drawCart(); $('bg').classList.remove('open');
+        var m = $('msg'); m.className = 'note ok'; m.textContent = '';
+        m.appendChild(vyro.el('b', '', 'Order ' + number + ' paid (' + method + ') and sent to the kitchen. ' + (change ? 'Change: ' + vutil.fmt(change) + '. ' : '') + (res === 'queued' ? 'No internet: saved on this phone and sent when the connection returns. ' : '')));
+        if (res !== 'queued') { var a = vyro.el('a', 'link', ' Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a); }
+        try { vqueue.count(ctx); drawQ(); } catch (e) {}
+      } catch (e) { say(vyro.friendly(e), 'err'); }
+      busy = false;
+    }
+    function drawQ() { var n = vqueue.count(ctx), b = $('qBanner'); b.style.display = n ? 'block' : 'none'; b.textContent = n ? n + ' order' + (n === 1 ? '' : 's') + ' saved on this phone, waiting for internet.' : ''; }
+    function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+    function needItems() { if (!cart.length) { say('Add at least one item.', 'err'); return true; } say(''); return false; }
+    $('payCard').addEventListener('click', function () { if (needItems()) return; sheet('Card payment ' + vutil.fmt(totals().total), function (b) { b.appendChild(vyro.el('div', 'note', 'Take the payment on your own card reader first, then confirm.')); var y = vyro.el('button', 'btn', 'Payment taken'); y.type = 'button'; y.addEventListener('click', function () { finish('Card'); }); b.appendChild(y); var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', function () { $('bg').classList.remove('open'); }); b.appendChild(n); }); });
+    $('payOther').addEventListener('click', function () { if (needItems()) return; sheet('Other payment ' + vutil.fmt(totals().total), function (b) { var y = vyro.el('button', 'btn', 'Payment taken'); y.type = 'button'; y.addEventListener('click', function () { finish('Other'); }); b.appendChild(y); var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', function () { $('bg').classList.remove('open'); }); b.appendChild(n); }); });
+    $('payCash').addEventListener('click', function () {
+      if (needItems()) return; var due = totals().total;
+      sheet('Cash ' + vutil.fmt(due), function (b) {
+        var inp = document.createElement('input'); inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.01'; inp.placeholder = 'Cash received ($), blank = exact'; inp.style.width = '100%'; b.appendChild(inp);
+        var note = vyro.el('div', 'note', ''); b.appendChild(note);
+        inp.addEventListener('input', function () { var c = inp.value ? vutil.toCents(inp.value) : due; note.textContent = c >= due ? 'Change: ' + vutil.fmt(c - due) : 'Not enough cash.'; note.className = 'note ' + (c >= due ? 'ok' : 'err'); });
+        var y = vyro.el('button', 'btn', 'Take cash'); y.type = 'button'; y.addEventListener('click', function () { var c = inp.value ? vutil.toCents(inp.value) : due; if (c < due) { note.textContent = 'Not enough cash.'; note.className = 'note err'; return; } finish('Cash', c); }); b.appendChild(y);
+        var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', function () { $('bg').classList.remove('open'); }); b.appendChild(n);
+      });
+    });
+    if (vrpay.enabled(ctx)) $('payVyro').style.display = 'block';
+    $('payVyro').addEventListener('click', function () {
+      if (needItems()) return; var t = totals(), btn = this;
+      vrpay.pickCoin(ctx, async function (coin) {
+        if (busy) return; busy = true; btn.disabled = true; say('Making the code...');
+        try {
+          if (!navigator.onLine) throw { code: 'vyro/offline' };
+          var req = await vrpay.makeReq(ctx, coin, t.total), number = '#' + String(Date.now() % 10000).padStart(4, '0'), id = ocol.doc().id;
+          var d = { items: cart.map(function (l) { return { menuId: l.menuId, name: l.name, qty: l.qty, priceCents: l.priceCents, round: 1, mods: l.mods || [], modText: l.modText || '' }; }), subtotalCents: t.sub, discountCents: t.disc, discountPct: disc ? disc.pct || 0 : 0, discountReason: disc ? disc.reason : '', discountBy: disc ? who : '', taxPct: taxPct, taxCents: t.tax, totalCents: t.total,
+            status: 'Open', kitchenStatus: 'Hold', payReq: req, lastRound: 1, number: number, label: 'Takeout', dateKey: vutil.todayStr(), byUid: ctx.user.uid, byName: who, createdAt: vyro.stamp(), clientAt: Date.now(), updatedAt: vyro.stamp() };
+          await ocol.doc(id).set(d); say('');
+          vrpay.qrModal(ctx, req, number, async function (found) {
+            try { await vrpay.markPaid(ctx, id, d, found, who); cart = []; disc = null; drawCart(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Order ' + number + ' paid with Vyro and sent to the kitchen. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a); }
+            catch (e) { say('The payment arrived but saving failed. Open order ' + number + ' in Orders. Reference: ' + found.signature, 'err'); }
+          }, function () { say('Cancelled. Order ' + number + ' was saved unpaid and is on hold. Find it by number on the Point of sale page, or ignore it.', 'err'); cart = []; disc = null; drawCart(); });
+        } catch (e) { say(e && e.code === 'vyro/offline' ? 'Pay with Vyro needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
+        busy = false; btn.disabled = false;
+      });
+    });
+    $('clear').addEventListener('click', function () { if (cart.length && !confirm('Clear this order? The items will be removed.')) return; cart = []; disc = null; drawCart(); say(''); });
+    $('discBtn').addEventListener('click', function () { if (!cart.length) { say('Add an item first.', 'err'); return; } if (!staff && !serverPct) { say('Ask a manager to apply a discount or comp.', 'err'); return; } vdisc.open({ staff: staff, maxPct: serverPct, current: disc }, function (d) { disc = d; drawCart(); }); });
+    $('bg').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+    drawCats(); drawItems(); drawCart(); try { drawQ(); if (vqueue.count(ctx)) vqueue.flush(ctx).then(drawQ); } catch (e) {}
+  });
+</script>
+</body>
+</html>

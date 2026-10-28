@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Sold out list - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Sold out list</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <div class="note" style="text-align:left">Tap an item to mark it sold out. It shows greyed out on the point of sale, the quick order screen and the kiosk until you tap it again. Items also show "Out of ..." automatically when an ingredient in Ingredient supply is at zero.</div>
+    <div class="tabs" id="flt" style="flex-wrap:wrap"><button type="button" class="on" data-f="all">All</button><button type="button" data-f="out">Sold out</button></div>
+    <div id="list"></div><div class="note" id="none"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script><script src="js/avail.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role === 'kiosk') { $('err').textContent = 'Not available on the kiosk login.'; return; }
+    var col = ctx.bizRef.collection('menu'), rows = [], out = {}, f = 'all';
+    try { var ss = await vcache.get(ctx, 'supply'); out = vavail.outSet(ss.docs.map(function (d) { return d.data(); })); } catch (e) {}
+    function draw() {
+      var box = $('list'); box.textContent = '';
+      var list = rows.filter(function (m) { return m.active !== false && (f === 'all' || m.soldOut); });
+      list.forEach(function (m) {
+        var auto = vavail.why({ ingredients: m.ingredients }, out), row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', m.name)); left.appendChild(vyro.el('small', '', [m.category, auto].filter(Boolean).join(' \u00b7 ')));
+        row.appendChild(left);
+        var b = vyro.el('button', m.soldOut ? 'btn' : 'btn ghost', m.soldOut ? 'SOLD OUT \u00b7 tap to bring back' : 'Mark sold out'); b.type = 'button'; b.style.marginTop = '0'; b.style.width = 'auto';
+        b.addEventListener('click', async function () { b.disabled = true; try { await col.doc(m.id).update({ soldOut: !m.soldOut, updatedAt: vyro.stamp() }); m.soldOut = !m.soldOut; vcache.bump(ctx, 'menu'); vyro.audit(ctx, m.soldOut ? '86 item' : 'item back', m.name); } catch (e) { $('err').textContent = vyro.friendly(e); } draw(); });
+        row.appendChild(b); box.appendChild(row);
+      });
+      $('none').textContent = list.length ? '' : (f === 'out' ? 'Nothing is sold out.' : 'No menu items yet.');
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (b) { b.addEventListener('click', function () { f = b.getAttribute('data-f'); Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (x) { x.classList.toggle('on', x === b); }); draw(); }); });
+    try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    draw();
+  });
+</script>
+</body>
+</html>

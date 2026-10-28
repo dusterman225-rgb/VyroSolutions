@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>What's in each dish - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">What's in each dish</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <input class="search" id="q" type="search" placeholder="Search a dish or an ingredient" autocomplete="off">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <div class="note">This is the list the restaurant saved, with no amounts. It is not an allergen guarantee. Always ask the kitchen about allergies.</div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var rows = [];
+    try { var s = await vcache.get(ctx, 'menu'); rows = s.docs.map(function (d) { return d.data(); }).filter(function (m) { return m.active !== false; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    rows.sort(function (a, b) { return (a.name || '').toLowerCase() < (b.name || '').toLowerCase() ? -1 : 1; });
+    function draw() {
+      var q = $('q').value.trim().toLowerCase(), box = $('list'); box.textContent = ''; var n = 0;
+      rows.forEach(function (m) {
+        var ing = (m.ingredients || []);
+        if (q && (m.name || '').toLowerCase().indexOf(q) < 0 && !ing.some(function (i) { return i.toLowerCase().indexOf(q) >= 0; })) return;
+        n++; var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', m.name)); left.appendChild(vyro.el('small', '', ing.length ? ing.join(', ') : 'No recipe saved'));
+        row.appendChild(left); box.appendChild(row);
+      });
+      $('empty').textContent = n ? '' : 'Nothing found.';
+    }
+    $('q').addEventListener('input', draw); draw();
+  });
+</script>
+</body>
+</html>

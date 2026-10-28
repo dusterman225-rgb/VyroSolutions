@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Locations - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Locations</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <h2>Your locations</h2>
+    <div id="list"></div>
+    <div class="note" id="none"></div>
+  </div>
+  <div class="card">
+    <h2>Add a location</h2>
+    <div class="note" style="text-align:left">Each location has its own team, tables, menu and orders. You own all of them with this one login. Give a location its own general manager under Team, and that person sees only their location.</div>
+    <label class="field"><span>Location name</span><input id="nm" maxlength="60" placeholder="e.g. Main Street"></label>
+    <label class="field"><span>How it serves customers</span><select id="svc"><option value="restaurant">Restaurant (tables)</option><option value="quick">Fast food or take-out</option><option value="both">Both</option></select></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="copy" checked style="width:auto"><span>Copy the menu from the location I am in now</span></label>
+    <button class="btn" id="add" type="button">Add location</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="btn ghost" href="chain.html">See all locations together</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role !== 'owner') { $('err').textContent = 'Only the owner can manage locations.'; return; }
+    async function draw() {
+      var list = (await vyro.myWorkplaces(ctx)).filter(function (w) { return w.role === 'owner' && w.product === 'takeout'; });
+      list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      var box = $('list'); box.textContent = '';
+      list.forEach(function (w) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', w.name)); left.appendChild(vyro.el('small', '', w.id === ctx.bizId ? 'You are working in this one' : 'Tap Open to work in it')); row.appendChild(left);
+        if (w.id !== ctx.bizId) { var b = vyro.el('button', 'btn ghost', 'Open'); b.type = 'button'; b.style.marginTop = '0'; b.addEventListener('click', async function () { b.disabled = true; try { await vyro.switchWorkplace(w.id, ctx.bizId); location.href = 'index.html'; } catch (e) { b.disabled = false; } }); row.appendChild(b); }
+        box.appendChild(row);
+      });
+      $('none').textContent = list.length > 1 ? '' : 'You have one location so far.';
+    }
+    await draw();
+    $('add').addEventListener('click', async function () {
+      var n = $('nm').value.trim(); if (!n) { $('msg').textContent = 'Enter a location name.'; $('msg').className = 'note err'; return; }
+      this.disabled = true; $('msg').textContent = 'Creating...'; $('msg').className = 'note';
+      try {
+        var ref = await vyro.createLocation(n, $('svc').value, vyro.who(ctx)), copied = 0;
+        if ($('copy').checked) {
+          var ms = await ctx.bizRef.collection('menu').get(), batch = vyro.db.batch();
+          ms.forEach(function (d) { var x = d.data(); batch.set(ref.collection('menu').doc(), { name: x.name, category: x.category || '', priceCents: x.priceCents, active: x.active !== false, ingredients: x.ingredients || [], extras: x.extras || [], createdAt: vyro.stamp(), updatedAt: vyro.stamp() }); copied++; });
+          if (copied) await batch.commit();
+        }
+        vyro.audit(ctx, 'location added', n);
+        $('msg').textContent = n + ' was added' + (copied ? ' with ' + copied + ' menu items' : '') + '. Use the Open button above to work in it, then set up its tables, tax rate and team.'; $('msg').className = 'note ok'; $('nm').value = ''; await draw();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      this.disabled = false;
+    });
+  });
+</script>
+</body>
+</html>
