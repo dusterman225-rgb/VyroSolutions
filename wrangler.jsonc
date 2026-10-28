@@ -1,0 +1,8 @@
+{
+  "name": "vyrosolutions",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./",
+    "not_found_handling": "404-page"
+  }
+}

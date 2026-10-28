@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
+<title>Account - Vyro Network</title>
+<link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head><body><div class="wrap">
+
+
+<div class="top"><a class="brand" href="dashboard.html">&larr; VYRO NETWORK</a></div>
+<h1>Your account</h1><div class="note err" id="err"></div><div class="note ok" id="msg"></div>
+<div class="card"><h2>Profile</h2><label>Name</label><input id="nm" maxlength="80"><label>Email</label><input id="em" disabled><div class="note" id="ver"></div><button class="btn" id="save" type="button">Save name</button></div>
+<div class="card"><h2>Security</h2><div class="note">Change your password with an email link. Two-step sign-in is not available yet.</div><button class="btn ghost" id="pwr" type="button">Email me a password reset link</button><button class="btn ghost" id="vr" type="button">Resend verification email</button></div>
+<div class="card"><button class="btn ghost" id="out" type="button">Sign out</button><div class="note">Deleting your whole account is not available here yet. It needs its own careful step because you may belong to several businesses.</div><a href="legal.html">Terms and privacy (draft)</a></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="shared/firebase-config.js"></script><script src="js/net-config.js"></script><script src="js/net.js"></script>
+<script>
+
+var $=function(i){return document.getElementById(i)}, U;
+vnet.requireAuth(async function(u){ U=u; var me=await vnet.me(u.uid); $('nm').value=me.name||u.displayName||''; $('em').value=u.email||''; $('ver').textContent=u.emailVerified?'Email verified.':'Email not verified yet.';
+ $('save').onclick=async function(){ try{ await vnet.db.collection('users').doc(u.uid).set({name:$('nm').value.trim()},{merge:true}); try{ await u.updateProfile({displayName:$('nm').value.trim()}); }catch(e){} $('msg').textContent='Saved.'; $('err').textContent=''; }catch(e){ $('err').textContent=vnet.friendly(e);} };
+ $('pwr').onclick=async function(){ try{ await vnet.resetPassword(u.email); $('msg').textContent='Reset link sent to '+u.email+'.'; }catch(e){ $('err').textContent=vnet.friendly(e);} };
+ $('vr').onclick=async function(){ try{ await u.sendEmailVerification(); $('msg').textContent='Verification email sent.'; }catch(e){ $('err').textContent=vnet.friendly(e);} };
+ $('out').onclick=async function(){ await vnet.signOut(); location.replace('index.html'); }; });
+
+</script></body></html>
