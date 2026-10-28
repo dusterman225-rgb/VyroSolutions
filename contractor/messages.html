@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Messages - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Messages</div>
+  </div>
+
+  <div id="listView">
+    <div class="card">
+      <h2>Customer messages</h2>
+      <div id="list"></div>
+      <div class="note" id="empty"></div>
+    </div>
+    <div class="note">No instant alerts yet. New messages show here and on your dashboard.</div>
+    <a class="back" href="app.html">Back to dashboard</a>
+  </div>
+
+  <div id="threadView" style="display:none">
+    <div class="card">
+      <h2 id="tName"></h2>
+      <p id="tSub"></p>
+      <div class="nav" id="tLinks"></div>
+    </div>
+    <div class="card">
+      <div id="tList"></div>
+      <div class="note" id="tNone"></div>
+      <label class="field"><span>Reply</span><textarea id="rText" rows="3" maxlength="1000"></textarea></label>
+      <button class="btn" id="rSend" type="button">Send reply</button>
+      <div class="note" id="rMsg"></div>
+      <div class="note">Your reply appears in the customer's portal. It isn't emailed. Call or text if urgent.</div>
+    </div>
+    <a class="back" href="messages.html">Back to all messages</a>
+  </div>
+
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function clean(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+
+  vyro.start(async function (ctx) {
+    var who = (ctx.me && ctx.me.name) || ctx.user.email;
+    var portals = vyro.db.collection('portals');
+    var openId = new URLSearchParams(location.search).get('job');
+
+    async function showList() {
+      $('threadView').style.display = 'none'; $('listView').style.display = 'block';
+      $('list').textContent = '';
+      var qs = await portals.where('bizId', '==', ctx.bizId).get();
+      var rows = qs.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; })
+        .filter(function (x) { return x.lastMessageAt; });
+      rows.sort(function (a, b) { return b.lastMessageAt.toMillis() - a.lastMessageAt.toMillis(); });
+      $('empty').textContent = rows.length ? '' : 'No customer messages yet.';
+      rows.forEach(function (x) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        var top = vyro.el('b');
+        if (x.unreadCount) top.appendChild(vyro.el('span', 'pill New', x.unreadCount + ' new'));
+        top.appendChild(document.createTextNode(x.customerName || x.customerEmail));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', (x.title || ('Estimate ' + (x.estimateNumber || ''))) + ' · ' + (x.lastMessageText || '')));
+        left.addEventListener('click', function () { openThread(x.id); });
+        row.appendChild(left); $('list').appendChild(row);
+      });
+    }
+
+    async function openThread(id) {
+      var pref = portals.doc(id), ps = await pref.get();
+      if (!ps.exists || ps.data().bizId !== ctx.bizId) { $('err').textContent = 'Conversation not found.'; return; }
+      var p = ps.data();
+      $('listView').style.display = 'none'; $('threadView').style.display = 'block';
+      $('tName').textContent = p.customerName || p.customerEmail;
+      $('tSub').textContent = (p.title || '') + (p.estimateNumber ? ' · Estimate ' + p.estimateNumber : '');
+      $('tLinks').textContent = '';
+      var j = vyro.el('a', 'btn ghost', 'Open job'); j.href = 'job.html?id=' + id; $('tLinks').appendChild(j);
+      async function load() {
+        $('tList').textContent = '';
+        var ms = await pref.collection('messages').orderBy('createdAt', 'asc').get();
+        $('tNone').textContent = ms.empty ? 'No messages yet.' : '';
+        ms.forEach(function (d) {
+          var m = d.data(), theirs = m.from === 'customer';
+          var when = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleString() : '';
+          var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+          if (!theirs) row.style.background = 'rgba(255,255,255,.04)';
+          left.appendChild(vyro.el('small', '', (theirs ? (p.customerName || 'Customer') : (m.by || 'You')) + ' · ' + when));
+          var t = vyro.el('div', '', m.text); t.style.whiteSpace = 'pre-wrap'; left.appendChild(t);
+          row.appendChild(left); $('tList').appendChild(row);
+        });
+      }
+      await load();
+      if (p.unreadCount) { try { await pref.update({ unreadCount: 0 }); } catch (e) { /* not critical */ } }
+      $('rSend').onclick = async function () {
+        var t = $('rText').value.trim();
+        if (!t) { $('rMsg').textContent = 'Type a reply first.'; $('rMsg').className = 'note err'; return; }
+        this.disabled = true; $('rMsg').textContent = 'Sending...'; $('rMsg').className = 'note';
+        try {
+          await pref.collection('messages').add({ from: 'contractor', text: t, by: who, createdAt: vyro.stamp(), read: true });
+          $('rText').value = ''; $('rMsg').textContent = 'Sent.'; await load();
+        } catch (e) { $('rMsg').textContent = vyro.friendly(e); $('rMsg').className = 'note err'; }
+        this.disabled = false;
+      };
+    }
+
+    try { if (openId) await openThread(openId); else await showList(); }
+    catch (e) { $('err').textContent = vyro.friendly(e); }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Estimates - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Estimates</div>
+  </div>
+
+  <div class="card" id="acceptedBanner" style="display:none">
+    <h2>Accepted online</h2>
+    <p id="acceptedText"></p>
+    <a class="btn" href="jobs.html">View active jobs</a>
+  </div>
+
+  <div class="card totals">
+    <div class="row"><span>Awaiting reply</span><b id="sumSent">-</b></div>
+    <span id="sumApproved" style="display:none"></span>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="card" style="margin-top:0">
+    <input class="search" id="q" type="search" placeholder="Search customer, project or number" autocomplete="off">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <a class="btn" href="estimate.html">New estimate</a>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/public.js"></script>
+<script>
+  var TABS = ['Open', 'Closed'];
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    var all = [], filter = 'Open';
+    function inTab(e, t) {
+      if (e.status === 'Approved') return false;       // approved estimates live in Jobs
+      if (t === 'Open') return e.status === 'Draft' || e.status === 'Sent';
+      return e.status === 'Rejected' || e.status === 'Voided';
+    }
+
+    function render() {
+      var tabs = $('tabs'); tabs.textContent = '';
+      TABS.forEach(function (s) {
+        var n = all.filter(function (x) { return inTab(x, s); }).length;
+        var b = vyro.el('button', 'tab' + (filter === s ? ' on' : ''), s + ' ' + n); b.type = 'button';
+        b.addEventListener('click', function () { filter = s; render(); });
+        tabs.appendChild(b);
+      });
+
+      var sent = 0, appr = 0;
+      all.forEach(function (e) { if (e.status === 'Sent') sent += e.totalCents || 0; if (e.status === 'Approved') appr++; });
+      $('sumSent').textContent = vutil.fmt(sent); $('sumApproved').textContent = appr + (appr === 1 ? ' job' : ' jobs');
+
+      var q = $('q').value.trim().toLowerCase();
+      var box = $('list'); box.textContent = '';
+      var shown = all.filter(function (e) {
+        if (!inTab(e, filter)) return false;
+        if (!q) return true;
+        return (e.customerName || '').toLowerCase().indexOf(q) > -1 ||
+               (e.title || '').toLowerCase().indexOf(q) > -1 ||
+               (e.number || '').toLowerCase().indexOf(q) > -1;
+      });
+      $('empty').textContent = shown.length ? '' : (all.length ? 'No estimates here.' : 'No estimates yet. Tap New estimate to start.');
+
+      shown.forEach(function (e) {
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + e.status, e.status)); top.appendChild(document.createTextNode(e.customerName));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', (e.number || '') + (e.title ? ' · ' + e.title : '')));
+        left.addEventListener('click', function () { location.href = 'estimate.html?id=' + e.id; });
+        row.appendChild(left);
+        row.appendChild(vyro.el('b', '', vutil.fmt(e.totalCents)));
+        box.appendChild(row);
+      });
+    }
+
+    // pull in estimates customers accepted through their email link
+    try {
+      var acc = await vpublic.syncAccepted(ctx);
+      if (acc.length) {
+        $('acceptedText').textContent = acc.map(function (a) { return a.by + ' accepted ' + a.number + ' (' + a.customer + ')'; }).join('. ') + '. A job was created for each.';
+        $('acceptedBanner').style.display = 'block';
+      }
+    } catch (e) { /* best effort; needs the latest Firestore rules */ }
+
+    try {
+      var snap = await ctx.bizRef.collection('estimates').orderBy('createdAt', 'desc').get();
+      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      render();
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('q').addEventListener('input', render);
+  });
+</script>
+</body>
+</html>

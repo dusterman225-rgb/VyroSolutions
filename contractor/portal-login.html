@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<meta name="robots" content="noindex">
+<title>Project portal sign in</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img class="mark-small" src="images/logo.svg" alt="">
+    <div class="tag">Customer: Project portal</div>
+  </div>
+
+  <div class="card">
+    <h2>Sign in</h2>
+    <p>Sign in to see your project, updates and invoices.</p>
+    <label class="field"><span>Email</span><input id="email" type="email" autocomplete="email" inputmode="email"></label>
+    <label class="field"><span>Password</span><input id="pw" type="password" autocomplete="current-password"></label>
+    <button class="btn" id="go" type="button">Sign in</button>
+    <button class="link" id="forgot" type="button">First time, or forgot your password?</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="card">
+    <div class="note">First time here? Your contractor sent an email with a link to set your password. If you can't find it, enter your email above and tap "First time, or forgot your password?" to get a new one. Check your spam folder too.</div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script>
+  firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+  var auth = firebase.auth();
+  var $ = function (id) { return document.getElementById(id); };
+  function msg(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
+  function nice(e) {
+    var c = e && e.code;
+    if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') return 'Email or password is incorrect.';
+    if (c === 'auth/invalid-email') return 'That email address does not look right.';
+    if (c === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes and try again.';
+    if (c === 'auth/network-request-failed') return 'No connection. Check your internet and try again.';
+    return 'Something went wrong. Please try again.';
+  }
+  var hold = false;
+  auth.onAuthStateChanged(function (u) { if (u && !hold) location.replace('portal.html'); });
+  $('go').addEventListener('click', async function () {
+    var e = $('email').value.trim(), p = $('pw').value;
+    if (!e || !p) { msg('Enter your email and password.', 'err'); return; }
+    this.disabled = true; msg('Signing in...');
+    hold = true;
+    try {
+      await auth.signInWithEmailAndPassword(e, p);
+      location.replace('portal.html');
+    }
+    catch (x) { hold = false; msg(nice(x), 'err'); this.disabled = false; }
+  });
+  $('forgot').addEventListener('click', async function () {
+    var e = $('email').value.trim();
+    if (!e) { msg('Type your email above first.', 'err'); return; }
+    try { await auth.sendPasswordResetEmail(e, { url: location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html' }); }
+    catch (x) { try { await auth.sendPasswordResetEmail(e); } catch (y) { /* keep the message neutral */ } }
+    msg('If that email has a portal, a link to set your password is on its way. Check spam too.', '');
+  });
+</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot.js"></script>
+</body>
+</html>

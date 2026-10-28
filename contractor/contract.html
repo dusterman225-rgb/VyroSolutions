@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Contract - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>
+  #paper{display:none;background:#fff;color:#111;border-radius:12px;padding:26px;margin-top:14px;font-family:Georgia,"Times New Roman",serif;font-size:.95rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  @media print{
+    body{background:#fff!important}
+    body *{visibility:hidden}
+    #paper,#paper *{visibility:visible}
+    #paper{display:block!important;position:absolute;left:0;top:0;width:100%;border-radius:0;padding:0;font-size:11.5pt}
+  }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">Contract</div>
+  </div>
+
+  <div class="card">
+    <h2 id="cTitle">Loading...</h2>
+    <p id="cSub"></p>
+    <div class="row"><span>Status</span><b id="cStatus"></b></div>
+    <div class="note" id="cWarn"></div>
+    <div class="note" id="cDep"></div>
+  </div>
+
+  <div class="card">
+    <h2>Edit this contract</h2>
+    <div class="note">Fill in anything in [square brackets] before sharing.</div>
+    <textarea id="body" rows="26" style="font-family:ui-monospace,Menlo,monospace;font-size:.85rem;width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:10px;padding:12px;line-height:1.45"></textarea>
+    <button class="btn ghost" id="bAuto" type="button">Fill in what Vyro already knows</button>
+    <button class="btn" id="bSave" type="button">Save changes</button>
+    <div class="note" id="sMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Send to the customer</h2>
+    <button class="btn" id="bShare" type="button">Share in customer's portal</button>
+    <button class="btn ghost" id="bEmail" type="button" style="display:none">Email customer the portal link</button>
+    <button class="btn ghost" id="bUnshare" type="button" style="display:none">Stop sharing</button>
+    <button class="btn ghost" id="bPrint" type="button">Preview and print</button>
+    <details class="more"><summary>How signing works</summary><div class="in"><div class="note">The customer opens it in their portal, prints and signs it, and returns it to you. Vyro does not collect signatures online. Keep the signed original and give them a copy.</div></div></details>
+    <div class="note" id="shMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Signed copy</h2>
+    <label class="field"><span>Date you received the signed contract</span><input id="signedOn" type="date"></label>
+    <button class="btn ghost" id="bSigned" type="button">Mark signed copy received</button>
+    <div class="note" id="sgMsg"></div>
+  </div>
+
+  <div class="card">
+    <a class="link" id="jobLink" href="#">Open the job</a>
+    <button class="link" id="bDel" type="button" style="color:#ff8a8a">Delete this contract</button>
+  </div>
+  <a class="back" href="documents.html">Back to documents</a>
+  <div class="note err" id="err"></div>
+  <div id="paper"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/contracts.js"></script>
+<script src="js/portal.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function cls(s) { return (s || '').replace(/ /g, ''); }
+
+  vyro.start(async function (ctx) {
+    if (ctx.role === 'employee') { $('err').textContent = 'Only the owner or a supervisor can use Documents.'; return; }
+    var id = new URLSearchParams(location.search).get('id');
+    var cref = ctx.bizRef.collection('contracts').doc(id || 'x');
+    var s = await cref.get();
+    if (!s.exists) { $('err').textContent = 'Contract not found.'; $('cTitle').textContent = 'Not found'; return; }
+    var c = s.data(); c.id = id;
+    var job = {};
+    try { var js = await ctx.bizRef.collection('jobs').doc(c.jobId).get(); if (js.exists) job = js.data(); } catch (e) { /* job may be deleted */ }
+
+    function paint() {
+      $('cTitle').textContent = c.title || 'Contract';
+      $('cSub').textContent = c.customerName || '';
+      $('cStatus').textContent = c.status;
+      $('body').value = c.body;
+      $('bShare').textContent = c.status === 'Draft' ? 'Share in customer\'s portal' : 'Update the shared copy';
+      $('bEmail').style.display = c.status !== 'Draft' ? 'block' : 'none';
+      $('bUnshare').style.display = c.status === 'Shared' ? 'block' : 'none';
+      if (c.signedOn) $('signedOn').value = c.signedOn;
+      var n = vcontract.blanks($('body').value);
+      $('cWarn').textContent = n ? n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still to complete or delete.' : '';
+      $('cWarn').className = n ? 'note late' : 'note';
+    }
+    paint();
+    $('jobLink').href = 'job.html?id=' + c.jobId;
+    $('pageTag').textContent = 'Contract';
+    if (job.depositPct && job.contractCents) {
+      var dep = Math.round(job.contractCents * job.depositPct / 100), cap = Math.min(100000, Math.round(job.contractCents * 0.10));
+      if (dep > cap) { $('cDep').textContent = 'California jobs: the down payment on this job is ' + vutil.fmt(dep) + ', but the legal limit is the lesser of $1,000 or 10% (' + vutil.fmt(cap) + '). Adjust the down payment in section 6 if this is a California job.'; $('cDep').className = 'note late'; }
+    }
+    $('body').addEventListener('input', function () { var n = vcontract.blanks($('body').value); $('cWarn').textContent = n ? n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still to complete or delete.' : ''; });
+
+    async function autoFill(manual) {
+      try {
+        var r = await vcontract.refill(ctx, c.jobId, $('body').value);
+        if (r.filled) { $('body').value = r.text; var n = vcontract.blanks(r.text); $('cWarn').textContent = n ? n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still to complete or delete.' : ''; $('cWarn').className = n ? 'note late' : 'note'; smsg('Filled in ' + r.filled + ' item' + (r.filled === 1 ? '' : 's') + ' from your job, customer and business info. Tap Save changes to keep them.'); }
+        else if (manual) smsg('Nothing more to fill in. What is left in brackets is not in Vyro yet.');
+      } catch (e) { if (manual) smsg(vyro.friendly(e), 'err'); }
+    }
+    $('bAuto').addEventListener('click', function () { autoFill(true); });
+    if (c.status === 'Draft' && vcontract.blanks($('body').value)) { autoFill(false); }
+
+    function smsg(t, k) { $('sMsg').textContent = t; $('sMsg').className = 'note ' + (k || ''); }
+    function hmsg(t, k) { $('shMsg').textContent = t; $('shMsg').className = 'note ' + (k || ''); }
+
+    async function save() {
+      var text = $('body').value;
+      if (text.trim().length < 20) throw { code: 'vyro/empty' };
+      await cref.update({ body: text, updatedAt: vyro.stamp() });
+      c.body = text;
+      if (c.status === 'Shared') await vcontract.share(ctx, id, c);
+    }
+    $('bSave').addEventListener('click', async function () {
+      this.disabled = true; smsg('Saving...');
+      try { await save(); smsg(c.status === 'Shared' ? 'Saved. The shared copy in the customer\'s portal is updated too.' : 'Saved.'); paint(); }
+      catch (e) { smsg(e && e.code === 'vyro/empty' ? 'The contract cannot be empty.' : vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+
+    $('bShare').addEventListener('click', async function () {
+      var n = vcontract.blanks($('body').value);
+      if (n && !confirm(n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still unfinished. Share anyway?')) return;
+      this.disabled = true; hmsg('Sharing...');
+      try {
+        await save();
+        if (!(await vportal.exists(c.jobId))) {
+          var em = (job.customerEmail || '').trim().toLowerCase();
+          if (!em) { hmsg('This customer has no email on file, so they cannot have a portal. Add their email on their customer page first.', 'err'); this.disabled = false; return; }
+          if (!confirm('This customer does not have a portal yet. Create it now and email them a link to set their password?')) { this.disabled = false; hmsg(''); return; }
+          var r = await vportal.ensureForCustomer(ctx, job.customerId, em, job.customerName);
+          if (!r || !r.ok) { hmsg((r && r.message) || 'Could not create the portal.', 'err'); this.disabled = false; return; }
+        }
+        await vcontract.share(ctx, id, c);
+        await cref.update({ status: 'Shared', sharedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+        c.status = 'Shared'; paint();
+        hmsg('Shared. The customer can open it from their portal. Tap "Email customer the portal link" to let them know.');
+      } catch (e) { hmsg(vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+
+    $('bUnshare').addEventListener('click', async function () {
+      if (!confirm('Remove this contract from the customer\'s portal?')) return;
+      try { await vcontract.unshare(id, c.jobId); await cref.update({ status: 'Draft', updatedAt: vyro.stamp() }); c.status = 'Draft'; paint(); hmsg('No longer shared.'); }
+      catch (e) { hmsg(vyro.friendly(e), 'err'); }
+    });
+
+    $('bEmail').addEventListener('click', function () {
+      var em = (job.customerEmail || '').trim();
+      var first = (c.customerName || '').split(' ')[0] || 'there';
+      var subject = 'Your contract from ' + ctx.biz.name;
+      var body = 'Hello ' + first + ',\r\n\r\nYour contract for ' + (job.title || 'your project') + ' is ready. Sign in to your project portal to read it and print it:\r\n' +
+        location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html\r\n\r\nPlease print it, sign it, and return it to me. We can arrange a time to meet, or call with any questions' +
+        (ctx.biz.phone ? ': ' + ctx.biz.phone : '.') + '\r\n\r\nThank you,\r\n' + ctx.biz.name;
+      location.href = 'mailto:' + encodeURIComponent(em).replace('%40', '@') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    });
+
+    $('bPrint').addEventListener('click', function () {
+      $('paper').textContent = $('body').value; $('paper').style.display = 'block';
+      $('paper').scrollIntoView(); setTimeout(function () { window.print(); }, 250);
+    });
+
+    $('bSigned').addEventListener('click', async function () {
+      var d = $('signedOn').value;
+      if (!d) { $('sgMsg').textContent = 'Pick the date first.'; $('sgMsg').className = 'note err'; return; }
+      try { await cref.update({ status: 'Signed', signedOn: d, updatedAt: vyro.stamp() }); c.status = 'Signed'; c.signedOn = d; paint(); $('sgMsg').textContent = 'Marked signed.'; $('sgMsg').className = 'note'; }
+      catch (e) { $('sgMsg').textContent = vyro.friendly(e); $('sgMsg').className = 'note err'; }
+    });
+
+    $('bDel').addEventListener('click', async function () {
+      if (!confirm('Delete this contract? It is also removed from the customer\'s portal. This cannot be undone.')) return;
+      try { await vcontract.unshare(id, c.jobId); await cref.delete(); location.href = 'documents.html'; }
+      catch (e) { smsg(vyro.friendly(e), 'err'); }
+    });
+  });
+</script>
+</body>
+</html>

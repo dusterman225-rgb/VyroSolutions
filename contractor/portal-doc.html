@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<meta name="robots" content="noindex">
+<title>Your contract</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>
+  #paper{background:#fff;color:#111;border-radius:12px;padding:26px;margin-top:14px;font-family:Georgia,"Times New Roman",serif;font-size:.95rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  @media print{
+    body{background:#fff!important}
+    body *{visibility:hidden}
+    #paper,#paper *{visibility:visible}
+    #paper{position:absolute;left:0;top:0;width:100%;border-radius:0;padding:0;font-size:11.5pt}
+  }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img class="mark-small" src="images/logo.svg" alt="">
+    <div class="tag" id="tag">Your contract</div>
+  </div>
+  <div class="card">
+    <h2 id="dTitle">Loading...</h2>
+    <p>To sign: tap Print, sign and date the last page, and return it to your contractor the way they asked (often in person). Keep a signed copy for yourself.</p>
+    <button class="btn" id="bPrint" type="button" style="display:none">Print this contract</button>
+    <div class="note">Read it carefully before signing. If anything is unclear, ask your contractor, or ask a lawyer of your choice.</div>
+  </div>
+  <div id="paper" style="display:none"></div>
+  <a class="back" href="portal.html">Back to your project</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script>
+  firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+  var auth = firebase.auth(), db = firebase.firestore();
+  var $ = function (id) { return document.getElementById(id); };
+  auth.onAuthStateChanged(async function (u) {
+    if (!u) { location.replace('portal-login.html'); return; }
+    var q = new URLSearchParams(location.search), p = q.get('p'), d = q.get('d');
+    if (!p || !d) { $('err').textContent = 'This link is not valid.'; return; }
+    try {
+      await u.getIdToken(true);
+      var s = await db.collection('portals').doc(p).collection('documents').doc(d).get();
+      if (!s.exists) { $('dTitle').textContent = 'Not available'; $('err').textContent = 'This document is no longer available. Please contact your contractor.'; return; }
+      var x = s.data();
+      $('dTitle').textContent = x.title || 'Contract'; $('tag').textContent = x.businessName || 'Your contract';
+      $('paper').textContent = x.body; $('paper').style.display = 'block'; $('bPrint').style.display = 'block';
+      $('bPrint').addEventListener('click', function () { window.print(); });
+    } catch (e) { $('err').textContent = 'Could not open this document. Make sure you are signed in with the email your contractor used.'; }
+  });
+</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot.js"></script>
+</body>
+</html>

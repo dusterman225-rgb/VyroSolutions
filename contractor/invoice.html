@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Invoice - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">New invoice</div>
+  </div>
+
+  <div id="topPay" style="display:none"><button class="btn" id="bTopPay" type="button">Payment received</button><a class="btn ghost" id="bVyro" href="#">Pay with Vyro (crypto)</a></div>
+
+  <div class="card" id="lockNote" style="display:none"><p id="lockText"></p></div>
+
+  <form id="form" autocomplete="off">
+    <div class="card" id="fromCard" style="display:none">
+      <h2>From estimate</h2>
+      <p id="fromInfo"></p>
+      <label class="field"><span>What are you billing?</span>
+        <select id="btype">
+          <option value="deposit">Deposit</option>
+          <option value="progress">Progress payment</option>
+          <option value="balance">Remaining balance</option>
+          <option value="full">Full amount</option>
+        </select>
+      </label>
+      <p>You can change the description and amount below before saving.</p>
+    </div>
+
+    <details class="sec" id="secCust" open>
+      <summary>Customer <small id="custSum"></small></summary>
+      <div class="in">
+      <label class="field"><span>Customer</span><select id="cust"><option value="">Choose a customer...</option></select></label>
+      <label class="field" id="nameRow"><span>Name (no customer record yet)</span><input id="cname" type="text" maxlength="120"></label>
+      <input id="cemail" type="hidden">
+      <input id="cphone" type="hidden">
+      <a class="link" id="viewCust" href="#" style="display:none">View customer page</a>
+      <label class="field"><span>Job address</span><textarea id="caddr" rows="2" maxlength="300"></textarea></label>
+      </div>
+    </details>
+
+    <div class="card">
+      <h2>Invoice</h2>
+      <label class="field"><span>Project title</span><input id="title" type="text" maxlength="120"></label>
+      <label class="field"><span>Issue date</span><input id="issueDate" type="date"></label>
+      <label class="field"><span>Due date</span><input id="dueDate" type="date"></label>
+    </div>
+
+    <div class="card">
+      <h2>Line items</h2>
+      <div id="lines"></div>
+      <button class="btn ghost" id="addLine" type="button">Add line</button>
+      <label class="field"><span>Discount ($)</span><input id="discount" type="text" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Sales tax (%)</span><input id="taxPct" type="text" inputmode="decimal" placeholder="0"></label>
+    </div>
+
+    <div class="card totals">
+      <h2>Totals</h2>
+      <div class="row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
+      <div class="row"><span>Discount</span><b id="tDisc">$0.00</b></div>
+      <div class="row"><span>Tax</span><b id="tTax">$0.00</b></div>
+      <div class="row big"><span>Total</span><b id="tTotal">$0.00</b></div>
+      <div class="row"><span>Paid</span><b id="tPaid">$0.00</b></div>
+      <div class="row big"><span>Balance due</span><b id="tBal">$0.00</b></div>
+    </div>
+
+    <details class="sec" id="secTerms" open>
+      <summary>Terms <small>shown to customer</small></summary>
+      <div class="in">
+        <label class="field"><span>Terms</span><textarea id="terms" rows="3" maxlength="2000"></textarea></label>
+      </div>
+    </details>
+    <details class="sec" id="secNotes">
+      <summary>Add notes <small>private</small></summary>
+      <div class="in">
+        <label class="field"><span>Internal notes (never shown to the customer)</span><textarea id="internalNotes" rows="3" maxlength="1000"></textarea></label>
+      </div>
+    </details>
+
+    <div class="card">
+      <button class="btn" id="bSend" type="button">Send</button>
+      <button class="btn ghost" id="bDraft" type="button" style="display:none">Back to draft</button>
+      <button class="btn ghost" id="bReopen" type="button" style="display:none">Reopen as draft</button>
+      <a class="btn ghost" id="bView" href="#" style="display:none">View, print or email</a>
+      <button class="link" id="save" type="submit">Save without sending</button>
+      <button class="link" id="bVoid" type="button" style="display:none;color:#ff8a8a">Void invoice</button>
+      <button class="link" id="bDel" type="button" style="display:none;color:#ff8a8a">Delete invoice</button>
+      <div class="note" id="msg"></div>
+    </div>
+    <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
+      <div class="card" style="max-width:420px;width:100%;margin:auto">
+        <h2>Was the email sent?</h2>
+        <p>Press Send in your mail app, then check it shows in <b>Sent</b>, not Outbox.</p>
+        <button class="btn" id="askYes" type="button">Yes, it was sent</button>
+        <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
+        <button class="btn ghost" id="askNo" type="button">No, not yet</button>
+        <details class="more">
+          <summary>Having trouble?</summary>
+          <div class="in">
+            <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
+            <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+            <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
+          </div>
+        </details>
+        <div class="note" id="askMsg"></div>
+      </div>
+    </div>
+  </form>
+
+  <div class="card" id="payCard" style="display:none">
+    <h2>Payments</h2>
+    <div id="payList"></div>
+    <div class="note" id="payNone"></div>
+    <div id="payForm" style="display:none">
+      <label class="field"><span>Amount received ($)</span><input id="payAmt" type="text" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Method</span>
+        <select id="payMethod">
+          <option>Cash</option><option>Check</option><option>Bank transfer</option>
+          <option>Card (outside Vyro)</option><option>Other</option>
+        </select>
+      </label>
+      <label class="field"><span>Date received</span><input id="payDate" type="date"></label>
+      <label class="field"><span>Note</span><input id="payNote" type="text" maxlength="200"></label>
+      <button class="btn" id="payGo" type="button">Record payment</button>
+    </div>
+    <div class="note" id="payMsg"></div>
+  </div>
+
+  <a class="back" href="invoices.html">Back to invoices</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script>
+  var TYPES = ['Labor', 'Materials', 'Other'];
+  var DEFAULT_TERMS = 'Payment is due by the due date shown. Thank you for your business.';
+  var $ = function (id) { return document.getElementById(id); };
+  function addDays(n) {
+    var d = new Date(); d.setDate(d.getDate() + n);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function deriveStatus(inv, paid) {
+    if (inv.status === 'Draft' || inv.status === 'Voided') return inv.status;
+    if (inv.totalCents > 0 && paid >= inv.totalCents) return 'Paid';
+    return paid > 0 ? 'Partially Paid' : 'Sent';
+  }
+
+  vyro.start(async function (ctx) {
+    var params = new URLSearchParams(location.search);
+    var id = params.get('id');
+    var estId = params.get('estimate') || '';
+    var col = ctx.bizRef.collection('invoices');
+    var canManage = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var inv = null, srcEst = null, linkedTotal = 0, customers = {};
+    var today = vutil.todayStr();
+
+    function say(t, cls) { $('msg').textContent = t; $('msg').className = 'note ' + (cls || ''); }
+
+    // ---------- line items ----------
+    function addRow(it) {
+      it = it || { type: 'Labor', description: '', qty: 1, unitCents: 0 };
+      var row = vyro.el('div', 'line');
+      var r1 = vyro.el('div', 'r1');
+      var type = vyro.el('select');
+      TYPES.forEach(function (t) { var o = vyro.el('option', '', t); o.value = t; type.appendChild(o); });
+      type.value = it.type || 'Labor';
+      var desc = vyro.el('input'); desc.type = 'text'; desc.maxLength = 200; desc.placeholder = 'Description'; desc.value = it.description || '';
+      r1.appendChild(type); r1.appendChild(desc); row.appendChild(r1);
+
+      var r = vyro.el('div', 'r');
+      var w1 = vyro.el('div'); w1.appendChild(vyro.el('small', '', 'Qty'));
+      var qty = vyro.el('input'); qty.type = 'text'; qty.inputMode = 'decimal'; qty.value = it.qty == null ? 1 : it.qty; w1.appendChild(qty);
+      var w2 = vyro.el('div'); w2.appendChild(vyro.el('small', '', 'Unit price $'));
+      var price = vyro.el('input'); price.type = 'text'; price.inputMode = 'decimal'; price.placeholder = '0.00';
+      price.value = it.unitCents ? (it.unitCents / 100).toFixed(2) : ''; w2.appendChild(price);
+      var w3 = vyro.el('div'); w3.appendChild(vyro.el('small', '', 'Amount'));
+      var amt = vyro.el('div', 'amt', '$0.00'); w3.appendChild(amt);
+      r.appendChild(w1); r.appendChild(w2); r.appendChild(w3); row.appendChild(r);
+
+      var rm = vyro.el('button', 'mini danger', 'Remove line'); rm.type = 'button'; rm.style.marginTop = '8px';
+      rm.addEventListener('click', function () { row.remove(); recalc(); });
+      row.appendChild(rm);
+
+      [type, desc, qty, price].forEach(function (x) { x.addEventListener('input', recalc); });
+      row._read = function () {
+        return { type: type.value, description: desc.value.trim(), qty: parseFloat(qty.value) || 0, unitCents: vutil.toCents(price.value) };
+      };
+      row._amt = amt;
+      $('lines').appendChild(row);
+    }
+    function setLines(items) {
+      $('lines').textContent = '';
+      (items || []).forEach(addRow);
+      if (!(items || []).length) addRow();
+    }
+    function getItems() {
+      var out = [];
+      Array.prototype.forEach.call($('lines').children, function (row) {
+        var it = row._read();
+        if (it.description || it.unitCents) out.push(it);
+      });
+      return out;
+    }
+    function calc() {
+      return vutil.totals(getItems(), vutil.toCents($('discount').value), parseFloat($('taxPct').value) || 0);
+    }
+    function recalc() {
+      Array.prototype.forEach.call($('lines').children, function (row) {
+        var it = row._read();
+        row._amt.textContent = vutil.fmt(Math.round(it.qty * it.unitCents));
+      });
+      var t = calc(), paid = inv ? inv.paidCents : 0;
+      $('tSub').textContent = vutil.fmt(t.subtotalCents);
+      $('tDisc').textContent = '-' + vutil.fmt(t.discountCents);
+      $('tTax').textContent = vutil.fmt(t.taxCents);
+      $('tTotal').textContent = vutil.fmt(t.totalCents);
+      $('tPaid').textContent = vutil.fmt(paid);
+      $('tBal').textContent = vutil.fmt(t.totalCents - paid);
+    }
+    ['discount', 'taxPct'].forEach(function (k) { $(k).addEventListener('input', recalc); });
+    $('addLine').addEventListener('click', function () { addRow(); });
+
+    // ---------- customers ----------
+    try {
+      var cs = await ctx.bizRef.collection('customers').orderBy('nameLower').get();
+      cs.forEach(function (d) {
+        var c = d.data(); customers[d.id] = c;
+        var o = vyro.el('option', '', c.name); o.value = d.id; $('cust').appendChild(o);
+      });
+    } catch (e) { /* optional */ }
+
+    function syncCustomerUi() {
+      var cid = $('cust').value;
+      $('nameRow').style.display = cid ? 'none' : 'block';
+      $('viewCust').style.display = cid ? 'block' : 'none';
+      if (cid) $('viewCust').href = 'customer.html?id=' + cid;
+    }
+    function pickCustomer() {
+      var cid = $('cust').value, c = customers[cid];
+      if (c) {
+        $('cname').value = c.name; $('cemail').value = c.email || ''; $('cphone').value = c.phone || '';
+        $('caddr').value = c.address || '';
+      } else { $('cemail').value = ''; $('cphone').value = ''; }
+      syncCustomerUi();
+    }
+    $('cust').addEventListener('change', pickCustomer);
+
+    var milestone = '';
+    // ---------- start from an estimate ----------
+    function applyType(type) {
+      var e = srcEst, n = e.number || 'estimate';
+      if (type === 'full') {
+        setLines(e.lineItems);
+        $('discount').value = e.discountCents ? (e.discountCents / 100).toFixed(2) : '';
+        $('taxPct').value = e.taxPct || '';
+      } else {
+        var amount = 0, desc = '';
+        if (type === 'deposit') {
+          amount = e.depositPct ? Math.round(e.totalCents * e.depositPct / 100) : 0;
+          desc = 'Deposit for ' + n + (e.depositPct ? ' (' + e.depositPct + '%)' : '');
+        } else if (type === 'balance') {
+          amount = Math.max(0, e.totalCents - linkedTotal);
+          desc = 'Remaining balance for ' + n;
+        } else {
+          desc = 'Progress payment for ' + n;
+        }
+        setLines([{ type: 'Other', description: desc, qty: 1, unitCents: amount }]);
+        $('discount').value = ''; $('taxPct').value = '';   // tax is already inside the estimate total
+      }
+      recalc();
+    }
+
+    // ---------- load ----------
+    function fill(i) {
+      $('cust').value = i.customerId || '';
+      $('cname').value = i.customerName || ''; $('cemail').value = i.customerEmail || '';
+      $('cphone').value = i.customerPhone || ''; $('caddr').value = i.address || '';
+      $('title').value = i.title || ''; $('issueDate').value = i.issueDate || ''; $('dueDate').value = i.dueDate || '';
+      setLines(i.lineItems);
+      $('discount').value = i.discountCents ? (i.discountCents / 100).toFixed(2) : '';
+      $('taxPct').value = i.taxPct || '';
+      $('terms').value = i.terms || ''; $('internalNotes').value = i.internalNotes || '';
+      syncCustomerUi();
+    }
+
+    if (id) {
+      var s = await col.doc(id).get();
+      if (!s.exists) { $('err').textContent = 'Invoice not found.'; return; }
+      inv = s.data(); inv.id = id; estId = inv.estimateId || '';
+      fill(inv);
+    } else {
+      $('issueDate').value = today; $('dueDate').value = addDays(14); $('terms').value = DEFAULT_TERMS;
+      setLines([]);
+      var custParam = params.get('customer');
+      if (estId) {
+        try {
+          var es = await ctx.bizRef.collection('estimates').doc(estId).get();
+          if (es.exists) {
+            srcEst = es.data(); srcEst.id = estId;
+            var linked = await col.where('estimateId', '==', estId).get();
+            linked.forEach(function (d) { var x = d.data(); if (x.status !== 'Voided') linkedTotal += x.totalCents || 0; });
+            $('fromCard').style.display = 'block';
+            $('fromInfo').textContent = srcEst.number + ' · total ' + vutil.fmt(srcEst.totalCents) +
+              ' · already invoiced ' + vutil.fmt(linkedTotal);
+            $('cust').value = srcEst.customerId || '';
+            $('cname').value = srcEst.customerName || ''; $('cemail').value = srcEst.customerEmail || '';
+            $('cphone').value = srcEst.customerPhone || ''; $('caddr').value = srcEst.address || '';
+            $('title').value = srcEst.title || '';
+            $('btype').value = linkedTotal > 0 ? 'balance' : (srcEst.depositPct ? 'deposit' : 'full');
+            var mPct = parseInt(params.get('pct'), 10), mLabel = (params.get('label') || '').slice(0, 40);
+            if (mPct > 0 && mPct <= 100 && mLabel) {
+              milestone = mLabel;
+              $('btype').value = mPct === 100 ? 'full' : 'progress';
+              var mAmt = Math.round(srcEst.totalCents * mPct / 100);
+              setLines([{ type: 'Other', description: mLabel + ' (' + mPct + '%) for ' + (srcEst.number || 'estimate'), qty: 1, unitCents: mAmt }]);
+              $('discount').value = ''; $('taxPct').value = ''; recalc();
+              $('btype').addEventListener('change', function () { milestone = ''; applyType(this.value); });
+            } else {
+            applyType($('btype').value);
+            $('btype').addEventListener('change', function () { applyType(this.value); });
+            }
+          }
+        } catch (e) { $('err').textContent = vyro.friendly(e); }
+      } else if (custParam && customers[custParam]) {
+        $('cust').value = custParam; pickCustomer();
+      }
+      syncCustomerUi();
+    }
+    recalc();
+
+    // ---------- state / buttons ----------
+    var status = inv ? inv.status : 'Draft';
+    var paidSoFar = inv ? inv.paidCents : 0;
+    var overdue = inv && (status === 'Sent' || status === 'Partially Paid') && inv.dueDate && inv.dueDate < today;
+    $('pageTag').textContent = inv ? (inv.number + ' · ' + (overdue ? 'Overdue' : status)) : 'New invoice';
+
+    if (status !== 'Draft') {
+      Array.prototype.forEach.call($('form').querySelectorAll('input,select,textarea,.line .mini'), function (x) { x.disabled = true; });
+      $('addLine').style.display = 'none'; $('save').style.display = 'none';
+      $('lockNote').style.display = 'block';
+      $('lockText').textContent = status === 'Voided'
+        ? 'This invoice is voided. Reopen it as a draft to edit it.'
+        : 'This invoice has been sent and is locked. Send it back to draft to edit it (only possible if no payments are recorded).';
+    }
+    if (inv) {
+      $('bView').style.display = 'block'; $('bView').href = 'invoice-view.html?id=' + inv.id;
+      if (status === 'Sent' && paidSoFar === 0) { $('bDraft').style.display = 'block'; $('bVoid').style.display = 'block'; }
+      if (status === 'Voided' && paidSoFar === 0) $('bReopen').style.display = 'block';
+      if (status === 'Draft') $('bVoid').style.display = 'block';
+      if (canManage && paidSoFar === 0 && (status === 'Draft' || status === 'Voided')) $('bDel').style.display = 'block';
+    }
+    if (inv && (status === 'Sent' || status === 'Partially Paid')) { $('topPay').style.display = 'block'; $('bVyro').href = 'paywithvyro.html?id=' + inv.id; }
+    var canSend = !inv || status === 'Draft' || status === 'Sent' || status === 'Partially Paid';
+    $('bSend').style.display = canSend ? 'block' : 'none';
+    $('bSend').textContent = (!inv || status === 'Draft') ? 'Send' : 'Resend by email';
+
+    // ---------- save ----------
+    async function save(newStatus, openSend) {
+      var name = $('cname').value.trim();
+      if (!name) { say('Choose a customer, or type a name.', 'err'); return; }
+      var items = getItems(), t = calc();
+      var st = newStatus || status;
+      if ((st === 'Sent' || openSend) && (!items.length || t.totalCents <= 0)) { say('Add at least one line item with a price first.', 'err'); return; }
+      if ((st === 'Sent' || openSend) && !$('dueDate').value) { say('Choose a due date first.', 'err'); return; }
+      var data = {
+        customerId: $('cust').value || '', customerName: name, customerEmail: $('cemail').value.trim(),
+        customerPhone: $('cphone').value.trim(), address: $('caddr').value.trim(),
+        estimateId: estId, estimateNumber: srcEst ? srcEst.number : (inv ? inv.estimateNumber || '' : ''),
+        milestone: inv ? (inv.milestone || '') : milestone,
+        billingType: srcEst && !inv ? $('btype').value : (inv ? inv.billingType || '' : ''),
+        title: $('title').value.trim(), issueDate: $('issueDate').value, dueDate: $('dueDate').value,
+        lineItems: items, discountCents: t.discountCents, taxPct: parseFloat($('taxPct').value) || 0,
+        subtotalCents: t.subtotalCents, taxCents: t.taxCents, totalCents: t.totalCents,
+        paidCents: inv ? inv.paidCents : 0,
+        terms: $('terms').value.trim(), internalNotes: $('internalNotes').value.trim(),
+        status: st, updatedAt: vyro.stamp()
+      };
+      if (newStatus === 'Sent' && status !== 'Sent') data.sentAt = vyro.stamp();
+      if (newStatus === 'Voided') { data.voidedAt = vyro.stamp(); vyro.audit(ctx, 'invoice voided', (inv && inv.number) || ''); }
+
+      Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = true; });
+      say('Saving...');
+      try {
+        var savedId;
+        if (inv) {
+          await col.doc(inv.id).update(data); savedId = inv.id;
+        } else {
+          var ref = col.doc(), cref = ctx.bizRef.collection('counters').doc('invoice');
+          data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid;
+          await vyro.db.runTransaction(async function (tx) {
+            var cs = await tx.get(cref);
+            var n = cs.exists ? cs.data().n + 1 : 1;
+            tx.set(cref, { n: n });
+            data.number = 'INV-' + String(n).padStart(4, '0');
+            tx.set(ref, data);
+          });
+          savedId = ref.id;
+        }
+        if (openSend) {      // stay on the page: open the mail app, then ask whether it was sent
+          inv = Object.assign({}, data, { id: savedId }); status = st;
+          history.replaceState(null, '', 'invoice.html?id=' + savedId);
+          Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = false; });
+          say(''); askSent(); return;
+        }
+        location.replace('invoice.html?id=' + savedId);
+      } catch (err) {
+        say(vyro.friendly(err), 'err');
+        Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = false; });
+      }
+    }
+
+    $('form').addEventListener('submit', function (e) { e.preventDefault(); save(null); });
+    function emailParts() {
+      var t = calc(), to = $('cemail').value.trim();
+      var bal = t.totalCents - (inv ? inv.paidCents : 0);
+      var phone = (ctx.biz.phone || '').trim();
+      var subject = 'Invoice ' + inv.number + ' from ' + ctx.biz.name;
+      var body = 'Hi ' + $('cname').value.trim() + ',\n\nHere is invoice ' + inv.number +
+        ($('title').value.trim() ? ' for ' + $('title').value.trim() : '') + '. The amount due is ' + vutil.fmt(bal) +
+        ', due ' + $('dueDate').value + '.\n\n' +
+        (phone ? 'Questions? Call ' + ctx.biz.name + ': ' + phone : 'Questions? Just reply to this email.') +
+        '\n\nThank you,\n' + ctx.biz.name;
+      return { to: to, subject: subject, body: body };
+    }
+    function ask(t, cls) { $('askMsg').textContent = t; $('askMsg').className = 'note ' + (cls || ''); }
+    function afterEmail(p) {
+      var warn = [];
+      if (!p.to) warn.push('This customer has no email on file. Type the address in your mail app.');
+      if (!(ctx.biz.phone || '').trim()) warn.push('Add your business phone in Business profile so customers get a Call line.');
+      ask(warn.join(' '), warn.length ? 'err' : '');
+    }
+    function openEmail() {
+      var p = emailParts(); afterEmail(p);
+      window.location.href = 'mailto:' + encodeURIComponent(p.to).replace('%40', '@') + '?subject=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body.replace(/\n/g, '\r\n'));
+    }
+    function openGmail() {
+      var p = emailParts(); afterEmail(p);
+      window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(p.to) + '&su=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body), '_blank');
+    }
+    async function copyEmail() {
+      var p = emailParts();
+      try {
+        await navigator.clipboard.writeText('To: ' + p.to + '\nSubject: ' + p.subject + '\n\n' + p.body);
+        afterEmail(p); ask('Copied. Paste it into any email app.', 'ok');
+      } catch (e) { ask('Could not copy on this device.', 'err'); }
+    }
+    $('bTopPay').addEventListener('click', function () {
+      $('payCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(function () { try { $('payAmt').focus(); $('payAmt').select(); } catch (e) { /* ignore */ } }, 450);
+    });
+    $('bSend').addEventListener('click', function () {
+      if (inv && status !== 'Draft') { askSent(); return; }   // already sent: resend the email
+      save(null, true);
+    });
+    function askSent() {
+      $('askModal').style.display = 'flex';
+      $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
+      openEmail();
+    }
+    function markDone() { if (status === 'Draft') save('Sent'); else location.replace('invoice.html?id=' + inv.id); }
+    $('askYes').addEventListener('click', markDone);
+    $('askHand').addEventListener('click', markDone);
+    $('askNo').addEventListener('click', function () { location.replace('invoice.html?id=' + inv.id); });
+    $('askAgain').addEventListener('click', openEmail);
+    $('askGmail').addEventListener('click', openGmail);
+    $('askCopy').addEventListener('click', copyEmail);
+    $('bDraft').addEventListener('click', function () { save('Draft'); });
+    $('bReopen').addEventListener('click', function () { save('Draft'); });
+    $('bVoid').addEventListener('click', function () { if (confirm('Void this invoice?')) save('Voided'); });
+    $('bDel').addEventListener('click', async function () {
+      if (!confirm('Delete this invoice permanently?')) return;
+      try { await col.doc(inv.id).delete(); await vyro.audit(ctx, 'invoice deleted', inv.number || inv.id); location.href = 'invoices.html'; } catch (e) { say(vyro.friendly(e), 'err'); }
+    });
+
+    // ---------- payments ----------
+    if (inv && (status === 'Sent' || status === 'Partially Paid' || status === 'Paid' || paidSoFar > 0)) {
+      $('payCard').style.display = 'block';
+      var iref = col.doc(inv.id);
+      var pmsg = function (t, cls) { $('payMsg').textContent = t; $('payMsg').className = 'note ' + (cls || ''); };
+
+      if (status === 'Sent' || status === 'Partially Paid') {
+        $('payForm').style.display = 'block';
+        $('payDate').value = today;
+        $('payAmt').value = ((inv.totalCents - inv.paidCents) / 100).toFixed(2);
+      }
+
+      try {
+        var ps = await iref.collection('payments').orderBy('createdAt', 'desc').get();
+        $('payNone').textContent = ps.empty ? 'No payments recorded yet.' : '';
+        ps.forEach(function (d) {
+          var p = d.data();
+          var row = vyro.el('div', 'item');
+          var left = vyro.el('div', 'grow');
+          left.appendChild(vyro.el('b', p.reversed ? 'struck' : '', vutil.fmt(p.amountCents)));
+          left.appendChild(vyro.el('small', '', (p.receivedOn || '') + ' · ' + p.method + (p.note ? ' · ' + p.note : '') + (p.reversed ? ' · reversed' : '')));
+          row.appendChild(left);
+          if (!p.reversed && canManage) {
+            var rv = vyro.el('button', 'mini danger', 'Reverse'); rv.type = 'button';
+            rv.addEventListener('click', async function () {
+              if (!confirm(p.source === 'vyro' ? 'Reverse this crypto payment in your records? This does NOT send any money back to the customer. Refunds must be sent from your wallet yourself.' : 'Reverse this payment? It stays on record, marked reversed.')) return;
+              try {
+                await vyro.db.runTransaction(async function (tx) {
+                  var is = await tx.get(iref), pr = await tx.get(d.ref);
+                  var pd = pr.data(); if (pd.reversed) throw { code: 'vyro/done' };
+                  var idata = is.data();
+                  var paid = Math.max(0, idata.paidCents - pd.amountCents);
+                  tx.update(d.ref, { reversed: true, reversedAt: vyro.stamp(), reversedBy: ctx.user.uid });
+                  tx.update(iref, { paidCents: paid, status: deriveStatus(idata, paid), updatedAt: vyro.stamp() });
+                });
+                await vyro.audit(ctx, 'payment reversed', (inv.number || inv.id) + ' ' + vutil.fmt(p.amountCents));
+                location.replace('invoice.html?id=' + inv.id);
+              } catch (e) { pmsg(vyro.friendly(e), 'err'); }
+            });
+            row.appendChild(rv);
+          }
+          $('payList').appendChild(row);
+        });
+      } catch (e) { pmsg(vyro.friendly(e), 'err'); }
+
+      $('payGo').addEventListener('click', async function () {
+        var btn = this;
+        var amt = vutil.toCents($('payAmt').value);
+        if (amt <= 0) { pmsg('Enter the amount received.', 'err'); return; }
+        if (amt > inv.totalCents - inv.paidCents) { pmsg('That is more than the balance due.', 'err'); return; }
+        btn.disabled = true; pmsg('Saving...');
+        var pref = iref.collection('payments').doc();
+        try {
+          await vyro.db.runTransaction(async function (tx) {
+            var is = await tx.get(iref); var d = is.data();
+            var paid = d.paidCents + amt;
+            if (paid > d.totalCents) throw { code: 'vyro/overpay' };
+            tx.set(pref, {
+              amountCents: amt, method: $('payMethod').value, receivedOn: $('payDate').value || today,
+              note: $('payNote').value.trim(), source: 'manual', reversed: false,
+              recordedBy: ctx.user.uid, createdAt: vyro.stamp()
+            });
+            tx.update(iref, { paidCents: paid, status: deriveStatus(d, paid), updatedAt: vyro.stamp() });
+          });
+          await vyro.audit(ctx, 'payment recorded', (inv.number || inv.id) + ' ' + vutil.fmt(amt) + ' ' + $('payMethod').value);
+          location.replace('invoice.html?id=' + inv.id);
+        } catch (e) {
+          pmsg(e && e.code === 'vyro/overpay' ? 'That is more than the balance due.' : vyro.friendly(e), 'err');
+          btn.disabled = false;
+        }
+      });
+    }
+  });
+</script>
+<script>
+// Fold Customer and Terms once they are filled in (existing invoices / estimate-based ones)
+(function () {
+  var qs = new URLSearchParams(location.search);
+  if (!(qs.get('id') || qs.get('customer') || qs.get('estimate') || qs.get('est'))) return;   // a brand new invoice: never fold while the person is typing
+  var tries = 0, t = setInterval(function () {
+    tries++;
+    var q = function (i) { return document.getElementById(i); };
+    var filled = q('cust') && (q('cust').value || (q('cname') && q('cname').value.trim()));
+    if (filled) {
+      var nm = q('cust').selectedOptions && q('cust').value ? q('cust').selectedOptions[0].text : q('cname').value;
+      q('custSum').textContent = nm;
+      q('secCust').open = false;
+      if (q('terms').value.trim()) q('secTerms').open = false;
+      if (q('internalNotes').value.trim()) q('secNotes').open = true;
+      clearInterval(t);
+    }
+    if (tries > 16) clearInterval(t);
+  }, 250);
+})();
+</script>
+</body>
+</html>

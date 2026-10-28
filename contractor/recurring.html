@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Recurring bills - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Recurring bills</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <details class="sec" open>
+    <summary>Add a recurring bill</summary>
+    <div class="in">
+      <label class="field"><span>What is it? (rent, insurance, truck payment...)</span><input id="desc" maxlength="200"></label>
+      <label class="field"><span>Who do you pay?</span><input id="vendor" maxlength="120"></label>
+      <label class="field"><span>Amount ($)</span><input id="amt" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label class="field"><span>How often</span><select id="every"><option value="month">Every month</option><option value="quarter">Every 3 months</option><option value="year">Every year</option></select></label>
+      <label class="field"><span>Next due date</span><input id="next" type="date"></label>
+      <button class="btn" id="add" type="button">Save</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <div class="note">When you open your dashboard, each bill that is due within 14 days is added to Expenses as Unpaid, and it shows on your calendar. Nothing is paid for you. If you do not open the app, nothing is created.</div>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/recur.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    var col = ctx.bizRef.collection('recurring'), rows = [];
+    var names = { month: 'monthly', quarter: 'every 3 months', year: 'yearly' };
+    $('next').value = vutil.todayStr();
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); rows.sort(function (a, b) { return a.nextDue < b.nextDue ? -1 : 1; }); }
+      catch (e) { $('err').textContent = vyro.friendly(e); }
+      var box = $('list'); box.textContent = '';
+      $('empty').textContent = rows.length ? '' : 'No recurring bills yet.';
+      rows.forEach(function (r) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', r.description));
+        left.appendChild(vyro.el('small', '', vutil.fmt(r.amountCents) + ' \u00b7 ' + names[r.every] + ' \u00b7 next ' + r.nextDue + (r.vendor ? ' \u00b7 ' + r.vendor : '')));
+        row.appendChild(left);
+        var x = vyro.el('button', 'btn ghost', 'Stop'); x.type = 'button';
+        x.addEventListener('click', async function () { if (!confirm('Stop this recurring bill? Bills already created stay.')) return; try { await col.doc(r.id).delete(); load(); } catch (e) { $('err').textContent = vyro.friendly(e); } });
+        row.appendChild(x); box.appendChild(row);
+      });
+    }
+    $('add').addEventListener('click', async function () {
+      var d = $('desc').value.trim(), c = vutil.toCents($('amt').value);
+      if (!d || !(c > 0) || !$('next').value) { $('msg').textContent = 'Fill in what it is, the amount and the next due date.'; $('msg').className = 'note err'; return; }
+      try {
+        await col.add({ description: d, vendor: $('vendor').value.trim(), amountCents: c, every: $('every').value, nextDue: $('next').value, anchorDay: parseInt($('next').value.slice(8), 10), createdAt: vyro.stamp() });
+        $('desc').value = ''; $('vendor').value = ''; $('amt').value = '';
+        if (window.vrecur) { try { await vrecur.run(ctx); } catch (e) {} }
+        $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    load();
+  });
+</script>
+</body>
+</html>

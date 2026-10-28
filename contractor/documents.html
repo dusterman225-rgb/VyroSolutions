@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Documents - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Documents</div>
+  </div>
+
+  <div id="mainView">
+    <div class="card">
+      <h2>Contracts</h2>
+      <div id="cList"></div>
+      <div class="note" id="cNone"></div>
+      <button class="btn" id="newC" type="button">New contract, change order or waiver</button>
+    </div>
+
+    <details class="sec">
+      <summary>Contract templates</summary>
+      <div class="in">
+        <div id="tList"></div>
+        <div class="note" id="tNone"></div>
+        <button class="btn ghost" id="newT" type="button">New template</button>
+      </div>
+    </details>
+    <a class="back" href="app.html">Back to dashboard</a>
+  </div>
+
+  <div id="newView" class="card" style="display:none">
+    <h2>New contract</h2>
+    <label class="field"><span>Job</span><select id="nJob"></select></label>
+    <label class="field"><span>Template</span><select id="nTpl"></select></label>
+    <button class="btn" id="nGo" type="button">Create contract</button>
+    <button class="btn ghost" id="nCancel" type="button">Cancel</button>
+    <div class="note" id="nMsg"></div>
+  </div>
+
+  <div id="tplView" class="card" style="display:none">
+    <h2 id="tpTitle">Template</h2>
+    <label class="field"><span>Template name</span><input id="tpName" type="text" maxlength="80"></label>
+    <label class="field"><span>Wording</span><textarea id="tpBody" rows="22" style="font-family:ui-monospace,Menlo,monospace;font-size:.8rem"></textarea></label>
+    <div class="note">Words like {{customer_name}} are filled in automatically. Available: contract_date, estimate_number, business_name, business_address, business_phone, business_email, license_number, customer_name, customer_address, customer_phone, customer_email, job_address, project_title, scope, contract_total, deposit_amount, start_date, target_end_date. Anything in [square brackets] is for you to complete per job.</div>
+    <button class="btn" id="tpSave" type="button">Save template</button>
+    <button class="btn ghost" id="tpReset" type="button">Replace with Vyro starter wording</button>
+    <button class="btn ghost" id="tpBack" type="button">Back</button>
+    <button class="link" id="tpDel" type="button" style="display:none;color:#ff8a8a">Delete template</button>
+    <div class="note" id="tpMsg"></div>
+  </div>
+
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/contract-default.js"></script>
+<script src="js/contracts.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function cls(s) { return (s || '').replace(/ /g, ''); }
+
+  vyro.start(async function (ctx) {
+    if (ctx.role === 'employee') { $('mainView').style.display = 'none'; $('err').textContent = 'Only the owner or a supervisor can use Documents.'; return; }
+    var isOwner = ctx.role === 'owner';
+    var tplCol = ctx.bizRef.collection('templates'), conCol = ctx.bizRef.collection('contracts');
+    var templates = [], editingId = null;
+    var preJob = new URLSearchParams(location.search).get('job');
+
+    function show(v) { ['mainView', 'newView', 'tplView'].forEach(function (x) { $(x).style.display = x === v ? 'block' : 'none'; }); window.scrollTo(0, 0); }
+
+    async function loadTemplates() {
+      var s = await tplCol.get();
+      if (s.empty) {
+        await tplCol.doc('starter').set({ name: VYRO_CONTRACT_DEFAULT.name, body: VYRO_CONTRACT_DEFAULT.body, createdAt: vyro.stamp(), updatedAt: vyro.stamp() });
+        s = await tplCol.get();
+      }
+      if (!s.docs.some(function (d) { return d.id === 'change-order'; })) {
+        try {
+          await tplCol.doc('change-order').set({ name: VYRO_CHANGE_ORDER_DEFAULT.name, body: VYRO_CHANGE_ORDER_DEFAULT.body, createdAt: vyro.stamp(), updatedAt: vyro.stamp() });
+          s = await tplCol.get();
+        } catch (e) { /* optional */ }
+      }
+      var extras = [['lien-waiver', 'VYRO_LIEN_WAIVER_DEFAULT'], ['final-receipt', 'VYRO_FINAL_RECEIPT_DEFAULT']];
+      for (var xi = 0; xi < extras.length; xi++) {
+        var ex = extras[xi];
+        if (!s.docs.some(function (d) { return d.id === ex[0]; }) && window[ex[1]]) {
+          try { await tplCol.doc(ex[0]).set({ name: window[ex[1]].name, body: window[ex[1]].body, createdAt: vyro.stamp(), updatedAt: vyro.stamp() }); } catch (e) { /* optional */ }
+        }
+      }
+      s = await tplCol.get();
+      templates = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      $('tList').textContent = '';
+      templates.forEach(function (t) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', t.name)); left.appendChild(vyro.el('small', '', 'Tap to edit'));
+        left.addEventListener('click', function () { openTemplate(t); });
+        row.appendChild(left); $('tList').appendChild(row);
+      });
+    }
+
+    async function loadContracts() {
+      var s = await conCol.get();
+      var list = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      list.sort(function (a, b) { return (b.createdAt ? b.createdAt.toMillis() : 0) - (a.createdAt ? a.createdAt.toMillis() : 0); });
+      $('cNone').textContent = list.length ? '' : 'No contracts yet.';
+      $('cList').textContent = '';
+      list.forEach(function (c) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(c.status), c.status)); top.appendChild(document.createTextNode(c.title || 'Contract'));
+        left.appendChild(top); left.appendChild(vyro.el('small', '', c.customerName || ''));
+        left.addEventListener('click', function () { location.href = 'contract.html?id=' + c.id; });
+        row.appendChild(left); $('cList').appendChild(row);
+      });
+    }
+
+    function openTemplate(t) {
+      editingId = t ? t.id : null;
+      $('tpTitle').textContent = t ? 'Edit template' : 'New template';
+      $('tpName').value = t ? t.name : ''; $('tpBody').value = t ? t.body : VYRO_CONTRACT_DEFAULT.body;
+      $('tpDel').style.display = t ? 'block' : 'none'; $('tpMsg').textContent = ''; show('tplView');
+    }
+    $('newT').addEventListener('click', function () { openTemplate(null); });
+    $('tpBack').addEventListener('click', function () { show('mainView'); });
+    $('tpReset').addEventListener('click', function () { if (confirm('Replace the wording in the box with Vyro\'s starter wording? Your edits in the box are lost until you save.')) $('tpBody').value = VYRO_CONTRACT_DEFAULT.body; });
+    $('tpSave').addEventListener('click', async function () {
+      var name = $('tpName').value.trim(), body = $('tpBody').value;
+      if (!name || body.trim().length < 20) { $('tpMsg').textContent = 'Give the template a name and some wording.'; $('tpMsg').className = 'note err'; return; }
+      this.disabled = true;
+      try {
+        var data = { name: name, body: body, updatedAt: vyro.stamp() };
+        if (editingId) await tplCol.doc(editingId).update(data); else { data.createdAt = vyro.stamp(); await tplCol.add(data); }
+        await loadTemplates(); show('mainView');
+      } catch (e) { $('tpMsg').textContent = vyro.friendly(e); $('tpMsg').className = 'note err'; }
+      this.disabled = false;
+    });
+    $('tpDel').addEventListener('click', async function () {
+      if (!editingId || !confirm('Delete this template? Contracts already made from it are not affected.')) return;
+      try { await tplCol.doc(editingId).delete(); await loadTemplates(); show('mainView'); } catch (e) { $('tpMsg').textContent = vyro.friendly(e); $('tpMsg').className = 'note err'; }
+    });
+
+    // new contract
+    async function openNew() {
+      var js = await ctx.bizRef.collection('jobs').get();
+      var jobs = js.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      jobs.sort(function (a, b) { return (b.createdAt ? b.createdAt.toMillis() : 0) - (a.createdAt ? a.createdAt.toMillis() : 0); });
+      $('nJob').textContent = ''; $('nTpl').textContent = '';
+      jobs.forEach(function (j) { var o = document.createElement('option'); o.value = j.id; o.textContent = (j.customerName || '') + ' - ' + (j.title || j.estimateNumber || 'Job'); $('nJob').appendChild(o); });
+      templates.forEach(function (t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.name; $('nTpl').appendChild(o); });
+      if (preJob) $('nJob').value = preJob;
+      $('nMsg').textContent = jobs.length ? '' : 'You need a job first (a job is created when an estimate is approved).';
+      show('newView');
+    }
+    $('newC').addEventListener('click', openNew);
+    $('nCancel').addEventListener('click', function () { show('mainView'); });
+    $('nGo').addEventListener('click', async function () {
+      var jid = $('nJob').value, tid = $('nTpl').value;
+      if (!jid || !tid) { $('nMsg').textContent = 'Pick a job and a template.'; $('nMsg').className = 'note err'; return; }
+      this.disabled = true; $('nMsg').textContent = 'Creating...'; $('nMsg').className = 'note';
+      try {
+        var t = templates.filter(function (x) { return x.id === tid; })[0];
+        var f = await vcontract.fill(ctx, jid, t.body);
+        var ref = await conCol.add({
+          jobId: jid, customerName: f.job.customerName || '', title: (/change order/i.test(t.name) ? 'Change order - ' : /lien/i.test(t.name) ? 'Lien waiver - ' : /receipt/i.test(t.name) ? 'Receipt - ' : 'Contract - ') + (f.job.title || ('Estimate ' + (f.job.estimateNumber || ''))),
+          templateName: t.name, body: f.text, status: 'Draft', createdAt: vyro.stamp(), updatedAt: vyro.stamp(), createdBy: ctx.user.uid
+        });
+        location.href = 'contract.html?id=' + ref.id;
+      } catch (e) { $('nMsg').textContent = vyro.friendly(e); $('nMsg').className = 'note err'; this.disabled = false; }
+    });
+
+    try { await loadTemplates(); await loadContracts(); if (preJob) openNew(); } catch (e) { $('err').textContent = vyro.friendly(e); }
+  });
+</script>
+</body>
+</html>

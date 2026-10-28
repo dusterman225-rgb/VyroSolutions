@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Customer - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">Customer</div>
+  </div>
+
+  <div class="card">
+    <h2 id="cName">Loading...</h2>
+    <div id="details"></div>
+    <div class="nav" id="actions"></div>
+  </div>
+
+  <details class="sec" open>
+    <summary>Jobs <small id="jobSum"></small></summary>
+    <div class="in">
+      <div id="jobs"></div>
+      <div class="note" id="noJobs"></div>
+    </div>
+  </details>
+
+  <details class="sec">
+    <summary>Estimates <small id="estSum"></small></summary>
+    <div class="in">
+      <div id="ests"></div>
+      <div class="note" id="none"></div>
+      <a class="btn" id="newEst" href="#">New estimate</a>
+    </div>
+  </details>
+
+  <details class="sec" id="portalCard">
+    <summary>Customer portal <small id="portSum"></small></summary>
+    <div class="in">
+      <p id="pStat">Checking...</p>
+      <button class="btn" id="pMake" type="button" style="display:none">Create customer portal</button>
+      <button class="btn ghost" id="pResend" type="button" style="display:none">Email login link again</button>
+      <button class="btn ghost" id="pSync" type="button" style="display:none">Refresh what the customer sees</button>
+      <button class="btn ghost" id="pDel" type="button" style="display:none;color:#ff8a8a">Delete portal</button>
+      <div class="note">Customers never see costs, profit or internal notes. Archiving or deleting the customer deletes their portal.</div>
+      <div class="note" id="pMsg"></div>
+    </div>
+  </details>
+
+  <details class="more">
+    <summary>More &#9662;</summary>
+    <div class="in">
+      <button class="btn ghost" id="bArchive" type="button" style="display:none">Archive customer</button>
+      <button class="btn" id="bRestore" type="button" style="display:none">Restore to active customers</button>
+      <button class="btn ghost" id="bDelete" type="button" style="display:none;color:#ff8a8a">Delete customer</button>
+      <div class="note" id="aMsg"></div>
+    </div>
+  </details>
+
+  <a class="back" id="back" href="customers.html">Back to customers</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/cascade.js"></script>
+<script src="js/portal.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var LANG = { en: 'English', es: 'Spanish', pt: 'Portuguese', fr: 'French', zh: 'Chinese', vi: 'Vietnamese',
+               tl: 'Tagalog', ar: 'Arabic', ru: 'Russian', ko: 'Korean', other: 'Other' };
+  function cleanPhone(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+  function cls(s) { return s.replace(/ /g, ''); }
+
+  vyro.start(async function (ctx) {
+    var id = new URLSearchParams(location.search).get('id');
+    var s = await ctx.bizRef.collection('customers').doc(id || 'x').get();
+    if (!s.exists) { $('err').textContent = 'Customer not found.'; $('cName').textContent = 'Not found'; return; }
+    var c = s.data();
+
+    $('cName').textContent = c.name;
+    if (c.archived) {
+      $('pageTag').textContent = 'Archived customer';
+      $('back').href = 'archived.html'; $('back').textContent = 'Back to archived customers';
+      $('bRestore').style.display = 'block';
+    } else {
+      $('bArchive').style.display = 'block';
+    }
+
+    var box = $('details');
+    function row(label, val) {
+      if (!val) return;
+      var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', label)); r.appendChild(vyro.el('b', '', val)); box.appendChild(r);
+    }
+    row('Phone', c.phone); row('Email', c.email); row('Address', c.address);
+    row('Language', LANG[c.language] || '');
+    if (c.notes) {
+      var n = vyro.el('div', 'row'); n.style.display = 'block';
+      n.appendChild(vyro.el('span', '', 'Notes'));
+      var nb = vyro.el('div', '', c.notes); nb.style.cssText = 'white-space:pre-wrap;color:#fff;margin-top:6px'; n.appendChild(nb);
+      box.appendChild(n);
+    }
+    if (!box.children.length) box.appendChild(vyro.el('p', '', 'No contact details saved yet.'));
+
+    var act = $('actions');
+    function link(label, href, newTab) {
+      var a = vyro.el('a', 'btn ghost', label); a.href = href;
+      if (newTab) { a.target = '_blank'; a.rel = 'noopener'; }
+      act.appendChild(a);
+    }
+    if (cleanPhone(c.phone)) link('Call', 'tel:' + cleanPhone(c.phone));
+    if (c.email) link('Email', 'mailto:' + encodeURIComponent(c.email).replace('%40', '@'));
+    if (c.address) link('Map', 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address), true);
+    link('Edit', 'customers.html?edit=' + id);
+
+    $('newEst').href = 'estimate.html?customer=' + id;
+
+    // ---------- jobs ----------
+    var jobList = [];
+    try {
+      if ((c.email || '').trim() && !c.archived) { try { await vportal.findJobs(ctx, id, (c.email || '').trim().toLowerCase(), c.email); } catch (e0) { /* optional */ } }
+      jobList = await vcascade.jobsOfCustomer(ctx.bizRef, id);
+      jobList.sort(function (a, b) {
+        var ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+        var tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+        return tb - ta;
+      });
+      $('noJobs').textContent = jobList.length ? '' : 'No jobs for this customer yet.';
+      $('jobSum').textContent = jobList.length ? String(jobList.length) : 'none yet';
+      jobList.forEach(function (j) {
+        var r = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(j.status), j.status)); top.appendChild(document.createTextNode(j.title || j.estimateNumber || 'Job'));
+        left.appendChild(top);
+        if (j.address) left.appendChild(vyro.el('small', '', j.address));
+        left.addEventListener('click', function () { location.href = 'job.html?id=' + j.id; });
+        r.appendChild(left);
+        r.appendChild(vyro.el('b', '', vutil.fmt(j.contractCents)));
+        $('jobs').appendChild(r);
+      });
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+
+    // ---------- estimates ----------
+    try {
+      var es = await ctx.bizRef.collection('estimates').where('customerId', '==', id).get();
+      var list = es.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      list.sort(function (a, b) {
+        var ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+        var tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+        return tb - ta;
+      });
+      $('none').textContent = list.length ? '' : 'No estimates for this customer yet.';
+      $('estSum').textContent = list.length ? String(list.length) : 'none yet';
+      list.forEach(function (e) {
+        var r = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + e.status, e.status)); top.appendChild(document.createTextNode(e.number || ''));
+        left.appendChild(top);
+        if (e.title) left.appendChild(vyro.el('small', '', e.title));
+        left.addEventListener('click', function () { location.href = 'estimate.html?id=' + e.id; });
+        r.appendChild(left);
+        r.appendChild(vyro.el('b', '', vutil.fmt(e.totalCents)));
+        $('ests').appendChild(r);
+      });
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+
+    // ---------- customer portal ----------
+    function pmsg(t, k) { $('pMsg').textContent = t; $('pMsg').className = 'note ' + (k || ''); }
+    var canPortal = !c.archived && ctx.role !== 'employee';
+    async function paintPortal() {
+      var em = (c.email || '').trim(), has = false;
+      if (!canPortal) {
+        $('pStat').textContent = c.archived ? 'Archived customers have no portal. Restore the customer to create one.' : 'Only the owner or a supervisor can manage portals.';
+        ['pMake', 'pResend', 'pSync', 'pDel'].forEach(function (b) { $(b).style.display = 'none'; });
+        return;
+      }
+      try { has = await vportal.hasForCustomer(ctx, id, em.toLowerCase(), em); } catch (e) { has = false; }
+      $('pMake').style.display = !has && em ? 'block' : 'none';
+      ['pResend', 'pSync', 'pDel'].forEach(function (b) { $(b).style.display = has ? 'block' : 'none'; });
+      $('portSum').textContent = has ? 'On' : 'Off';
+      $('pStat').textContent = has ? 'Portal is on for ' + em + '.' :
+        (em ? 'No portal yet for ' + em + '.' : 'Add an email to this customer first (tap Edit), then come back to create their portal.');
+    }
+    $('pMake').addEventListener('click', async function () {
+      this.disabled = true; pmsg('Creating...');
+      try {
+        var r = await vportal.ensureForCustomer(ctx, id, (c.email || '').trim().toLowerCase(), c.name, c.email);
+        if (r && r.ok) pmsg('Done. ' + (r.emailed ? 'A link to set their password was emailed to ' + r.email + '.' : ''), '');
+        else pmsg((r && r.message) || 'Could not create the portal.', 'err');
+      } catch (e) { pmsg(vyro.friendly(e), 'err'); }
+      this.disabled = false; paintPortal();
+    });
+    $('pResend').addEventListener('click', async function () {
+      this.disabled = true; pmsg('Sending...');
+      try {
+        var r = await vportal.ensureForCustomer(ctx, id, (c.email || '').trim().toLowerCase(), c.name, c.email);
+        pmsg(r && r.ok ? 'Sent a new login link to ' + r.email + '.' : ((r && r.message) || 'Could not send.'), r && r.ok ? '' : 'err');
+      } catch (e) { pmsg(vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    $('pSync').addEventListener('click', async function () {
+      this.disabled = true; pmsg('Refreshing...');
+      try { for (var i = 0; i < jobList.length; i++) await vportal.syncJob(ctx, jobList[i].id); pmsg('Updated.', ''); }
+      catch (e) { pmsg(vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    $('pDel').addEventListener('click', async function () {
+      if (!confirm('Delete this customer\'s portal? They will no longer be able to see their project. You can create it again later.')) return;
+      this.disabled = true; pmsg('Deleting...');
+      try { await vportal.removeForCustomer(ctx, id); pmsg('Portal deleted.', ''); }
+      catch (e) { pmsg(vyro.friendly(e), 'err'); }
+      this.disabled = false; paintPortal();
+    });
+    paintPortal();
+
+    // ---------- delete customer ----------
+    if (ctx.role === 'owner' || ctx.role === 'supervisor') $('bDelete').style.display = 'block';
+    $('bDelete').addEventListener('click', async function () {
+      var n = jobList.length;
+      var q = n ? 'Delete this customer AND their ' + n + (n === 1 ? ' job' : ' jobs') + ' and their customer portal? Their estimates and invoices are kept for your records. This cannot be undone.'
+                : 'Delete this customer? This cannot be undone.';
+      if (!confirm(q)) return;
+      this.disabled = true; amsg('Deleting...');
+      try { await vcascade.deleteCustomer(ctx.bizRef, id); location.href = c.archived ? 'archived.html' : 'customers.html'; }
+      catch (e) { amsg(vyro.friendly(e), 'err'); this.disabled = false; }
+    });
+
+    // ---------- archive / restore ----------
+    function amsg(t, k) { $('aMsg').textContent = t; $('aMsg').className = 'note ' + (k || ''); }
+    $('bArchive').addEventListener('click', async function () {
+      var active = jobList.filter(function (j) { return vcascade.ACTIVE.indexOf(j.status) > -1; }).length;
+      var q = active
+        ? 'This customer has ' + active + ' active job' + (active === 1 ? '' : 's') + '. Archive them anyway? Starting new work for them restores them automatically.'
+        : 'Move this customer to the archive? You can restore them any time.';
+      if (!confirm(q)) return;
+      this.disabled = true; amsg('Archiving...');
+      try { await vcascade.setArchived(ctx.bizRef, id, true); location.href = 'customers.html'; }
+      catch (e) { amsg(vyro.friendly(e), 'err'); this.disabled = false; }
+    });
+    $('bRestore').addEventListener('click', async function () {
+      this.disabled = true; amsg('Restoring...');
+      try { await vcascade.setArchived(ctx.bizRef, id, false); location.reload(); }
+      catch (e) { amsg(vyro.friendly(e), 'err'); this.disabled = false; }
+    });
+  });
+</script>
+</body>
+</html>

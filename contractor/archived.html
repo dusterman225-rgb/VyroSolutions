@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Archived customers - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Archived customers</div>
+  </div>
+
+  <div class="card">
+    <input class="search" id="q" type="search" placeholder="Search by phone number, name or email" autocomplete="off">
+    <p>Past customers are grouped by phone number so you can find them again for future work.</p>
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+
+  <a class="back" href="customers.html">Back to customers</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function digits(p) {
+    var d = (p || '').replace(/[^0-9]/g, '');
+    if (d.length === 11 && d.charAt(0) === '1') d = d.slice(1);
+    return d;
+  }
+
+  vyro.start(async function (ctx) {
+    var all = [];
+    function render() {
+      var q = $('q').value.trim().toLowerCase(), qd = digits(q);
+      var shown = all.filter(function (c) {
+        if (!q) return true;
+        return (c.name || '').toLowerCase().indexOf(q) > -1 ||
+               (c.email || '').toLowerCase().indexOf(q) > -1 ||
+               (qd && digits(c.phone).indexOf(qd) > -1);
+      });
+      var groups = {}, order = [];
+      shown.forEach(function (c) {
+        var k = digits(c.phone) || '~none';
+        if (!groups[k]) { groups[k] = []; order.push(k); }
+        groups[k].push(c);
+      });
+      order.sort();
+
+      var box = $('list'); box.textContent = '';
+      $('empty').textContent = shown.length ? '' : (all.length ? 'No archived customers match.' : 'No archived customers yet. Customers move here when a job is completed, or when you archive them.');
+      order.forEach(function (k) {
+        var h = vyro.el('h2', '', k === '~none' ? 'No phone number' : (groups[k][0].phone || k));
+        h.style.marginTop = '18px';
+        box.appendChild(h);
+        groups[k].forEach(function (c) {
+          var row = vyro.el('div', 'item');
+          var left = vyro.el('div', 'grow');
+          left.appendChild(vyro.el('b', '', c.name));
+          var when = c.archivedAt && c.archivedAt.toDate ? 'Archived ' + c.archivedAt.toDate().toLocaleDateString() : '';
+          left.appendChild(vyro.el('small', '', [c.email, c.address, when].filter(Boolean).join(' \u00b7 ') || 'No other details'));
+          left.addEventListener('click', function () { location.href = 'customer.html?id=' + c.id; });
+          row.appendChild(left);
+          box.appendChild(row);
+        });
+      });
+    }
+
+    try {
+      var snap = await ctx.bizRef.collection('customers').orderBy('nameLower').get();
+      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (c) { return c.archived; });
+      render();
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('q').addEventListener('input', render);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Finances - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Finances</div>
+  </div>
+
+  <div id="deny" class="card" style="display:none"><p>Only the business owner can view finances.</p></div>
+
+  <div id="main" style="display:none">
+    <div class="card">
+      <label class="field"><span>Period</span><select id="period"></select></label>
+      <p id="rangeNote"></p>
+    </div>
+
+    <div class="card totals">
+      <h2>Profit</h2>
+      <div class="row big"><span>Net profit</span><b id="fProfit">-</b></div>
+      <div class="row"><span>Earnings (payments received)</span><b id="fIncome">-</b></div>
+      <div class="row"><span>Expenses (bills paid)</span><b id="fSpent">-</b></div>
+      <div class="row"><span>Vyro fees</span><b id="fVyro">-</b></div>
+      <div class="row"><span>Profit margin</span><b id="fMargin">-</b></div>
+    </div>
+
+    <details class="sec">
+      <summary>Earnings</summary>
+      <div class="in">
+        <div id="incomeList"></div>
+        <div class="row"><span>Invoiced in this period</span><b id="fBilled">-</b></div>
+        <div class="row"><span>Sales tax on those invoices</span><b id="fTax">-</b></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Expenses by category</summary>
+      <div class="in">
+        <div id="catList"></div>
+        <div class="note" id="catNone"></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Vyro fees</summary>
+      <div class="in">
+        <div class="row"><span>Vyro monthly fee</span><b id="vSub">-</b></div>
+        <div class="row"><span>Pay with Vyro payments</span><b id="vCount">-</b></div>
+        <div class="row"><span>Transaction fees (<span id="vPct"></span>%)</span><b id="vFees">-</b></div>
+        <div class="note" id="vNote"></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Owed right now</summary>
+      <div class="in">
+        <div class="row"><span>Customers owe you</span><b id="nOwed">-</b></div>
+        <div class="row"><span>You owe in unpaid bills</span><b id="nBills">-</b></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Tax documents</summary>
+      <div class="in">
+        <a class="btn" id="bReport" href="#">Prepare tax report</a>
+        <button class="btn ghost" id="bCsv" type="button">Download spreadsheet (CSV)</button>
+        <button class="btn ghost" id="bCopy" type="button">Copy summary as text</button>
+        <div class="note" id="dMsg"></div>
+        <div class="note">Cash basis. Not tax advice.</div>
+      </div>
+    </details>
+  </div>
+
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/finance.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    if (ctx.role !== 'owner') { $('deny').style.display = 'block'; return; }
+    $('main').style.display = 'block';
+
+    var data;
+    try { data = await vfin.load(ctx); } catch (e) { $('err').textContent = vyro.friendly(e); return; }
+
+    vfin.PERIODS.forEach(function (p) { var o = vyro.el('option', '', p[1]); o.value = p[0]; $('period').appendChild(o); });
+    var saved = 'lastMonth';
+    try { saved = localStorage.getItem('vyroFinPeriod') || saved; } catch (e) { /* ignore */ }
+    $('period').value = saved;
+    var cur = null;
+
+    function line(box, label, val) {
+      var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', label)); r.appendChild(vyro.el('b', '', val)); box.appendChild(r);
+    }
+
+    function render() {
+      var key = $('period').value;
+      try { localStorage.setItem('vyroFinPeriod', key); } catch (e) { /* ignore */ }
+      var m = cur = vfin.compute(data, key);
+      $('rangeNote').textContent = m.range.label + ' \u00b7 cash basis';
+      $('fProfit').textContent = vfin.money(m.profit); $('fProfit').className = m.profit < 0 ? 'late' : '';
+      $('fIncome').textContent = vfin.money(m.income);
+      $('fSpent').textContent = vfin.money(m.spent);
+      $('fVyro').textContent = vfin.money(m.vyroSub + m.vyroFees);
+      $('fMargin').textContent = m.margin === null ? '-' : m.margin + '%';
+      $('fBilled').textContent = vfin.money(m.billed); $('fTax').textContent = vfin.money(m.taxBilled);
+
+      var il = $('incomeList'); il.textContent = '';
+      var methods = Object.keys(m.byMethod);
+      if (!methods.length) il.appendChild(vyro.el('div', 'note', 'No payments received in this period.'));
+      methods.forEach(function (k) { line(il, k, vfin.money(m.byMethod[k])); });
+
+      var cl = $('catList'); cl.textContent = '';
+      $('catNone').textContent = m.cats.length ? '' : 'No expenses paid in this period.';
+      m.cats.forEach(function (c) { line(cl, c.cat, vfin.money(c.cents)); });
+
+      $('vSub').textContent = vfin.money(m.vyroSub);
+      $('vCount').textContent = m.vyroCount ? m.vyroCount + ' (' + vfin.money(m.vyroGross) + ')' : '0';
+      $('vPct').textContent = vfin.VYRO_TX_FEE_PCT; $('vFees').textContent = vfin.money(m.vyroFees);
+      $('vNote').textContent = vfin.VYRO_MONTHLY_FEE_CENTS ? '' : 'The Vyro subscription is free during launch.';
+
+      $('nOwed').textContent = vfin.money(m.owed); $('nBills').textContent = vfin.money(m.billsOwed);
+      $('bReport').href = 'finances-report.html?period=' + key;
+    }
+
+    $('period').addEventListener('change', render);
+    $('bCsv').addEventListener('click', function () {
+      vfin.download('vyro-ledger-' + cur.range.key + '.csv', vfin.csv(cur));
+    });
+    $('bCopy').addEventListener('click', async function () {
+      try { await vfin.copy(vfin.textSummary(ctx.biz, cur)); $('dMsg').textContent = 'Copied. Paste it into an email or document.'; $('dMsg').className = 'note ok'; }
+      catch (e) { $('dMsg').textContent = 'Could not copy. Use the tax report page instead.'; $('dMsg').className = 'note err'; }
+    });
+    render();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Sign in - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Vyro home"></a>
+    <div class="tag">Contractor sign in</div>
+  </div>
+
+  <form class="card" id="f">
+    <h2>VyroContractor: business and team</h2>
+    <label class="field"><span>Email</span><input id="email" type="email" autocomplete="email" inputmode="email" required></label>
+    <label class="field"><span>Password</span><input id="pw" type="password" autocomplete="current-password" required></label>
+    <button class="btn" id="go" type="submit">Sign in</button>
+    <button class="link" id="forgot" type="button">Forgot your password?</button>
+    <div class="note" id="msg"></div>
+  </form>
+  <a class="back" href="portal-login.html">Customer? Open your project portal</a>
+  <a class="back" href="/restaurant/login.html">Restaurant owner or employee? Sign in here</a>
+  <a class="back" href="choose.html">New contractor? Create an account</a>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  vyro.redirectIfSignedIn();
+  var $ = function (id) { return document.getElementById(id); };
+  function say(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
+  $('f').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var em = $('email').value.trim(), pw = $('pw').value;
+    if (!em || !pw) { say('Enter your email and password.', 'err'); return; }
+    $('go').disabled = true; say('Signing in...');
+    try {
+      await vyro.signInAs('contractor', em, pw);
+      location.href = 'app.html';
+    }
+    catch (err) { say(err && err.msg ? err.msg : vyro.friendly(err), 'err'); $('go').disabled = false; }
+  });
+  $('forgot').addEventListener('click', async function () {
+    var em = $('email').value.trim();
+    if (!em) { say('Type your email above first.', 'err'); return; }
+    try { await vyro.resetPassword(em); } catch (err) { /* keep the message neutral */ }
+    say('If that email has an account, a reset link is on its way. Check spam too.');
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<meta name="robots" content="noindex">
+<title>Your project</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img class="mark-small" src="images/logo.svg" alt="">
+    <div class="tag" id="tag">Your project</div>
+  </div>
+
+  <div id="list"></div>
+
+  <div id="proj" style="display:none">
+    <div class="card">
+      <h2 id="pTitle"></h2>
+      <p id="pSub"></p>
+      <p id="pAddr"></p>
+      <div class="nav" id="pLinks"></div>
+    </div>
+    <div class="card">
+      <h2>Progress</h2>
+      <div class="row"><span>Status</span><b id="pStatus"></b></div>
+      <div class="row"><span>Start date</span><b id="pStart"></b></div>
+      <div class="row"><span>Target finish</span><b id="pEnd"></b></div>
+    </div>
+    <div class="card totals">
+      <h2>Money</h2>
+      <div class="row"><span>Contract total</span><b id="mTotal"></b></div>
+      <div class="row"><span>Paid so far</span><b id="mPaid"></b></div>
+      <div class="row big"><span>Amount due now</span><b id="mOwed"></b></div>
+    </div>
+    <div class="card">
+      <h2>Invoices</h2>
+      <div id="invList"></div>
+      <div class="note" id="invNone"></div>
+    </div>
+    <div class="card" id="docCard" style="display:none">
+      <h2>Documents</h2>
+      <div id="dList"></div>
+    </div>
+    <div class="card">
+      <h2>Messages</h2>
+      <div id="mList"></div>
+      <div class="note" id="mNone"></div>
+      <label class="field"><span>Send a message to your contractor</span><textarea id="mText" rows="3" maxlength="1000" placeholder="Type your question or note..."></textarea></label>
+      <button class="btn" id="mSend" type="button">Send message</button>
+      <div class="note" id="mMsg"></div>
+      <div class="note">Your contractor sees your message the next time they open their app. For anything urgent, please call.</div>
+    </div>
+    <div class="card">
+      <h2>Updates</h2>
+      <div id="uList"></div>
+      <div class="note" id="uNone"></div>
+    </div>
+  </div>
+
+  <div class="card" id="empty" style="display:none">
+    <p>We couldn't find a project for this email yet. If you just accepted an estimate, your contractor may need to open their app once to finish setting it up. Please contact them.</p>
+    <p class="note">Own or work for a business on Vyro? Use the business sign in instead. The same email works for both.</p>
+  </div>
+
+  <button class="link" id="out" type="button">Sign out</button>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>
+  firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+  var auth = firebase.auth(), db = firebase.firestore();
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clean(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+  function cls(s) { return (s || '').replace(/ /g, ''); }
+  $('out').addEventListener('click', function () { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } auth.signOut().then(function () { location.replace('portal-login.html'); }); });
+
+  async function showProject(id, p) {
+    $('list').textContent = ''; $('proj').style.display = 'block';
+    $('tag').textContent = p.businessName || 'Your project';
+    document.title = 'Your project with ' + (p.businessName || 'your contractor');
+    $('pTitle').textContent = p.title || ('Estimate ' + (p.estimateNumber || ''));
+    $('pSub').textContent = (p.businessName || '') + (p.estimateNumber ? ' · Estimate ' + p.estimateNumber : '');
+    $('pAddr').textContent = p.address || '';
+    if (clean(p.businessPhone)) { var a = h('a', 'btn ghost', 'Call ' + (p.businessName || 'us')); a.href = 'tel:' + clean(p.businessPhone); $('pLinks').appendChild(a); }
+    if (p.businessEmail) { var m = h('a', 'btn ghost', 'Email'); m.href = 'mailto:' + p.businessEmail; $('pLinks').appendChild(m); }
+    $('pStatus').textContent = p.status || '-';
+    $('pStart').textContent = p.startDate || 'Not set yet';
+    $('pEnd').textContent = p.targetEndDate || 'Not set yet';
+    $('mTotal').textContent = vutil.fmt(p.contractCents || 0);
+    $('mPaid').textContent = vutil.fmt(p.paidCents || 0);
+    $('mOwed').textContent = vutil.fmt(p.owedCents || 0);
+    if (p.owedCents) $('mOwed').className = 'late';
+
+    var ref = db.collection('portals').doc(id);
+    try {
+      var is = await ref.collection('invoices').get();
+      var invs = is.docs.map(function (d) { return d.data(); });
+      invs.sort(function (a, b) { return (a.number || '') < (b.number || '') ? -1 : 1; });
+      $('invNone').textContent = invs.length ? '' : 'No invoices yet.';
+      var today = vutil.todayStr();
+      invs.forEach(function (i) {
+        var disp = i.status;
+        if ((i.status === 'Sent' || i.status === 'Partially Paid') && i.dueDate && i.dueDate < today) disp = 'Overdue';
+        var row = h('div', 'item'), left = h('div', 'grow');
+        var top = h('b'); top.appendChild(h('span', 'pill ' + cls(disp), disp)); top.appendChild(document.createTextNode(i.number || ''));
+        left.appendChild(top);
+        left.appendChild(h('small', '', (i.dueDate ? 'Due ' + i.dueDate + ' · ' : '') + 'paid ' + vutil.fmt(i.paidCents || 0)));
+        row.appendChild(left); row.appendChild(h('b', disp === 'Overdue' ? 'late' : '', vutil.fmt(i.totalCents)));
+        $('invList').appendChild(row);
+      });
+    } catch (e) { $('invNone').textContent = 'Invoices could not be loaded.'; }
+    try {
+      var ds = await ref.collection('documents').get();
+      if (!ds.empty) {
+        $('docCard').style.display = 'block';
+        ds.forEach(function (d) {
+          var x = d.data(), row = h('div', 'item'), left = h('div', 'grow');
+          left.appendChild(h('b', '', x.title || 'Document'));
+          left.appendChild(h('small', '', 'Tap to read and print'));
+          left.addEventListener('click', function () { location.href = 'portal-doc.html?p=' + encodeURIComponent(id) + '&d=' + encodeURIComponent(d.id); });
+          row.appendChild(left); $('dList').appendChild(row);
+        });
+      }
+    } catch (e) { /* documents are optional */ }
+    async function loadMessages() {
+      try {
+        var ms = await ref.collection('messages').orderBy('createdAt', 'asc').get();
+        $('mList').textContent = '';
+        $('mNone').textContent = ms.empty ? 'No messages yet.' : '';
+        ms.forEach(function (d) {
+          var m = d.data(), mine = m.from === 'customer';
+          var when = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleString() : 'sending...';
+          var row = h('div', 'item'), left = h('div', 'grow');
+          if (mine) row.style.background = 'rgba(255,255,255,.04)';
+          left.appendChild(h('small', '', (mine ? 'You' : (p.businessName || 'Contractor')) + ' \u00b7 ' + when));
+          var t = h('div', '', m.text); t.style.whiteSpace = 'pre-wrap'; left.appendChild(t);
+          row.appendChild(left); $('mList').appendChild(row);
+        });
+      } catch (e) { $('mNone').textContent = 'Messages could not be loaded.'; }
+    }
+    loadMessages();
+    $('mSend').onclick = async function () {
+      var t = $('mText').value.trim();
+      if (!t) { $('mMsg').textContent = 'Type a message first.'; $('mMsg').className = 'note err'; return; }
+      this.disabled = true; $('mMsg').textContent = 'Sending...'; $('mMsg').className = 'note';
+      try {
+        var cur = (await ref.get()).data().unreadCount || 0;
+        var st = firebase.firestore.FieldValue.serverTimestamp();
+        var b = db.batch();
+        b.set(ref.collection('messages').doc(), { from: 'customer', text: t, by: p.customerName || 'Customer', createdAt: st, read: false });
+        b.update(ref, { unreadCount: cur + 1, lastMessageAt: st, lastMessageText: t.slice(0, 80) });
+        await b.commit();
+        $('mText').value = ''; $('mMsg').textContent = 'Sent. Your contractor will see it when they next open their app.';
+        loadMessages();
+      } catch (e) { $('mMsg').textContent = 'Could not send. Please try again, or call your contractor.'; $('mMsg').className = 'note err'; }
+      this.disabled = false;
+    };
+    try {
+      var us = await ref.collection('updates').orderBy('createdAt', 'desc').get();
+      $('uNone').textContent = us.empty ? 'No updates yet.' : '';
+      us.forEach(function (d) {
+        var u = d.data(), when = u.createdAt && u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString() : '';
+        var row = h('div', 'item'), left = h('div', 'grow');
+        left.appendChild(h('b', '', u.text)); left.appendChild(h('small', '', when));
+        row.appendChild(left); $('uList').appendChild(row);
+      });
+    } catch (e) { $('uNone').textContent = 'Updates could not be loaded.'; }
+  }
+
+  // Your contractor's records are only shown to a confirmed email address.
+  function showVerify(u) {
+    var c = h('div', 'card');
+    c.appendChild(h('h2', '', 'Confirm your email'));
+    c.appendChild(h('p', '', 'To protect your project, please confirm ' + (u.email || 'your email') + '. We will email you a link. Tap it, then come back and tap the second button.'));
+    var b1 = h('button', 'btn', 'Send confirmation email'); b1.type = 'button';
+    var b2 = h('button', 'btn ghost', 'I confirmed it'); b2.type = 'button';
+    var m = h('div', 'note', '');
+    b1.addEventListener('click', async function () {
+      b1.disabled = true;
+      try { await u.sendEmailVerification({ url: location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal.html' }); }
+      catch (e) { try { await u.sendEmailVerification(); } catch (e2) { m.textContent = 'Could not send right now. Please try again in a few minutes.'; b1.disabled = false; return; } }
+      m.textContent = 'Sent. Check your inbox and spam folder.';
+    });
+    b2.addEventListener('click', function () { location.reload(); });
+    c.appendChild(b1); c.appendChild(b2); c.appendChild(m);
+    $('list').appendChild(c);
+  }
+
+  auth.onAuthStateChanged(async function (u) {
+    if (!u) { location.replace('portal-login.html'); return; }
+    try {
+      await u.reload(); u = auth.currentUser;
+      await u.getIdToken(true);          // pick up "email verified" after setting a password
+      if (!u.emailVerified) { showVerify(u); return; }
+      var qs = await db.collection('portals').where('customerEmail', '==', (u.email || '').toLowerCase()).get();
+      if (qs.empty) { $('empty').style.display = 'block'; return; }
+      if (qs.size === 1) { showProject(qs.docs[0].id, qs.docs[0].data()); return; }
+      var wrap = h('div', 'card'); wrap.appendChild(h('h2', '', 'Your projects'));
+      qs.forEach(function (d) {
+        var p = d.data(), row = h('div', 'item'), left = h('div', 'grow');
+        left.appendChild(h('b', '', p.title || ('Estimate ' + p.estimateNumber)));
+        left.appendChild(h('small', '', (p.businessName || '') + ' · ' + (p.status || '')));
+        left.addEventListener('click', function () { showProject(d.id, p); });
+        row.appendChild(left); wrap.appendChild(row);
+      });
+      $('list').appendChild(wrap);
+    } catch (e) {
+      if (e && e.code === 'permission-denied') { showVerify(u); return; }
+      $('err').textContent = 'Could not load your project. Please try again, or contact your contractor.';
+    }
+  });
+</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot.js"></script>
+</body>
+</html>

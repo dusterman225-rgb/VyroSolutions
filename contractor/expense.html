@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Expense - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">New expense</div>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <div class="card">
+      <h2>What was it?</h2>
+      <label class="field"><span>Description</span><input id="desc" type="text" maxlength="200" placeholder="Lumber, 2x4s"></label>
+      <label class="field"><span>Vendor (who you paid)</span><input id="vendor" type="text" maxlength="120" placeholder="Home Depot"></label>
+      <label class="field"><span>Category</span>
+        <select id="category">
+          <option>Materials</option><option>Subcontractor</option><option>Labor</option><option>Equipment rental</option>
+          <option>Fuel and vehicle</option><option>Permits and fees</option><option>Insurance</option>
+          <option>Tools</option><option>Office and software</option><option>Other</option>
+        </select>
+      </label>
+      <label class="field"><span>Amount ($)</span><input id="amount" type="text" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Date</span><input id="date" type="date"></label>
+      <label class="field"><span>Receipt or reference number</span><input id="ref" type="text" maxlength="80"></label>
+    </div>
+
+    <div class="card">
+      <h2>Which job?</h2>
+      <label class="field"><span>Job</span><select id="job"><option value="">Overhead (not for one job)</option></select></label>
+    </div>
+
+    <div class="card">
+      <h2>Payment</h2>
+      <label class="field"><span>Status</span>
+        <select id="status"><option value="Paid">Paid</option><option value="Unpaid">Unpaid bill (I still owe this)</option></select>
+      </label>
+      <div id="unpaidRow">
+        <label class="field"><span>Bill due date</span><input id="dueDate" type="date"></label>
+      </div>
+      <div id="paidRow">
+        <label class="field"><span>Paid on</span><input id="paidOn" type="date"></label>
+        <label class="field"><span>Paid with</span>
+          <select id="method"><option>Cash</option><option>Check</option><option>Debit or credit card</option><option>Bank transfer</option><option>Other</option></select>
+        </label>
+      </div>
+      <label class="field"><span>Notes</span><textarea id="notes" rows="2" maxlength="1000"></textarea></label>
+      <div class="note">No receipt photos yet. Write the receipt number and keep the paper copy.</div>
+    </div>
+
+    <div class="card">
+      <button class="btn" id="save" type="submit">Save</button>
+      <button class="btn ghost" id="bPaid" type="button" style="display:none">Mark as paid today</button>
+      <button class="link" id="bDel" type="button" style="display:none;color:#ff8a8a">Delete</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </form>
+
+  <a class="back" id="back" href="expenses.html">Back to expenses</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    var params = new URLSearchParams(location.search);
+    var id = params.get('id'), jobParam = params.get('job') || '', backJob = params.get('back') === 'job';
+    var col = ctx.bizRef.collection('expenses');
+    var canDelete = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var today = vutil.todayStr(), jobs = {}, ex = null;
+    function say(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
+
+    try {
+      var js = await ctx.bizRef.collection('jobs').get();
+      js.forEach(function (d) {
+        var j = d.data(); jobs[d.id] = j;
+        if (j.status === 'Cancelled' && d.id !== jobParam) return;
+        var o = vyro.el('option', '', j.customerName + (j.title ? ' \u00b7 ' + j.title : '')); o.value = d.id; $('job').appendChild(o);
+      });
+    } catch (e) { /* optional */ }
+
+    function syncStatus() {
+      var unpaid = $('status').value === 'Unpaid';
+      $('unpaidRow').style.display = unpaid ? 'block' : 'none';
+      $('paidRow').style.display = unpaid ? 'none' : 'block';
+    }
+    $('status').addEventListener('change', syncStatus);
+
+    if (id) {
+      var s = await col.doc(id).get();
+      if (!s.exists) { $('err').textContent = 'Expense not found.'; return; }
+      ex = s.data(); ex.id = id;
+      $('pageTag').textContent = 'Expense';
+      $('desc').value = ex.description || ''; $('vendor').value = ex.vendor || '';
+      $('category').value = ex.category || 'Other';
+      $('amount').value = (ex.amountCents / 100).toFixed(2); $('date').value = ex.date || '';
+      $('ref').value = ex.reference || ''; $('job').value = ex.jobId || '';
+      $('status').value = ex.status; $('dueDate').value = ex.dueDate || '';
+      $('paidOn').value = ex.paidOn || ''; if (ex.method) $('method').value = ex.method;
+      $('notes').value = ex.notes || '';
+      if (ex.status === 'Unpaid') $('bPaid').style.display = 'block';
+      if (canDelete) $('bDel').style.display = 'block';
+    } else {
+      $('date').value = today; $('paidOn').value = today;
+      if (jobParam && jobs[jobParam]) $('job').value = jobParam;
+    }
+    syncStatus();
+
+    function goBack(jobId) { location.href = (backJob && jobId) ? 'job.html?id=' + jobId : 'expenses.html'; }
+    if (backJob && (jobParam || (ex && ex.jobId))) {
+      $('back').href = 'job.html?id=' + (jobParam || ex.jobId); $('back').textContent = 'Back to job';
+    }
+
+    async function save(forcePaid) {
+      var desc = $('desc').value.trim(), amt = vutil.toCents($('amount').value);
+      if (!desc) { say('Add a short description.', 'err'); return; }
+      if (amt <= 0) { say('Enter the amount.', 'err'); return; }
+      if (!$('date').value) { say('Choose the date.', 'err'); return; }
+      if (forcePaid) { $('status').value = 'Paid'; $('paidOn').value = today; syncStatus(); }
+      var st = $('status').value, jid = $('job').value, j = jobs[jid];
+      var data = {
+        description: desc, vendor: $('vendor').value.trim(), category: $('category').value,
+        amountCents: amt, date: $('date').value, reference: $('ref').value.trim(),
+        jobId: jid, jobLabel: j ? j.customerName + (j.title ? ' \u00b7 ' + j.title : '') : '',
+        status: st, dueDate: st === 'Unpaid' ? $('dueDate').value : '',
+        paidOn: st === 'Paid' ? ($('paidOn').value || $('date').value) : '',
+        method: st === 'Paid' ? $('method').value : '',
+        notes: $('notes').value.trim(), updatedAt: vyro.stamp()
+      };
+      Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = true; });
+      say('Saving...');
+      try {
+        if (ex) await col.doc(ex.id).update(data);
+        else { data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid; await col.add(data); }
+        goBack(jid);
+      } catch (e) {
+        say(vyro.friendly(e), 'err');
+        Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = false; });
+      }
+    }
+
+    $('form').addEventListener('submit', function (e) { e.preventDefault(); save(false); });
+    $('bPaid').addEventListener('click', function () { save(true); });
+    $('bDel').addEventListener('click', async function () {
+      if (!confirm('Delete this expense permanently?')) return;
+      try { await col.doc(ex.id).delete(); goBack(ex.jobId); } catch (e) { say(vyro.friendly(e), 'err'); }
+    });
+  });
+</script>
+</body>
+</html>

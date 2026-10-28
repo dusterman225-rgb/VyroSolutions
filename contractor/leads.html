@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Leads - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Leads</div>
+  </div>
+
+  <div id="listView">
+    <div class="tabs" id="tabs"></div>
+    <div class="card" style="margin-top:0">
+      <input class="search" id="q" type="search" placeholder="Search name, phone, email or job" autocomplete="off">
+      <div id="list"></div>
+      <div class="note" id="empty"></div>
+    </div>
+    <button class="btn" id="add" type="button">Add lead</button>
+
+    <details class="sec" id="srcCard" style="display:none">
+      <summary>Lead sources</summary>
+      <div class="in"><div id="sources"></div></div>
+    </details>
+    <a class="back" href="app.html">Back to dashboard</a>
+  </div>
+
+  <form class="card" id="form" style="display:none">
+    <h2 id="formTitle">New lead</h2>
+    <label class="field"><span>Name</span><input id="name" type="text" maxlength="120" required></label>
+    <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40" autocomplete="off"></label>
+    <label class="field"><span>Email</span><input id="email" type="email" maxlength="120" autocomplete="off"></label>
+    <label class="field"><span>Job details</span><textarea id="jobDetails" rows="3" maxlength="1000" placeholder="What do they need done?"></textarea></label>
+    <label class="field"><span>Status</span><select id="status"></select></label>
+    <label class="field"><span>Follow up on</span><input id="followUp" type="date"></label>
+    <details class="more">
+      <summary>More details</summary>
+      <div class="in">
+        <label class="field"><span>Job address</span><textarea id="address" rows="2" maxlength="300"></textarea></label>
+        <label class="field"><span>Source</span><select id="source"></select></label>
+        <label class="field"><span>Notes</span><textarea id="notes" rows="3" maxlength="1000"></textarea></label>
+      </div>
+    </details>
+    <button class="btn" id="save" type="submit">Save lead</button>
+    <button class="btn ghost" id="toCustomer" type="button" style="display:none">Create customer from this lead</button>
+    <a class="btn ghost" id="toEstimate" href="#" style="display:none">Create estimate for this lead</a>
+    <button class="btn ghost" id="cancel" type="button">Cancel</button>
+    <button class="link" id="del" type="button" style="display:none;color:#ff8a8a">Delete lead</button>
+    <div class="note" id="msg"></div>
+  </form>
+
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var STATUSES = ['New', 'Contacted', 'Estimate Sent', 'Won', 'Lost'];
+  var SOURCES = ['Referral', 'Phone call', 'Website', 'Google', 'Facebook', 'Yard sign', 'Repeat customer', 'Other'];
+  var $ = function (id) { return document.getElementById(id); };
+
+  STATUSES.forEach(function (s) { var o = vyro.el('option', '', s); o.value = s; $('status').appendChild(o); });
+  SOURCES.forEach(function (s) { var o = vyro.el('option', '', s); o.value = s; $('source').appendChild(o); });
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function cleanPhone(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+
+  vyro.start(function (ctx) {
+    var col = ctx.bizRef.collection('leads');
+    var canDelete = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var all = [], filter = 'Open', editing = null;
+    function inTab(x, t) { return t === 'Open' ? ['New', 'Contacted', 'Estimate Sent'].indexOf(x.status) > -1 : x.status === t; }
+
+    function showList() { $('form').style.display = 'none'; $('listView').style.display = 'block'; $('msg').textContent = ''; }
+    function showForm(l) {
+      editing = l || null;
+      $('formTitle').textContent = l ? 'Edit lead' : 'New lead';
+      $('name').value = l ? l.name : '';
+      $('phone').value = l ? (l.phone || '') : '';
+      $('email').value = l ? (l.email || '') : '';
+      $('address').value = l ? (l.address || '') : '';
+      $('source').value = l && l.source ? l.source : 'Referral';
+      $('status').value = l ? l.status : 'New';
+      $('followUp').value = l ? (l.followUpOn || '') : '';
+      $('jobDetails').value = l ? (l.jobDetails || '') : '';
+      $('notes').value = l ? (l.notes || '') : '';
+      $('del').style.display = (l && canDelete) ? 'block' : 'none';
+      $('toCustomer').style.display = (l && !l.customerId) ? 'block' : 'none';
+            $('toEstimate').style.display = l ? 'block' : 'none';
+      if (l) { $('toEstimate').href = 'estimate.html?lead=' + l.id; }
+      $('msg').textContent = l && l.customerId ? 'This lead already has a customer record.' : '';
+      $('msg').className = 'note';
+      $('listView').style.display = 'none'; $('form').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function renderTabs() {
+      var box = $('tabs'); box.textContent = '';
+      ['Open', 'Won', 'Lost'].forEach(function (s) {
+        var n = all.filter(function (x) { return inTab(x, s); }).length;
+        var b = vyro.el('button', 'tab' + (filter === s ? ' on' : ''), s + ' ' + n);
+        b.type = 'button';
+        b.addEventListener('click', function () { filter = s; render(); });
+        box.appendChild(b);
+      });
+    }
+
+    function renderSources() {
+      var by = {};
+      all.forEach(function (l) {
+        var s = l.source || 'Other';
+        by[s] = by[s] || { n: 0, won: 0 };
+        by[s].n++; if (l.status === 'Won') by[s].won++;
+      });
+      var keys = Object.keys(by).sort(function (a, b) { return by[b].n - by[a].n; });
+      var box = $('sources'); box.textContent = '';
+      $('srcCard').style.display = keys.length ? 'block' : 'none';
+      keys.forEach(function (k) {
+        var r = vyro.el('div', 'row');
+        r.appendChild(vyro.el('span', '', k));
+        r.appendChild(vyro.el('b', '', by[k].n + ' lead' + (by[k].n === 1 ? '' : 's') + ' \u00b7 ' + by[k].won + ' won (' + Math.round(by[k].won / by[k].n * 100) + '%)'));
+        box.appendChild(r);
+      });
+    }
+
+    function render() {
+      renderTabs(); renderSources();
+      var q = $('q').value.trim().toLowerCase();
+      var today = todayStr();
+      var box = $('list'); box.textContent = '';
+      var shown = all.filter(function (l) {
+        if (!inTab(l, filter)) return false;
+        if (!q) return true;
+        return (l.name || '').toLowerCase().indexOf(q) > -1 ||
+               (l.email || '').toLowerCase().indexOf(q) > -1 ||
+               (l.jobDetails || '').toLowerCase().indexOf(q) > -1 ||
+               (cleanPhone(q) && cleanPhone(l.phone).indexOf(cleanPhone(q)) > -1);
+      });
+      $('empty').textContent = shown.length ? '' :
+        (all.length ? 'No leads match.' : 'No leads yet. Tap Add lead to start.');
+
+      shown.forEach(function (l) {
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + l.status.replace(' ', ''), l.status)); top.appendChild(document.createTextNode(l.name));
+        left.appendChild(top);
+        var bits = [];
+        if (l.source) bits.push(l.source);
+        if (l.phone) bits.push(l.phone);
+        left.appendChild(vyro.el('small', '', bits.join(' \u00b7 ') || 'No contact details'));
+        if (l.followUpOn && l.status !== 'Won' && l.status !== 'Lost') {
+          var f = vyro.el('small', l.followUpOn <= today ? 'late' : '', 'Follow up ' + l.followUpOn + (l.followUpOn < today ? ' (overdue)' : l.followUpOn === today ? ' (today)' : ''));
+          f.style.display = 'block'; left.appendChild(f);
+        }
+        left.addEventListener('click', function () { showForm(l); });
+        row.appendChild(left);
+
+        if (l.status === 'New') {
+          var mc = vyro.el('button', 'mini', 'Contacted'); mc.type = 'button';
+          mc.addEventListener('click', async function () {
+            try {
+              await col.doc(l.id).update({ status: 'Contacted', lastContactedAt: vyro.stamp(), statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+              await load();
+            } catch (e) { $('err').textContent = vyro.friendly(e); }
+          });
+          row.appendChild(mc);
+        }
+        if (cleanPhone(l.phone)) { var call = vyro.el('a', 'mini', 'Call'); call.href = 'tel:' + cleanPhone(l.phone); row.appendChild(call); }
+        box.appendChild(row);
+      });
+    }
+
+    async function load() {
+      var snap = await col.orderBy('createdAt', 'desc').get();
+      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      render();
+    }
+
+    $('q').addEventListener('input', render);
+    $('add').addEventListener('click', function () { showForm(null); });
+    $('cancel').addEventListener('click', showList);
+
+    $('form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var name = $('name').value.trim();
+      if (!name) { $('msg').textContent = 'Name is required.'; $('msg').className = 'note err'; return; }
+      var status = $('status').value;
+      var data = {
+        name: name, phone: $('phone').value.trim(), email: $('email').value.trim(),
+        address: $('address').value.trim(), source: $('source').value, status: status,
+        followUpOn: $('followUp').value, jobDetails: $('jobDetails').value.trim(),
+        notes: $('notes').value.trim(), updatedAt: vyro.stamp()
+      };
+      var btn = $('save'); btn.disabled = true; $('msg').className = 'note'; $('msg').textContent = 'Saving...';
+      try {
+        if (editing) {
+          if (editing.status !== status) {
+            data.statusChangedAt = vyro.stamp();
+            if (status === 'Contacted') data.lastContactedAt = vyro.stamp();
+          }
+          await col.doc(editing.id).update(data);
+        } else {
+          data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid; data.statusChangedAt = vyro.stamp();
+          await col.add(data);
+        }
+        await load(); showList();
+      } catch (err) { $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
+      btn.disabled = false;
+    });
+
+    $('toCustomer').addEventListener('click', async function () {
+      if (!editing || editing.customerId) return;
+      if (!confirm('Create a customer record for ' + editing.name + '?')) return;
+      var btn = this; btn.disabled = true;
+      try {
+        var cust = ctx.bizRef.collection('customers').doc();
+        var batch = vyro.db.batch();
+        batch.set(cust, {
+          name: editing.name, nameLower: editing.name.toLowerCase(), phone: editing.phone || '',
+          email: editing.email || '', address: editing.address || '', language: 'en',
+          notes: editing.notes || '', fromLeadId: editing.id,
+          createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
+        });
+        batch.update(col.doc(editing.id), { customerId: cust.id, updatedAt: vyro.stamp() });
+        await batch.commit();
+        await load(); showList();
+      } catch (err) { $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
+      btn.disabled = false;
+    });
+
+    $('del').addEventListener('click', async function () {
+      if (!editing || !confirm('Delete this lead? This cannot be undone.')) return;
+      try { await col.doc(editing.id).delete(); await load(); showList(); }
+      catch (err) { $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
+    });
+
+    load().then(function () { if (new URLSearchParams(location.search).get('new') === '1') showForm(null); });
+  });
+</script>
+</body>
+</html>

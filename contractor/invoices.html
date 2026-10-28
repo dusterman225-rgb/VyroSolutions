@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Invoices - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Invoices</div>
+  </div>
+
+  <div class="strip">
+    <div><small>Collected</small><b id="sCol">-</b></div>
+    <div><small>Outstanding</small><b id="sOut">-</b></div>
+    <div><small>Overdue</small><b id="sOver">-</b></div>
+  </div>
+  <span id="sInv" style="display:none"></span>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="card" style="margin-top:0">
+    <input class="search" id="q" type="search" placeholder="Search customer, project or number" autocomplete="off">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <a class="btn" href="invoice.html">New invoice</a>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script>
+  var TABS = ['Unpaid', 'Draft', 'Paid', 'All'];
+  function inTab(i, t) {
+    var d = disp(i);
+    if (t === 'All') return true;
+    if (t === 'Unpaid') return d === 'Sent' || d === 'Partially Paid' || d === 'Overdue';
+    return d === t;
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  var today = vutil.todayStr();
+  function disp(i) {
+    if ((i.status === 'Sent' || i.status === 'Partially Paid') && i.dueDate && i.dueDate < today) return 'Overdue';
+    return i.status;
+  }
+  function cls(s) { return s.replace(' ', ''); }
+
+  vyro.start(async function (ctx) {
+    var all = [], filter = 'Unpaid';
+
+    function render() {
+      var tabs = $('tabs'); tabs.textContent = '';
+      TABS.forEach(function (s) {
+        var n = all.filter(function (x) { return inTab(x, s); }).length;
+        var b = vyro.el('button', 'tab' + (filter === s ? ' on' : ''), s + ' ' + n); b.type = 'button';
+        b.addEventListener('click', function () { filter = s; render(); });
+        tabs.appendChild(b);
+      });
+
+      var invd = 0, coll = 0, out = 0, over = 0;
+      all.forEach(function (i) {
+        if (i.status === 'Voided') return;
+        coll += i.paidCents || 0;
+        if (i.status !== 'Draft') invd += i.totalCents || 0;
+        if (i.status === 'Sent' || i.status === 'Partially Paid') {
+          var bal = (i.totalCents || 0) - (i.paidCents || 0);
+          out += bal; if (disp(i) === 'Overdue') over += bal;
+        }
+      });
+      $('sInv').textContent = vutil.fmt(invd); $('sCol').textContent = vutil.fmt(coll);
+      $('sOut').textContent = vutil.fmt(out); $('sOver').textContent = vutil.fmt(over);
+      if (over) $('sOver').className = 'late';
+
+      var q = $('q').value.trim().toLowerCase();
+      var box = $('list'); box.textContent = '';
+      var shown = all.filter(function (i) {
+        if (!inTab(i, filter)) return false;
+        if (!q) return true;
+        return (i.customerName || '').toLowerCase().indexOf(q) > -1 ||
+               (i.title || '').toLowerCase().indexOf(q) > -1 ||
+               (i.number || '').toLowerCase().indexOf(q) > -1;
+      });
+      $('empty').textContent = shown.length ? '' : (all.length ? 'No invoices match.' : 'No invoices yet. Tap New invoice, or create one from an approved estimate.');
+
+      shown.forEach(function (i) {
+        var d = disp(i);
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(d), d)); top.appendChild(document.createTextNode(i.customerName));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', (i.number || '') + (i.title ? ' \u00b7 ' + i.title : '')));
+        left.addEventListener('click', function () { location.href = 'invoice.html?id=' + i.id; });
+        row.appendChild(left);
+        var open = i.status === 'Sent' || i.status === 'Partially Paid';
+        row.appendChild(vyro.el('b', d === 'Overdue' ? 'late' : '', vutil.fmt(open ? (i.totalCents - i.paidCents) : i.totalCents)));
+        box.appendChild(row);
+      });
+    }
+
+    try {
+      var snap = await ctx.bizRef.collection('invoices').orderBy('createdAt', 'desc').get();
+      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      render();
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('q').addEventListener('input', render);
+  });
+</script>
+</body>
+</html>

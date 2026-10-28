@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Business profile - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Business profile</div>
+  </div>
+
+  <div class="card" id="meCard">
+    <h2>Your name</h2>
+    <label class="field"><span>Name shown as the contractor on contracts</span><input id="myName" type="text" maxlength="80" autocomplete="name" placeholder="Jane Smith"></label>
+    <button class="btn ghost" id="saveMe" type="button">Save my name</button>
+    <div class="note" id="meMsg"></div>
+  </div>
+
+  <form class="card" id="f">
+    <h2>Details</h2>
+    <label class="field"><span>Business name</span><input id="name" type="text" required></label>
+    <label class="field"><span>Business phone</span><input id="phone" type="tel" autocomplete="tel"></label>
+    <label class="field"><span>Business email</span><input id="bemail" type="email" autocomplete="email"></label>
+    <label class="field"><span>Address</span><textarea id="address" rows="3" autocomplete="street-address"></textarea></label>
+    <label class="field"><span>License number</span><input id="license" type="text"></label>
+    <label class="field"><span>Website</span><input id="website" type="url" placeholder="https://"></label>
+    <button class="btn" id="save" type="submit">Save changes</button>
+    <div class="note" id="msg"></div>
+  </form>
+
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var fields = { name: 'name', phone: 'phone', email: 'bemail', address: 'address', license: 'license', website: 'website' };
+  var msg = document.getElementById('msg');
+
+  vyro.start(function (ctx) {
+    var isOwner = ctx.role === 'owner';
+    document.getElementById('myName').value = (ctx.me && ctx.me.name) || '';
+    document.getElementById('saveMe').addEventListener('click', async function () {
+      var n = document.getElementById('myName').value.trim(), mm = document.getElementById('meMsg');
+      if (!n) { mm.textContent = 'Type your name.'; mm.className = 'note err'; return; }
+      this.disabled = true; mm.className = 'note'; mm.textContent = 'Saving...';
+      try { await ctx.bizRef.collection('members').doc(ctx.user.uid).update({ name: n }); ctx.me.name = n; mm.textContent = 'Saved.'; mm.className = 'note ok'; }
+      catch (e) { mm.textContent = vyro.friendly(e); mm.className = 'note err'; }
+      this.disabled = false;
+    });
+    Object.keys(fields).forEach(function (k) {
+      var input = document.getElementById(fields[k]);
+      input.value = (k === 'license' ? (ctx.biz.license || ctx.biz.licenseNumber) : ctx.biz[k]) || '';
+      input.disabled = !isOwner;
+    });
+    var save = document.getElementById('save');
+    if (!isOwner) {
+      save.style.display = 'none';
+      msg.textContent = 'Only the business owner can edit these details.';
+    }
+
+    document.getElementById('f').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var data = {};
+      Object.keys(fields).forEach(function (k) { data[k] = document.getElementById(fields[k]).value.trim(); });
+      if (!data.name) { msg.textContent = 'Business name is required.'; msg.className = 'note err'; return; }
+      data.licenseNumber = data.license;
+      data.updatedAt = vyro.stamp();
+      save.disabled = true; msg.className = 'note'; msg.textContent = 'Saving...';
+      try {
+        await ctx.bizRef.update(data);
+        msg.textContent = 'Saved.'; msg.className = 'note ok';
+      } catch (err) {
+        msg.textContent = vyro.friendly(err); msg.className = 'note err';
+      }
+      save.disabled = false;
+    });
+  });
+</script>
+</body>
+  </html>

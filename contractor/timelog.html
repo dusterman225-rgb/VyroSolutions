@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Time and mileage - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Time and mileage</div>
+  </div>
+
+  <div class="strip">
+    <div><small>Hours</small><b id="sHrs">-</b></div>
+    <div><small>Miles</small><b id="sMi">-</b></div>
+    <div><small>Mileage value</small><b id="sVal">-</b></div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>Job</span><select id="job"></select></label>
+    <label class="field"><span>Type</span><select id="kind"><option value="hours">Hours worked</option><option value="miles">Miles driven</option></select></label>
+    <label class="field"><span id="amtLbl">Hours</span><input id="amt" type="number" inputmode="decimal" step="0.25" min="0"></label>
+    <label class="field"><span>Date</span><input id="date" type="date"></label>
+    <label class="field"><span>Note (optional)</span><input id="note" maxlength="200"></label>
+    <button class="btn" id="add" type="button">Save entry</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="card">
+    <label class="field"><span>Mileage rate, dollars per mile (optional, only for your own estimate; check the current IRS rate)</span><input id="rate" type="number" inputmode="decimal" step="0.001" min="0"></label>
+    <label class="field"><span>Show</span><select id="filt"></select></label>
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    var staff = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var col = ctx.bizRef.collection('timelog');
+    var who = (ctx.me && ctx.me.name) || ctx.user.email;
+    var jobs = {}, rows = [];
+    var pj = new URLSearchParams(location.search).get('job') || '';
+    $('date').value = vutil.todayStr();
+    try { $('rate').value = localStorage.getItem('vyroMileRate') || ''; } catch (e) {}
+    try {
+      var js = await ctx.bizRef.collection('jobs').get();
+      js.forEach(function (d) { var j = d.data(); if (j.status !== 'Cancelled') jobs[d.id] = j.customerName + (j.title ? ' \u00b7 ' + j.title : ''); });
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    function fillJobs() {
+      var s = $('job'); s.textContent = '';
+      var o = document.createElement('option'); o.value = ''; o.textContent = 'No job (general)'; s.appendChild(o);
+      Object.keys(jobs).forEach(function (k) { var x = document.createElement('option'); x.value = k; x.textContent = jobs[k]; s.appendChild(x); });
+      if (pj && jobs[pj]) s.value = pj;
+      var f = $('filt'); f.textContent = '';
+      var a = document.createElement('option'); a.value = ''; a.textContent = 'Everything'; f.appendChild(a);
+      Object.keys(jobs).forEach(function (k) { var x = document.createElement('option'); x.value = k; x.textContent = jobs[k]; f.appendChild(x); });
+      if (pj && jobs[pj]) f.value = pj;
+    }
+    fillJobs();
+    $('kind').addEventListener('change', function () { $('amtLbl').textContent = this.value === 'hours' ? 'Hours' : 'Miles'; $('amt').step = this.value === 'hours' ? '0.25' : '0.1'; });
+    $('filt').addEventListener('change', draw);
+    $('rate').addEventListener('input', function () { try { localStorage.setItem('vyroMileRate', $('rate').value); } catch (e) {} draw(); });
+
+    async function load() {
+      try {
+        var q = staff ? col.limit(500) : col.where('uid', '==', ctx.user.uid);
+        var s = await q.get();
+        rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+        rows.sort(function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; });
+      } catch (e) { $('err').textContent = vyro.friendly(e); }
+      draw();
+    }
+    function draw() {
+      var f = $('filt').value, hrs = 0, mi = 0, box = $('list'); box.textContent = '';
+      var shown = rows.filter(function (r) { return !f || r.jobId === f; });
+      shown.forEach(function (r) {
+        if (r.kind === 'hours') hrs += r.amount; else mi += r.amount;
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', (r.kind === 'hours' ? r.amount + ' h' : r.amount + ' mi') + ' \u00b7 ' + r.date));
+        left.appendChild(vyro.el('small', '', [staff ? r.name : '', jobs[r.jobId] || (r.jobId ? 'Job' : 'General'), r.note].filter(Boolean).join(' \u00b7 ')));
+        row.appendChild(left);
+        if (staff || r.uid === ctx.user.uid) {
+          var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button';
+          x.addEventListener('click', async function () {
+            if (!confirm('Delete this entry?')) return;
+            try { await col.doc(r.id).delete(); rows = rows.filter(function (z) { return z.id !== r.id; }); draw(); } catch (e) { $('err').textContent = vyro.friendly(e); }
+          });
+          row.appendChild(x);
+        }
+        box.appendChild(row);
+      });
+      $('empty').textContent = shown.length ? '' : 'No entries yet.';
+      var rate = parseFloat($('rate').value) || 0;
+      $('sHrs').textContent = (Math.round(hrs * 100) / 100) + ''; $('sMi').textContent = (Math.round(mi * 10) / 10) + '';
+      $('sVal').textContent = rate ? vutil.fmt(Math.round(mi * rate * 100)) : '-';
+    }
+    $('add').addEventListener('click', async function () {
+      var n = parseFloat($('amt').value), kind = $('kind').value, btn = this;
+      if (!(n > 0) || n > (kind === 'hours' ? 24 : 5000)) { $('msg').textContent = 'Enter a number above 0' + (kind === 'hours' ? ' and up to 24 hours.' : '.'); $('msg').className = 'note err'; return; }
+      if (!$('date').value) { $('msg').textContent = 'Choose a date.'; $('msg').className = 'note err'; return; }
+      btn.disabled = true;
+      try {
+        var d = { uid: ctx.user.uid, name: who, kind: kind, amount: Math.round(n * 100) / 100, date: $('date').value, jobId: $('job').value, note: $('note').value.trim().slice(0, 200), createdAt: vyro.stamp() };
+        var r = await col.add(d); d.id = r.id; rows.unshift(d);
+        rows.sort(function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; });
+        $('amt').value = ''; $('note').value = ''; $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; draw();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      btn.disabled = false;
+    });
+    load();
+  });
+</script>
+</body>
+</html>

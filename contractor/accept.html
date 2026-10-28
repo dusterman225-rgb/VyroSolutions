@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<meta name="robots" content="noindex">
+<title>Your estimate</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>
+  .paper{background:#fff;color:#111;border-radius:12px;padding:22px;margin-top:18px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .paper h1{margin:0;font-size:1.25rem}
+  .paper h3{margin:16px 0 4px;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
+  .paper .muted{color:#555;font-size:.85rem;line-height:1.5;white-space:pre-wrap}
+  .paper table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.9rem}
+  .paper th{text-align:left;border-bottom:2px solid #111;padding:6px 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
+  .paper td{border-bottom:1px solid #ddd;padding:8px 4px;vertical-align:top;word-break:break-word}
+  .paper .n{text-align:right;white-space:nowrap}
+  .paper .tot{margin-left:auto;max-width:280px;margin-top:12px}
+  .paper .tot div{display:flex;justify-content:space-between;padding:4px 0}
+  .paper .grand{font-weight:700;font-size:1.05rem;border-top:2px solid #111;margin-top:4px;padding-top:8px}
+  .check{display:flex;gap:10px;align-items:flex-start;margin:14px 0;line-height:1.4}
+  .check input{width:auto;margin-top:4px}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img class="mark-small" src="images/logo.svg" alt="">
+    <div class="tag" id="bizTag">Estimate</div>
+  </div>
+
+  <div id="status" class="card" style="display:none"><p id="statusText"></p></div>
+  <div class="paper" id="paper" style="display:none"></div>
+
+  <div class="card" id="acceptCard" style="display:none">
+    <h2>Accept this estimate</h2>
+    <label class="check"><input type="checkbox" id="agree"><span>I have read this estimate and its terms, and I agree to them.</span></label>
+    <label class="field"><span>Type your full name</span><input id="who" type="text" maxlength="120" autocomplete="name"></label>
+    <button class="btn" id="go" type="button">Accept estimate</button>
+    <div class="note" id="msg"></div>
+    <div class="note">By typing your name and tapping Accept, you are accepting this estimate. The date and time are recorded.</div>
+  </div>
+
+  <div id="callBox" style="display:none"><a class="btn ghost" id="callBtn" href="#">Call</a></div>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clean(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+
+  (async function () {
+    var token = new URLSearchParams(location.search).get('t') || '';
+    function showStatus(t) { $('status').style.display = 'block'; $('statusText').textContent = t; }
+    if (token.length < 24) { showStatus('This link is not valid. Please contact the company that sent it.'); return; }
+
+    firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+    var ref = firebase.firestore().collection('publicEstimates').doc(token), e;
+    try {
+      var s = await ref.get();
+      if (!s.exists) { showStatus('This estimate could not be found. Please contact the company that sent it.'); return; }
+      e = s.data();
+    } catch (err) { showStatus('This estimate could not be loaded. Please try again, or contact the company.'); return; }
+
+    document.title = 'Estimate from ' + (e.businessName || 'your contractor');
+    $('bizTag').textContent = e.businessName || 'Estimate';
+    if (clean(e.businessPhone)) {
+      $('callBox').style.display = 'block';
+      $('callBtn').href = 'tel:' + clean(e.businessPhone);
+      $('callBtn').textContent = 'Call ' + (e.businessName || 'us') + (e.businessPhone ? ' · ' + e.businessPhone : '');
+    }
+
+    // estimate paper
+    var p = $('paper'); p.style.display = 'block';
+    p.appendChild(h('h1', '', e.businessName || 'Estimate'));
+    p.appendChild(h('div', 'muted', [e.businessPhone, e.businessEmail].filter(Boolean).join('\n')));
+    p.appendChild(h('h3', '', 'Estimate ' + (e.number || '')));
+    p.appendChild(h('div', 'muted', 'Prepared for ' + (e.customerName || '') + (e.validUntil ? '\nValid until ' + e.validUntil : '')));
+    if (e.title) { p.appendChild(h('h3', '', 'Project')); p.appendChild(h('div', '', e.title)); }
+    var tbl = h('table'), hr = h('tr');
+    ['Description', 'Qty', 'Price', 'Amount'].forEach(function (t, i) { hr.appendChild(h('th', i ? 'n' : '', t)); });
+    tbl.appendChild(hr);
+    (e.lineItems || []).forEach(function (it) {
+      var tr = h('tr');
+      tr.appendChild(h('td', '', it.description || ''));
+      tr.appendChild(h('td', 'n', String(it.qty)));
+      tr.appendChild(h('td', 'n', vutil.fmt(it.unitCents)));
+      tr.appendChild(h('td', 'n', vutil.fmt(Math.round(it.qty * it.unitCents))));
+      tbl.appendChild(tr);
+    });
+    p.appendChild(tbl);
+    var tot = h('div', 'tot');
+    function line(label, val, cls) { var d = h('div', cls || ''); d.appendChild(h('span', '', label)); d.appendChild(h('span', '', val)); tot.appendChild(d); }
+    line('Subtotal', vutil.fmt(e.subtotalCents));
+    if (e.discountCents) line('Discount', '-' + vutil.fmt(e.discountCents));
+    if (e.taxCents) line('Tax (' + e.taxPct + '%)', vutil.fmt(e.taxCents));
+    line('Total', vutil.fmt(e.totalCents), 'grand');
+    if (e.depositPct) line('Deposit requested (' + e.depositPct + '%)', vutil.fmt(Math.round(e.totalCents * e.depositPct / 100)));
+    p.appendChild(tot);
+    if (e.terms) { p.appendChild(h('h3', '', 'Terms')); p.appendChild(h('div', 'muted', e.terms)); }
+
+    // status
+    if (e.status === 'Accepted') {
+      var when = e.acceptedAt && e.acceptedAt.toDate ? ' on ' + e.acceptedAt.toDate().toLocaleString() : '';
+      showStatus('Accepted by ' + (e.acceptedBy || 'you') + when + '. Thank you! ' + (e.businessName || 'The company') + ' will be in touch.');
+      return;
+    }
+    if (e.status !== 'Sent') { showStatus('This estimate is no longer open for online acceptance. Please call ' + (e.businessName || 'the company') + '.'); return; }
+    if (e.validUntil && e.validUntil < vutil.todayStr()) { showStatus('This estimate expired on ' + e.validUntil + '. Please call ' + (e.businessName || 'the company') + ' for an updated one.'); return; }
+
+    $('acceptCard').style.display = 'block';
+    $('go').addEventListener('click', async function () {
+      var name = $('who').value.trim();
+      if (!$('agree').checked) { $('msg').textContent = 'Please tick the box to confirm you agree.'; $('msg').className = 'note err'; return; }
+      if (name.length < 2) { $('msg').textContent = 'Please type your full name.'; $('msg').className = 'note err'; return; }
+      this.disabled = true; $('msg').textContent = 'Saving...'; $('msg').className = 'note';
+      try {
+        await ref.update({ status: 'Accepted', acceptedBy: name, acceptedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        $('acceptCard').style.display = 'none';
+        showStatus('Thank you, ' + name + '! Your estimate is accepted. ' + (e.businessName || 'The company') + ' will be in touch.');
+        window.scrollTo(0, 0);
+      } catch (err) {
+        this.disabled = false;
+        $('msg').textContent = 'Sorry, this could not be accepted online right now. Please call ' + (e.businessName || 'the company') + '.';
+        $('msg').className = 'note err';
+      }
+    });
+  })();
+</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot.js"></script>
+</body>
+</html>

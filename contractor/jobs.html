@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Jobs - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Jobs</div>
+  </div>
+
+  <div class="strip">
+    <div><small>Active</small><b id="sActive">-</b></div>
+    <div><small>Collected</small><b id="sPaid">-</b></div>
+    <div><small>Owed</small><b id="sOwed">-</b></div>
+  </div>
+  <span id="sValue" style="display:none"></span>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="card" style="margin-top:0">
+    <input class="search" id="q" type="search" placeholder="Search customer, project or address" autocomplete="off">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var ACTIVE = ['Not Started', 'In Progress', 'On Hold'];
+  var TABS = ['Active', 'Completed', 'Cancelled', 'All'];
+  var $ = function (id) { return document.getElementById(id); };
+  function cls(s) { return s.replace(/ /g, ''); }
+
+  vyro.start(async function (ctx) {
+    var jobs = [], bill = {}, filter = 'Active';
+
+    function render() {
+      var tabs = $('tabs'); tabs.textContent = '';
+      TABS.forEach(function (t) {
+        var n = jobs.filter(function (j) { return inTab(j, t); }).length;
+        var b = vyro.el('button', 'tab' + (filter === t ? ' on' : ''), t + ' ' + n); b.type = 'button';
+        b.addEventListener('click', function () { filter = t; render(); });
+        tabs.appendChild(b);
+      });
+
+      var act = 0, val = 0, paid = 0, owed = 0;
+      jobs.forEach(function (j) {
+        var m = bill[j.id] || { paid: 0, owed: 0 };
+        if (ACTIVE.indexOf(j.status) > -1) { act++; val += j.contractCents || 0; }
+        if (j.status !== 'Cancelled') { paid += m.paid; owed += m.owed; }
+      });
+      $('sActive').textContent = act; $('sValue').textContent = vutil.fmt(val);
+      $('sPaid').textContent = vutil.fmt(paid); $('sOwed').textContent = vutil.fmt(owed);
+
+      var q = $('q').value.trim().toLowerCase();
+      var box = $('list'); box.textContent = '';
+      var shown = jobs.filter(function (j) {
+        if (!inTab(j, filter)) return false;
+        if (!q) return true;
+        return (j.customerName || '').toLowerCase().indexOf(q) > -1 ||
+               (j.title || '').toLowerCase().indexOf(q) > -1 ||
+               (j.address || '').toLowerCase().indexOf(q) > -1;
+      });
+      $('empty').textContent = shown.length ? '' : (jobs.length ? 'No jobs here.' : 'No jobs yet. A job appears when you approve an estimate.');
+
+      shown.forEach(function (j) {
+        var m = bill[j.id] || { paid: 0, owed: 0 };
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(j.status), j.status)); top.appendChild(document.createTextNode(j.customerName));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', (j.title || j.estimateNumber || '') + ' \u00b7 paid ' + vutil.fmt(m.paid) + ' of ' + vutil.fmt(j.contractCents)));
+        left.addEventListener('click', function () { location.href = 'job.html?id=' + j.id; });
+        row.appendChild(left);
+        row.appendChild(vyro.el('b', m.owed ? 'late' : '', m.owed ? vutil.fmt(m.owed) + ' due' : vutil.fmt(j.contractCents)));
+        box.appendChild(row);
+      });
+    }
+    function inTab(j, t) {
+      if (t === 'All') return true;
+      if (t === 'Active') return ACTIVE.indexOf(j.status) > -1;
+      return j.status === t;
+    }
+
+    try {
+      var js = await ctx.bizRef.collection('jobs').get();
+      var have = {};
+      jobs = js.docs.map(function (d) { var x = d.data(); x.id = d.id; have[d.id] = 1; return x; });
+
+      // convert already-approved estimates that have no job yet
+      var es = await ctx.bizRef.collection('estimates').where('status', '==', 'Approved').get();
+      var batch = vyro.db.batch(), added = 0;
+      es.forEach(function (d) {
+                if (have[d.id] || d.data().jobDismissed) return;
+        var e = d.data();
+        var jd = {
+          estimateId: d.id, estimateNumber: e.number || '', customerId: e.customerId || '', customerName: e.customerName || '',
+          customerEmail: e.customerEmail || '', customerPhone: e.customerPhone || '', address: e.address || '',
+          title: e.title || '', contractCents: e.totalCents || 0, depositPct: e.depositPct || 0, status: 'Not Started',
+          startDate: '', targetEndDate: '', internalNotes: '', createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
+        };
+        batch.set(ctx.bizRef.collection('jobs').doc(d.id), jd);
+        jd.id = d.id; jobs.push(jd); added++;
+      });
+      if (added) await batch.commit();
+
+      var inv = (ctx.role === 'employee') ? { forEach: function () {} } : await ctx.bizRef.collection('invoices').get();
+      inv.forEach(function (d) {
+        var i = d.data();
+        if (!i.estimateId || i.status === 'Voided') return;
+        var m = bill[i.estimateId] = bill[i.estimateId] || { paid: 0, owed: 0 };
+        m.paid += i.paidCents || 0;
+        if (i.status === 'Sent' || i.status === 'Partially Paid') m.owed += (i.totalCents || 0) - (i.paidCents || 0);
+      });
+      render();
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('q').addEventListener('input', render);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Tax report - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .paper{background:#fff;color:#111;border-radius:12px;padding:24px;margin-top:20px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .paper h1{margin:0;font-size:1.3rem;letter-spacing:.06em}
+  .paper h3{margin:20px 0 4px;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
+  .paper .muted{color:#555;font-size:.85rem;line-height:1.5;white-space:pre-wrap}
+  .paper table{width:100%;border-collapse:collapse;margin-top:6px;font-size:.88rem}
+  .paper th{text-align:left;border-bottom:2px solid #111;padding:6px 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
+  .paper td{border-bottom:1px solid #ddd;padding:7px 4px;vertical-align:top;word-break:break-word}
+  .paper .n{text-align:right;white-space:nowrap}
+  .paper .tot td{font-weight:700;border-top:2px solid #111;border-bottom:none}
+  .paper .small{font-size:.75rem;color:#555}
+  .paper .flag{color:#b00020;font-weight:700}
+  @media print{
+    body{background:#fff !important}
+    .noprint{display:none !important}
+    .wrap{padding:0;max-width:none}
+    .paper{margin:0;border-radius:0;padding:0}
+  }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="noprint brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Tax report</div>
+  </div>
+
+  <div class="noprint" id="denyBox" style="display:none"><div class="card"><p>Only the business owner can view finances.</p></div></div>
+  <div class="paper" id="paper" style="display:none"></div>
+
+  <div class="noprint" id="actions" style="display:none">
+    <button class="btn" id="print" type="button">Print or save as PDF</button>
+    <button class="btn ghost" id="copy" type="button">Copy as text</button>
+    <button class="btn ghost" id="csv" type="button">Download spreadsheet (CSV)</button>
+    <div class="note" id="dMsg"></div>
+  </div>
+  <a class="back noprint" href="finances.html">Back to finances</a>
+  <div class="note err noprint" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/finance.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, text) { return vyro.el(tag, cls, text); }
+
+  vyro.start(async function (ctx) {
+    if (ctx.role !== 'owner') { $('denyBox').style.display = 'block'; return; }
+    var data;
+    try { data = await vfin.load(ctx); } catch (e) { $('err').textContent = vyro.friendly(e); return; }
+    var key = new URLSearchParams(location.search).get('period') || 'lastYear';
+    var m = vfin.compute(data, key), b = ctx.biz, p = $('paper');
+    p.style.display = 'block'; $('actions').style.display = 'block';
+
+    function table(headers, rows, totalRow) {
+      var t = h('table'), hr = h('tr');
+      headers.forEach(function (x, i) { hr.appendChild(h('th', i === headers.length - 1 ? 'n' : '', x)); });
+      t.appendChild(hr);
+      rows.forEach(function (r) {
+        var tr = h('tr');
+        r.forEach(function (c, i) { tr.appendChild(h('td', i === r.length - 1 ? 'n' : '', c)); });
+        t.appendChild(tr);
+      });
+      if (totalRow) {
+        var tt = h('tr', 'tot');
+        totalRow.forEach(function (c, i) { tt.appendChild(h('td', i === totalRow.length - 1 ? 'n' : '', c)); });
+        t.appendChild(tt);
+      }
+      return t;
+    }
+
+    p.appendChild(h('h1', '', b.name || 'Business'));
+    p.appendChild(h('div', 'muted', [b.address, b.phone, b.email, b.license ? 'License ' + b.license : ''].filter(Boolean).join('\n')));
+    p.appendChild(h('h3', '', 'Profit and loss summary'));
+    p.appendChild(h('div', '', m.range.label));
+    p.appendChild(h('div', 'muted', 'Dates: ' + (m.range.from.slice(0, 4) === '0000' ? 'all records' : m.range.from) + ' to ' + m.range.to +
+      '\nBasis: cash (money actually received and paid)\nPrepared: ' + vutil.todayStr()));
+
+    p.appendChild(h('h3', '', 'Income'));
+    var inRows = Object.keys(m.byMethod).map(function (k) { return [k, vfin.money(m.byMethod[k])]; });
+    if (!inRows.length) inRows = [['No payments received in this period', '$0.00']];
+    p.appendChild(table(['Payments received by method', 'Amount'], inRows, ['Total income (gross receipts)', vfin.money(m.income)]));
+
+    p.appendChild(h('h3', '', 'Expenses'));
+    var exRows = m.cats.map(function (c) { return [c.cat + ' \u2014 ' + c.line, vfin.money(c.cents)]; });
+    if (!exRows.length) exRows = [['No expenses paid in this period', '$0.00']];
+    p.appendChild(table(['Category and suggested Schedule C line', 'Amount'], exRows, ['Total expenses', vfin.money(m.totalCosts)]));
+
+    p.appendChild(h('h3', '', 'Vyro fees included above'));
+    p.appendChild(table(['Item', 'Amount'], [
+      ['Vyro subscription (' + m.months + ' month' + (m.months === 1 ? '' : 's') + (vfin.VYRO_MONTHLY_FEE_CENTS ? '' : ', free during launch') + ')', vfin.money(m.vyroSub)],
+      ['Pay with Vyro transaction fees (' + m.vyroCount + ' transaction' + (m.vyroCount === 1 ? '' : 's') + ')', vfin.money(m.vyroFees)]
+    ]));
+
+    p.appendChild(h('h3', '', 'Net profit'));
+    p.appendChild(table(['Income minus expenses', 'Amount'], [], ['Net profit' + (m.margin === null ? '' : ' (' + m.margin + '% of income)'), vfin.money(m.profit)]));
+
+    p.appendChild(h('h3', '', 'Sales tax reference'));
+    p.appendChild(h('div', 'muted', 'Sales tax billed on invoices dated in this period: ' + vfin.money(m.taxBilled) +
+      '\nThis is what you billed, not necessarily what you collected or owe. Check your state\u2019s filing rules.'));
+
+    p.appendChild(h('h3', '', 'Subcontractor payments (1099 helper)'));
+    if (!m.subs.length) {
+      p.appendChild(h('div', 'muted', 'No payments recorded in the Subcontractor category in this period.'));
+    } else {
+      var sr = m.subs.map(function (s) {
+        var limit = +s.year >= 2026 ? 200000 : 60000;
+        return [s.vendor, s.year, vfin.money(s.cents) + (s.cents >= limit ? '  \u2691 may need a 1099-NEC' : '')];
+      });
+      var st = table(['Vendor', 'Year', 'Paid'], sr);
+      Array.prototype.forEach.call(st.querySelectorAll('td'), function (td) { if (td.textContent.indexOf('\u2691') > -1) td.className = 'n flag'; });
+      p.appendChild(st);
+      p.appendChild(h('div', 'small', 'Federal reporting threshold: $600 for payments made through 2025, $2,000 for payments made from 2026 on (indexed for inflation from 2027). Get a W-9 from each subcontractor. Confirm the current rules with your tax professional.'));
+    }
+
+    p.appendChild(h('h3', '', 'Snapshot at time of report'));
+    p.appendChild(h('div', 'muted', 'Customers owe you: ' + vfin.money(m.owed) + '\nUnpaid bills you owe: ' + vfin.money(m.billsOwed)));
+
+    var note = h('div', 'small', 'This is a bookkeeping summary prepared from records entered in Vyro, on a cash basis. It is not tax advice and it is not a filed return. Schedule C line references are suggestions for sole proprietors and single-member LLCs only, so other business types report differently. Review everything with a qualified tax professional before filing.');
+    note.style.marginTop = '24px'; p.appendChild(note);
+
+    $('print').addEventListener('click', function () { window.print(); });
+    $('csv').addEventListener('click', function () { vfin.download('vyro-ledger-' + m.range.key + '.csv', vfin.csv(m)); });
+    $('copy').addEventListener('click', async function () {
+      try { await vfin.copy(vfin.textSummary(b, m)); $('dMsg').textContent = 'Copied. Paste it into an email or document.'; $('dMsg').className = 'note ok'; }
+      catch (e) { $('dMsg').textContent = 'Could not copy on this device.'; $('dMsg').className = 'note err'; }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Subcontractors - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Subcontractors</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <details class="sec" id="formSec" open>
+    <summary id="formTitle">Add a subcontractor</summary>
+    <div class="in">
+      <label class="field"><span>Name or company</span><input id="name" maxlength="120"></label>
+      <label class="field"><span>Trade (electrician, plumber...)</span><input id="trade" maxlength="60"></label>
+      <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40"></label>
+      <label class="field"><span>Email</span><input id="email" type="email" maxlength="120"></label>
+      <label class="field"><span>Licence number</span><input id="lic" maxlength="60"></label>
+      <label class="field"><span>Licence expires</span><input id="licExp" type="date"></label>
+      <label class="field"><span>Insurance expires</span><input id="insExp" type="date"></label>
+      <label class="field"><span>Notes</span><textarea id="notes" rows="2" maxlength="500"></textarea></label>
+      <button class="btn" id="save" type="button">Save</button>
+      <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <div class="note">Expiry dates show on your home calendar in teal. This only tracks dates you type in. It does not check that a licence or policy is valid.</div>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(async function (ctx) {
+    var col = ctx.bizRef.collection('subs'), rows = [], editing = null, today = vutil.todayStr();
+    function status(d) { if (!d) return ''; return d < today ? 'EXPIRED ' + d : d; }
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); rows.sort(function (a, b) { return (a.name || '').toLowerCase() < (b.name || '').toLowerCase() ? -1 : 1; }); }
+      catch (e) { $('err').textContent = vyro.friendly(e); }
+      draw();
+    }
+    function draw() {
+      var box = $('list'); box.textContent = '';
+      $('empty').textContent = rows.length ? '' : 'No subcontractors yet.';
+      rows.forEach(function (r) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', r.name + (r.trade ? ' \u00b7 ' + r.trade : '')));
+        left.appendChild(vyro.el('small', '', 'Licence ' + (r.licenseNo || '-') + ': ' + (status(r.licenseExpires) || 'no date')));
+        left.appendChild(vyro.el('small', '', 'Insurance: ' + (status(r.insuranceExpires) || 'no date')));
+        if (r.phone) { var a = vyro.el('a', '', r.phone); a.href = 'tel:' + r.phone; left.appendChild(a); }
+        row.appendChild(left);
+        var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.addEventListener('click', function () { edit(r); });
+        var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button';
+        x.addEventListener('click', async function () { if (!confirm('Delete ' + r.name + '?')) return; try { await col.doc(r.id).delete(); load(); } catch (er) { $('err').textContent = vyro.friendly(er); } });
+        row.appendChild(e); row.appendChild(x); box.appendChild(row);
+      });
+    }
+    function edit(r) {
+      editing = r ? r.id : null; r = r || {};
+      $('name').value = r.name || ''; $('trade').value = r.trade || ''; $('phone').value = r.phone || ''; $('email').value = r.email || '';
+      $('lic').value = r.licenseNo || ''; $('licExp').value = r.licenseExpires || ''; $('insExp').value = r.insuranceExpires || ''; $('notes').value = r.notes || '';
+      $('formTitle').textContent = editing ? 'Edit subcontractor' : 'Add a subcontractor'; $('cancel').style.display = editing ? 'block' : 'none';
+      $('formSec').open = true; window.scrollTo(0, document.body.scrollHeight);
+    }
+    $('cancel').addEventListener('click', function () { edit(null); });
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim();
+      if (!n) { $('msg').textContent = 'Enter a name.'; $('msg').className = 'note err'; return; }
+      var d = { name: n, trade: $('trade').value.trim(), phone: $('phone').value.trim(), email: $('email').value.trim(), licenseNo: $('lic').value.trim(),
+        licenseExpires: $('licExp').value, insuranceExpires: $('insExp').value, notes: $('notes').value.trim(), updatedAt: vyro.stamp() };
+      try {
+        if (editing) await col.doc(editing).set(d, { merge: true }); else { d.createdAt = vyro.stamp(); await col.add(d); }
+        $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; edit(null); load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    load();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Job - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">Job</div>
+  </div>
+
+  <div class="card">
+    <h2 id="jCust">Loading...</h2>
+    <p id="jTitle"></p>
+    <p id="jAddr"></p>
+    <div class="nav" id="jLinks"></div>
+  </div>
+
+  <div class="strip">
+    <div><small>Contract</small><b id="mContract">-</b></div>
+    <div><small>Paid</small><b id="mPaid">-</b></div>
+    <div><small>Owed</small><b id="mOwed">-</b></div>
+  </div>
+
+  <details class="sec" open>
+    <summary>Progress <small id="progSum"></small></summary>
+    <div class="in">
+      <label class="field"><span>Status</span>
+        <select id="status">
+          <option>Not Started</option><option>In Progress</option><option>On Hold</option>
+          <option>Completed</option><option>Cancelled</option>
+        </select>
+      </label>
+      <label class="field"><span>Start date</span><input id="startDate" type="date"></label>
+      <label class="field"><span>Target finish date</span><input id="targetEndDate" type="date"></label>
+      <label class="field"><span>Internal notes (never shown to the customer)</span><textarea id="internalNotes" rows="3" maxlength="2000"></textarea></label>
+      <button class="btn" id="saveJob" type="button">Save progress</button>
+      <div class="note" id="jMsg"></div>
+    </div>
+  </details>
+
+  <details class="sec" id="invSec">
+    <summary>Invoices <small id="invSum"></small></summary>
+    <div class="in">
+      <div id="invList"></div>
+      <div class="note" id="invNone"></div>
+      <div class="row"><span>Invoiced so far</span><b id="mBilled">-</b></div>
+      <div class="row"><span>Left to invoice</span><b id="mLeft">-</b></div>
+      <a class="btn" id="newInv" href="#">New invoice for this job</a>
+    </div>
+  </details>
+
+  <details class="sec" id="schedSec">
+    <summary>Payment schedule <small id="schedSum"></small></summary>
+    <div class="in">
+      <div class="note">Split the job into deposit and progress payments. Percentages must add up to 100.</div>
+      <div id="schedList"></div>
+      <div class="row" style="gap:8px"><button class="btn ghost" id="schedAdd" type="button">Add a payment</button><button class="btn" id="schedSave" type="button">Save schedule</button></div>
+      <div class="note" id="schedMsg"></div>
+    </div>
+  </details>
+
+  <details class="sec" id="costSec">
+    <summary>Costs and profit <small id="costSum"></small></summary>
+    <div class="in">
+      <div class="row"><span>Costs (incl. unpaid bills)</span><b id="cAll">-</b></div>
+      <div class="row"><span>Expected profit</span><b id="cExp">-</b></div>
+      <div class="row"><span>Margin</span><b id="cMargin">-</b></div>
+      <div class="row"><span>Cash in hand so far</span><b id="cCash">-</b></div>
+      <div id="costList"></div>
+      <div class="note" id="costNone"></div>
+      <a class="btn ghost" id="newCost" href="#">Add expense for this job</a>
+    </div>
+  </details>
+
+  <details class="sec" id="taskSec">
+    <summary>Materials and punch list <small id="taskSum"></small></summary>
+    <div class="in">
+      <div class="tabs"><button type="button" class="on" id="tabMat">Materials</button><button type="button" id="tabPun">Punch list</button></div>
+      <div id="taskList"></div>
+      <label class="field"><span id="taskLbl">Add a material</span><input id="taskText" maxlength="200" placeholder="e.g. 12 sheets 1/2 in drywall"></label>
+      <button class="btn ghost" id="taskAdd" type="button">Add</button>
+      <div class="note" id="taskMsg"></div>
+      <a class="btn ghost" href="#" id="timeLink">Log hours or miles</a>
+    </div>
+  </details>
+
+  <details class="sec">
+    <summary>Updates <small id="upSum"></small></summary>
+    <div class="in">
+      <label class="field"><span>Add an update</span><textarea id="uText" rows="2" maxlength="1000" placeholder="e.g. Demo finished, waiting on permit"></textarea></label>
+      <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="uShare" style="width:auto"><span>Show to the customer in their portal</span></label>
+      <button class="btn ghost" id="uAdd" type="button">Add update</button>
+      <div class="note" id="uMsg"></div>
+      <div id="uList"></div>
+    </div>
+  </details>
+
+  <details class="more">
+    <summary>More &#9662;</summary>
+    <div class="in">
+      <a class="btn ghost" id="viewEst" href="#">View the original estimate</a>
+      <button class="btn ghost" id="bDel" type="button" style="display:none;color:#ff8a8a">Delete job</button>
+    </div>
+  </details>
+
+  <a class="back" href="jobs.html">Back to jobs</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/cascade.js"></script>
+<script src="js/portal.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function cls(s) { return s.replace(/ /g, ''); }
+
+  vyro.start(async function (ctx) {
+    var id = new URLSearchParams(location.search).get('id');
+    var jref = ctx.bizRef.collection('jobs').doc(id || 'x');
+    var s = await jref.get();
+    if (!s.exists) { $('err').textContent = 'Job not found.'; return; }
+    var job = s.data(); job.id = id;
+    var canManage = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var who = (ctx.me && ctx.me.name) || ctx.user.email;
+    var today = vutil.todayStr();
+    var paidIn = 0;
+
+    $('pageTag').textContent = 'Job \u00b7 ' + (job.estimateNumber || '');
+    $('jCust').textContent = job.customerName;
+    $('jTitle').textContent = job.title || '';
+    $('jAddr').textContent = job.address || '';
+    var links = $('jLinks');
+    function lk(text, href) { var a = vyro.el('a', 'btn ghost', text); a.href = href; links.appendChild(a); }
+    if (job.customerPhone) lk('Call', 'tel:' + job.customerPhone);
+    if (job.address) lk('Map', 'https://maps.google.com/?q=' + encodeURIComponent(job.address));
+    if (job.customerId) lk('Customer', 'customer.html?id=' + job.customerId);
+    if (canManage) lk('Contract', 'documents.html?job=' + id);
+    $('viewEst').href = 'estimate.html?id=' + (job.estimateId || id);
+    $('newInv').href = 'invoice.html?estimate=' + (job.estimateId || id);
+    $('newCost').href = 'expense.html?job=' + id + '&back=job';
+
+    $('status').value = job.status;
+    $('startDate').value = job.startDate || '';
+    $('targetEndDate').value = job.targetEndDate || '';
+    $('internalNotes').value = job.internalNotes || '';
+    if (canManage) $('bDel').style.display = 'block'; else {
+      $('costSec').style.display = 'none'; $('invSec').style.display = 'none'; $('schedSec').style.display = 'none';
+      var stp = document.querySelector('.strip'); if (stp) stp.style.display = 'none';
+    }
+    $('progSum').textContent = job.status;
+
+    function jmsg(t, c) { $('jMsg').textContent = t; $('jMsg').className = 'note ' + (c || ''); }
+    vportal.exists(id).then(function (x) { if (x) vportal.syncJob(ctx, id, job).catch(function () {}); }).catch(function () {});
+
+    function umsg(t, c) { $('uMsg').textContent = t; $('uMsg').className = 'note ' + (c || ''); }
+
+    // ---------- save progress ----------
+    $('saveJob').addEventListener('click', async function () {
+      var btn = this, st = $('status').value, jobWas = job.status;
+      btn.disabled = true; jmsg('Saving...');
+      try {
+        var data = {
+          status: st, startDate: $('startDate').value, targetEndDate: $('targetEndDate').value,
+          internalNotes: $('internalNotes').value.trim(), updatedAt: vyro.stamp()
+        };
+        if (st === 'Completed' && job.status !== 'Completed') data.completedAt = vyro.stamp();
+        var batch = vyro.db.batch();
+        batch.update(jref, data);
+        if (st !== job.status) {
+          batch.set(jref.collection('updates').doc(), { text: 'Status changed to ' + st, by: who, kind: 'status', createdAt: vyro.stamp() });
+        }
+        await batch.commit();
+        try {
+          if (await vportal.exists(id)) {
+            job.status = st; job.startDate = data.startDate; job.targetEndDate = data.targetEndDate;
+            await vportal.syncJob(ctx, id, job);
+            if (st !== jobWas) await vportal.shareUpdate(id, 'Status changed to ' + st);
+          }
+        } catch (e) { /* portal is optional */ }
+        if (st !== jobWas) {
+          try { await vcascade.afterJobStatus(ctx.bizRef, job.customerId, st, id); } catch (e) { /* job saved; archive is optional */ }
+        }
+        location.reload();
+      } catch (e) { jmsg(vyro.friendly(e), 'err'); btn.disabled = false; }
+    });
+
+
+    // ---------- payment schedule ----------
+    var sched = (job.schedule && job.schedule.length) ? job.schedule.map(function (x) { return { label: x.label, pct: x.pct }; }) : null;
+    var dep = Math.round(Number(job.depositPct) || 0);
+    if (!sched) sched = dep > 0 && dep < 100 ? [{ label: 'Deposit', pct: dep }, { label: 'Final payment', pct: 100 - dep }] : [{ label: 'Deposit', pct: 30 }, { label: 'Progress', pct: 40 }, { label: 'Final payment', pct: 30 }];
+    var invsAll = [];
+    function smsg(t, c) { $('schedMsg').textContent = t; $('schedMsg').className = 'note ' + (c || ''); }
+    function renderSched() {
+      var box = $('schedList'); box.textContent = '';
+      var sum = 0;
+      sched.forEach(function (m, idx) {
+        sum += Number(m.pct) || 0;
+        var done = invsAll.filter(function (i) { return i.milestone === m.label && i.status !== 'Voided'; })[0];
+        var row = vyro.el('div', 'item'); row.style.flexWrap = 'wrap'; row.style.gap = '6px';
+        var l = document.createElement('input'); l.value = m.label; l.maxLength = 40; l.style.flex = '2 1 120px';
+        l.addEventListener('input', function () { m.label = l.value; });
+        var p = document.createElement('input'); p.type = 'number'; p.min = 1; p.max = 100; p.value = m.pct; p.style.flex = '1 1 70px';
+        p.addEventListener('change', function () { m.pct = Math.max(0, Math.min(100, Math.round(Number(p.value) || 0))); renderSched(); });
+        row.appendChild(l); row.appendChild(p); row.appendChild(vyro.el('small', '', '% · ' + vutil.fmt(Math.round((job.contractCents || 0) * (Number(m.pct) || 0) / 100))));
+        if (done) { var a = vyro.el('a', 'pill Paid', 'Invoiced ' + (done.number || '')); a.href = 'invoice.html?id=' + done.id; row.appendChild(a); }
+        else {
+          var b = vyro.el('a', 'btn', 'Create invoice');
+          b.href = 'invoice.html?estimate=' + encodeURIComponent(job.estimateId || id) + '&pct=' + (Number(m.pct) || 0) + '&label=' + encodeURIComponent(m.label);
+          row.appendChild(b);
+          var x = vyro.el('button', 'btn ghost', 'Remove'); x.type = 'button';
+          x.addEventListener('click', function () { sched.splice(idx, 1); renderSched(); });
+          row.appendChild(x);
+        }
+        box.appendChild(row);
+      });
+      $('schedSum').textContent = sum === 100 ? sched.length + ' payments' : 'adds to ' + sum + '%';
+      if (sum !== 100) smsg('Percentages add up to ' + sum + ', not 100.', 'err'); else smsg('');
+    }
+    $('schedAdd').addEventListener('click', function () { if (sched.length >= 12) return; sched.push({ label: 'Progress ' + (sched.length), pct: 0 }); renderSched(); });
+    $('schedSave').addEventListener('click', async function () {
+      var sum = 0, names = {}, bad = false;
+      sched.forEach(function (m) { sum += Number(m.pct) || 0; if (!m.label.trim() || names[m.label.trim()]) bad = true; names[m.label.trim()] = 1; m.label = m.label.trim(); });
+      if (bad) { smsg('Give every payment its own name.', 'err'); return; }
+      if (sum !== 100) { smsg('Percentages must add up to 100 (now ' + sum + ').', 'err'); return; }
+      try { await jref.update({ schedule: sched.map(function (m) { return { label: m.label, pct: m.pct }; }), updatedAt: vyro.stamp() }); smsg('Saved.', 'ok'); renderSched(); }
+      catch (e) { smsg(vyro.friendly(e), 'err'); }
+    });
+    if (canManage) renderSched();
+
+    // ---------- invoices and money ----------
+    if (canManage) try {
+      var is = await ctx.bizRef.collection('invoices').where('estimateId', '==', id).get();
+      var invs = is.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      invs.sort(function (a, b) { return (a.number || '') < (b.number || '') ? -1 : 1; });
+      var billed = 0, paid = 0, owed = 0;
+      $('invNone').textContent = invs.length ? '' : 'No invoices yet for this job.';
+      invs.forEach(function (i) {
+        var disp = i.status;
+        if ((i.status === 'Sent' || i.status === 'Partially Paid') && i.dueDate && i.dueDate < today) disp = 'Overdue';
+        if (i.status !== 'Voided') {
+          billed += i.totalCents || 0; paid += i.paidCents || 0;
+          if (i.status === 'Sent' || i.status === 'Partially Paid') owed += (i.totalCents || 0) - (i.paidCents || 0);
+        }
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(disp), disp)); top.appendChild(document.createTextNode(i.number || ''));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', (i.billingType ? i.billingType + ' \u00b7 ' : '') + 'paid ' + vutil.fmt(i.paidCents || 0)));
+        left.addEventListener('click', function () { location.href = 'invoice.html?id=' + i.id; });
+        row.appendChild(left);
+        row.appendChild(vyro.el('b', disp === 'Overdue' ? 'late' : '', vutil.fmt(i.totalCents)));
+        $('invList').appendChild(row);
+      });
+      paidIn = paid; invsAll = invs; renderSched();
+      $('mContract').textContent = vutil.fmt(job.contractCents);
+      $('invSum').textContent = invs.length ? invs.length + (owed ? ' \u00b7 ' + vutil.fmt(owed) + ' due' : ' \u00b7 all paid') : 'none yet';
+      $('mBilled').textContent = vutil.fmt(billed);
+      $('mPaid').textContent = vutil.fmt(paid);
+      $('mOwed').textContent = vutil.fmt(owed); if (owed) $('mOwed').className = 'late';
+      $('mLeft').textContent = vutil.fmt(Math.max(0, job.contractCents - billed));
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+
+    // ---------- costs and profit ----------
+    if (canManage) try {
+      var xs = await ctx.bizRef.collection('expenses').where('jobId', '==', id).get();
+      var xl = xs.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      xl.sort(function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; });
+      var costAll = 0, costPaid = 0;
+      $('costNone').textContent = xl.length ? '' : 'No costs recorded for this job yet.';
+      xl.forEach(function (x) {
+        costAll += x.amountCents || 0;
+        if (x.status === 'Paid') costPaid += x.amountCents || 0;
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + x.status, x.status)); top.appendChild(document.createTextNode(x.description));
+        left.appendChild(top);
+        left.appendChild(vyro.el('small', '', [x.vendor, x.category, x.date].filter(Boolean).join(' \u00b7 ')));
+        left.addEventListener('click', function () { location.href = 'expense.html?id=' + x.id + '&back=job'; });
+        row.appendChild(left);
+        row.appendChild(vyro.el('b', '', vutil.fmt(x.amountCents)));
+        $('costList').appendChild(row);
+      });
+      var expected = (job.contractCents || 0) - costAll;
+      $('cAll').textContent = vutil.fmt(costAll); $('costSum').textContent = vutil.fmt(costAll) + ' spent';
+      $('cExp').textContent = vutil.fmt(expected); if (expected < 0) $('cExp').className = 'late';
+      $('cMargin').textContent = job.contractCents ? Math.round(expected / job.contractCents * 100) + '%' : '-';
+      var cash = paidIn - costPaid;
+      $('cCash').textContent = vutil.fmt(cash); if (cash < 0) $('cCash').className = 'late';
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+
+
+    // ---------- materials and punch list ----------
+    var tkind = 'material', tasks = [];
+    $('timeLink').href = 'timelog.html?job=' + id;
+    function tmsg(t, c) { $('taskMsg').textContent = t; $('taskMsg').className = 'note ' + (c || ''); }
+    async function loadTasks() {
+      try {
+        var q = await jref.collection('tasks').get();
+        tasks = q.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      } catch (e) { tmsg(vyro.friendly(e), 'err'); }
+      drawTasks();
+    }
+    function drawTasks() {
+      var box = $('taskList'); box.textContent = '';
+      var open = tasks.filter(function (t) { return !t.done; }).length;
+      $('taskSum').textContent = tasks.length ? open + ' open' : '';
+      var mine = tasks.filter(function (t) { return t.kind === tkind; });
+      mine.sort(function (a, b) { return (a.done === b.done) ? (a.text < b.text ? -1 : 1) : (a.done ? 1 : -1); });
+      if (!mine.length) box.appendChild(vyro.el('div', 'note', tkind === 'material' ? 'No materials listed yet.' : 'No punch items yet.'));
+      mine.forEach(function (t) {
+        var row = vyro.el('div', 'item');
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!t.done; cb.style.width = 'auto';
+        cb.addEventListener('change', async function () {
+          try { await jref.collection('tasks').doc(t.id).update({ text: t.text, kind: t.kind, done: cb.checked }); t.done = cb.checked; drawTasks(); }
+          catch (e) { tmsg(vyro.friendly(e), 'err'); cb.checked = !cb.checked; }
+        });
+        var tx = vyro.el('div', 'grow', t.text); if (t.done) tx.style.textDecoration = 'line-through';
+        var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button';
+        x.addEventListener('click', async function () {
+          try { await jref.collection('tasks').doc(t.id).delete(); tasks = tasks.filter(function (z) { return z.id !== t.id; }); drawTasks(); }
+          catch (e) { tmsg(vyro.friendly(e), 'err'); }
+        });
+        row.appendChild(cb); row.appendChild(tx); row.appendChild(x); box.appendChild(row);
+      });
+    }
+    function setTab(k) {
+      tkind = k; $('tabMat').className = k === 'material' ? 'on' : ''; $('tabPun').className = k === 'punch' ? 'on' : '';
+      $('taskLbl').textContent = k === 'material' ? 'Add a material' : 'Add a punch item'; drawTasks();
+    }
+    $('tabMat').addEventListener('click', function () { setTab('material'); });
+    $('tabPun').addEventListener('click', function () { setTab('punch'); });
+    $('taskAdd').addEventListener('click', async function () {
+      var t = $('taskText').value.trim(); if (!t) return;
+      try {
+        var r = await jref.collection('tasks').add({ text: t.slice(0, 200), kind: tkind, done: false, createdAt: vyro.stamp() });
+        tasks.push({ id: r.id, text: t.slice(0, 200), kind: tkind, done: false }); $('taskText').value = ''; tmsg(''); drawTasks();
+      } catch (e) { tmsg(vyro.friendly(e), 'err'); }
+    });
+    loadTasks();
+
+    // ---------- updates log ----------
+    async function loadUpdates() {
+      $('uList').textContent = '';
+      try {
+        var us = await jref.collection('updates').orderBy('createdAt', 'desc').get();
+        $('upSum').textContent = us.size ? String(us.size) : 'none yet';
+        us.forEach(function (d) {
+          var u = d.data();
+          var when = u.createdAt && u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString() : '';
+          var row = vyro.el('div', 'item');
+          var left = vyro.el('div', 'grow');
+          left.appendChild(vyro.el('b', '', u.text));
+          left.appendChild(vyro.el('small', '', when + ' \u00b7 ' + (u.by || '')));
+          row.appendChild(left);
+          $('uList').appendChild(row);
+        });
+      } catch (e) { umsg(vyro.friendly(e), 'err'); }
+    }
+    loadUpdates();
+    $('uAdd').addEventListener('click', async function () {
+      var t = $('uText').value.trim();
+      if (!t) { umsg('Type an update first.', 'err'); return; }
+      this.disabled = true;
+      try {
+        await jref.collection('updates').add({ text: t, by: who, kind: 'note', createdAt: vyro.stamp() });
+        if ($('uShare').checked) { try { await vportal.shareUpdate(id, t); } catch (e) { umsg('Saved, but could not share with the customer: ' + vyro.friendly(e), 'err'); } }
+        $('uShare').checked = false;
+        $('uText').value = ''; umsg(''); this.disabled = false; loadUpdates();
+      } catch (e) { umsg(vyro.friendly(e), 'err'); this.disabled = false; }
+    });
+
+    // ---------- delete ----------
+    $('bDel').addEventListener('click', async function () {
+      if (!confirm('Delete this job and its update log permanently? The estimate, invoices and expenses are kept for your records.')) return;
+      this.disabled = true; jmsg('Deleting...');
+      try { await vcascade.deleteJob(ctx.bizRef, id); location.href = 'jobs.html'; }
+      catch (e) { jmsg(vyro.friendly(e), 'err'); this.disabled = false; }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Team - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Team</div>
+  </div>
+
+  <div class="card">
+    <h2>Members</h2>
+    <div id="members"></div>
+    <div class="note" id="status"></div>
+  </div>
+
+  <div class="card" id="addCard" style="display:none">
+    <h2>Add a team member</h2>
+    <p>We create their login and email them a link to choose their own password. Nobody, including you, ever sees it.</p>
+    <label class="field"><span>Name</span><input id="mname" type="text" maxlength="80" autocomplete="off"></label>
+    <label class="field"><span>Email</span><input id="memail" type="email" maxlength="120" autocomplete="off"></label>
+    <label class="field" id="roleField"><span>Role</span>
+      <select id="mrole">
+        <option value="employee">Employee</option>
+        <option value="supervisor">Supervisor</option>
+      </select>
+    </label>
+    <button class="btn" id="add" type="button">Add and send login email</button>
+    <div class="note" id="amsg"></div>
+  </div>
+
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  vyro.start(function (ctx) {
+    var isOwner = ctx.role === 'owner';
+    var isManager = isOwner || ctx.role === 'supervisor';
+    function fail(e) { $('err').textContent = vyro.friendly(e); }
+    function status(t, cls) { $('status').textContent = t; $('status').className = 'note ' + (cls || ''); }
+
+    async function loadMembers() {
+      var box = $('members'); box.textContent = '';
+      var snap = await ctx.bizRef.collection('members').get();
+      snap.forEach(function (d) {
+        var m = d.data();
+        var isMe = d.id === ctx.user.uid;
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', m.name || m.email));
+        left.appendChild(vyro.el('small', '', m.email + (isMe ? ' (you)' : '') + ' \u00b7 ' + m.role));
+        row.appendChild(left);
+
+        var canManage = !isMe && m.role !== 'owner' && (isOwner || (ctx.role === 'supervisor' && m.role === 'employee'));
+        if (canManage) {
+          if (isOwner) {
+            var sel = vyro.el('select');
+            ['supervisor', 'employee'].forEach(function (r) {
+              var o = vyro.el('option', '', r); o.value = r; if (m.role === r) o.selected = true; sel.appendChild(o);
+            });
+            sel.addEventListener('change', async function () {
+              try { await d.ref.update({ role: sel.value }); } catch (e) { fail(e); loadMembers(); }
+            });
+            row.appendChild(sel);
+          }
+          var rs = vyro.el('button', 'mini', 'Resend login'); rs.type = 'button';
+          rs.addEventListener('click', async function () {
+            try { await vyro.sendLoginEmail(m.email); status('Login email sent to ' + m.email + '.', 'ok'); }
+            catch (e) { status(vyro.friendly(e), 'err'); }
+          });
+          row.appendChild(rs);
+          var rm = vyro.el('button', 'mini danger', 'Remove'); rm.type = 'button';
+          rm.addEventListener('click', async function () {
+            if (!confirm('Remove ' + (m.name || m.email) + ' from the team?')) return;
+            try { await d.ref.delete(); loadMembers(); } catch (e) { fail(e); }
+          });
+          row.appendChild(rm);
+        }
+        box.appendChild(row);
+      });
+    }
+
+    loadMembers().catch(fail);
+
+    if (isManager) {
+      $('addCard').style.display = 'block';
+      $('roleField').style.display = isOwner ? 'block' : 'none';
+
+      $('add').addEventListener('click', async function () {
+        var btn = this;
+        var name = $('mname').value.trim();
+        var email = $('memail').value.trim();
+        var role = isOwner ? $('mrole').value : 'employee';
+        var msg = $('amsg'); msg.className = 'note';
+        if (!name || !email) { msg.textContent = 'Enter a name and an email.'; msg.className = 'note err'; return; }
+        btn.disabled = true; msg.textContent = 'Creating login...';
+        try {
+          var r = await vyro.addMember(ctx.bizId, email, name, role);
+          msg.className = 'note ok';
+          msg.textContent = r.emailSent
+            ? 'Added. A login email was sent to ' + email + '. Ask them to check spam too.'
+            : 'Added, but the email could not be sent. Tap Resend login next to their name.';
+          $('mname').value = ''; $('memail').value = '';
+          await loadMembers();
+        } catch (err) {
+          msg.className = 'note err';
+          msg.textContent = (err && err.code === 'auth/email-already-in-use')
+            ? 'That email already has a Vyro login, so it cannot be added here yet. Use a different email for now.'
+            : vyro.friendly(err);
+        }
+        btn.disabled = false;
+      });
+    }
+  });
+</script>
+</body>
+</html>

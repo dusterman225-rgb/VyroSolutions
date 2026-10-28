@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Pay with Vyro - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">Pay with Vyro</div>
+  </div>
+
+  <div id="testBanner" style="display:none;margin:8px 0;padding:6px 12px;border:1px solid #d4af37;border-radius:999px;text-align:center;font-size:.78rem;color:#d4af37">TEST MODE: no real money</div>
+
+  <div class="card">
+    <h2 id="iTitle">Loading...</h2>
+    <div class="row"><span>Balance due</span><b id="iBal">-</b></div>
+    <div class="note" id="iNote"></div>
+  </div>
+
+  <div class="card" id="setupCard" style="display:none">
+    <h2>Set up first</h2>
+    <p id="setupText"></p>
+    <a class="btn" href="paysettings.html">Pay with Vyro setup</a>
+  </div>
+
+  <div class="card" id="coinCard" style="display:none">
+    <h2>Choose the coin</h2>
+    <div class="nav" id="coinBtns"></div>
+    <div class="note" id="cMsg"></div>
+  </div>
+
+  <div class="card" id="qrCard" style="display:none">
+    <h2>Customer: scan this</h2>
+    <div id="qrBox" style="background:#fff;padding:6px;border-radius:10px;max-width:340px;margin:8px auto"></div>
+    <div class="row"><span>They send</span><b id="qAmt"></b></div>
+    <div class="row"><span>You receive (after 2% Vyro fee)</span><b id="qNet"></b></div>
+    <div class="note">Keep this page open. It marks the invoice paid by itself.</div>
+    <button class="btn" id="bCheck" type="button">Check payment now</button>
+    <details class="more">
+      <summary>More</summary>
+      <div class="in">
+        <button class="btn ghost" id="bNew" type="button">Make a new code</button>
+        <div class="note" id="qLink" style="word-break:break-all"></div>
+      </div>
+    </details>
+    <div class="note" id="qMsg"></div>
+  </div>
+
+  <div class="card" id="doneCard" style="display:none">
+    <h2>Payment received</h2>
+    <p id="doneText"></p>
+    <a class="btn" id="doneLink" href="#" target="_blank" rel="noopener">View on the blockchain explorer</a>
+    <a class="btn ghost" id="backInv" href="#">Back to the invoice</a>
+  </div>
+
+  <a class="back" id="back" href="invoices.html">Back to invoices</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="../shared/chain-config.js"></script>
+<script src="js/chain.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function deriveStatus(inv, paid) {
+    if (inv.status === 'Draft' || inv.status === 'Voided') return inv.status;
+    if (inv.totalCents > 0 && paid >= inv.totalCents) return 'Paid';
+    return paid > 0 ? 'Partially Paid' : 'Sent';
+  }
+  function coinText(base, coin, dec) { var n = base / Math.pow(10, dec); return n.toFixed(coin === 'USDC' ? 2 : 4) + ' ' + coin; }
+
+  vyro.start(async function (ctx) {
+    var CFG = vchain.cfg;
+    var id = new URLSearchParams(location.search).get('id');
+    if (CFG.network !== 'mainnet') $('testBanner').style.display = 'block';
+    var iref = ctx.bizRef.collection('invoices').doc(id || 'x');
+    var s = await iref.get();
+    if (!s.exists) { $('err').textContent = 'Invoice not found.'; $('iTitle').textContent = 'Not found'; return; }
+    var inv = s.data(); inv.id = id;
+    $('backInv').href = 'invoice.html?id=' + id; $('back').href = 'invoice.html?id=' + id; $('back').textContent = 'Back to the invoice';
+    $('iTitle').textContent = 'Invoice ' + (inv.number || '') + (inv.customerName ? ' · ' + inv.customerName : '');
+    var bal = (inv.totalCents || 0) - (inv.paidCents || 0);
+    $('iBal').textContent = vutil.fmt(bal);
+    if (inv.status !== 'Sent' && inv.status !== 'Partially Paid') { $('iNote').textContent = inv.status === 'Paid' ? 'This invoice is already paid.' : 'Only a sent invoice with a balance can be paid. Send it first.'; return; }
+    if (bal <= 0) { $('iNote').textContent = 'Nothing is due.'; return; }
+
+    var wallet = ctx.biz.payWallet, coins = ctx.biz.payCoins || [];
+    var cfgBad = /PUT-YOUR/.test(CFG.feeWallet) || !vchain.isAddress(CFG.feeWallet);
+    if (cfgBad) { $('setupCard').style.display = 'block'; $('setupText').textContent = 'The Vyro fee wallet is not set in js/chain-config.js yet.'; return; }
+    if (!wallet || !coins.length) { $('setupCard').style.display = 'block'; $('setupText').textContent = ctx.role === 'owner' ? 'Add your wallet address and the coins you accept.' : 'The owner needs to add the business wallet first.'; return; }
+
+    var reqCol = iref.collection('payRequests');
+    var current = null, timer = null, working = false;
+
+    function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+    async function makeRequest(coin) {
+      $('cMsg').textContent = 'Making the code...'; $('cMsg').className = 'note';
+      try {
+        var q = await vchain.quote(coin, bal);
+        var ref = vchain.makeReference();
+        var req = { reference: ref, net: CFG.network, coin: coin, usdCents: bal, amountBase: q.amountBase, feeBase: q.feeBase, bizBase: q.bizBase,
+          decimals: q.decimals, wallet: wallet, feeWallet: CFG.feeWallet, mint: coin === 'USDC' ? CFG.usdcMint[CFG.network] : null,
+          usdPrice: q.price, status: 'Open', createdAt: vyro.stamp(), createdBy: ctx.user.uid };
+        await reqCol.doc(ref).set(req);
+        current = req; showQr(req); $('cMsg').textContent = '';
+      } catch (e) {
+        $('cMsg').textContent = e && e.code === 'vyro/no-price' ? 'Could not get the SOL price right now. Try again, or use USDC.' : vyro.friendly(e); $('cMsg').className = 'note err';
+      }
+    }
+
+    function showQr(req) {
+      $('coinCard').style.display = 'none'; $('qrCard').style.display = 'block';
+      var text = vchain.uri(req, inv, ctx.biz.name);
+      var svg = vchain.qrSvg(text);
+      if (svg) $('qrBox').innerHTML = svg; else { $('qrBox').textContent = 'The QR picture could not load. Use the payment link below instead.'; $('qrBox').style.color = '#111'; }
+      $('qLink').textContent = text;
+      $('qAmt').textContent = coinText(req.amountBase, req.coin, req.decimals) + ' (' + vutil.fmt(req.usdCents) + (req.usdPrice ? ' at $' + req.usdPrice.toFixed(2) + ' per SOL' : '') + ')';
+      $('qNet').textContent = coinText(req.bizBase, req.coin, req.decimals);
+      stopTimer(); timer = setInterval(check, 6000); setTimeout(function () { stopTimer(); $('qMsg').textContent = 'Stopped checking automatically after 10 minutes. Tap Check payment now if they paid.'; }, 600000);
+    }
+
+    async function record(req, found) {
+      var pref = iref.collection('payments').doc(found.signature), today = vutil.todayStr();
+      await vyro.db.runTransaction(async function (tx) {
+        var is = await tx.get(iref), ps = await tx.get(pref);
+        if (ps.exists) return;                       // already recorded
+        var d = is.data(), paid = d.paidCents + req.usdCents;
+        if (paid > d.totalCents) throw { code: 'vyro/overpay' };
+        tx.set(pref, { amountCents: req.usdCents, method: 'Pay with Vyro', receivedOn: today, note: req.coin + ' on ' + (req.net === 'mainnet' ? 'Solana' : 'Solana TEST network'),
+          source: 'vyro', reversed: false, recordedBy: ctx.user.uid, createdAt: vyro.stamp(),
+          txSignature: found.signature, coin: req.coin, network: req.net, feeCents: Math.round(req.usdCents * CFG.feeBps / 10000) });
+        tx.update(iref, { paidCents: paid, status: deriveStatus(d, paid), updatedAt: vyro.stamp() });
+      });
+      await reqCol.doc(req.reference).update({ status: 'Paid', signature: found.signature, paidAt: vyro.stamp() });
+    }
+
+    async function check() {
+      if (working || !current) return; working = true;
+      try {
+        var found = await vchain.findPayment(current);
+        if (found) {
+          stopTimer(); $('qMsg').textContent = 'Payment found. Recording...';
+          await record(current, found);
+          $('qrCard').style.display = 'none'; $('doneCard').style.display = 'block';
+          $('doneText').textContent = vutil.fmt(current.usdCents) + ' received in ' + current.coin + (current.net === 'mainnet' ? '' : ' (TEST)') + '. The invoice is updated.';
+          $('doneLink').href = vchain.explorer(found.signature, current.net);
+        } else { $('qMsg').textContent = 'Waiting for the payment...'; }
+      } catch (e) {
+        if (e && e.code === 'vyro/overpay') { stopTimer(); $('qMsg').textContent = 'A payment was found, but it is more than the balance now due (another payment was recorded). Check the invoice, and record it by hand if needed.'; $('qMsg').className = 'note err'; }
+        else if (e && e.code === 'vyro/no-rpc') { stopTimer(); $('qMsg').textContent = 'The blockchain connection is not set up in js/chain-config.js.'; $('qMsg').className = 'note err'; }
+        else { $('qMsg').textContent = 'Could not check just now. Will retry.'; }
+      }
+      working = false;
+    }
+
+    $('bCheck').addEventListener('click', check);
+    $('bNew').addEventListener('click', function () { stopTimer(); current = null; $('qrCard').style.display = 'none'; $('coinCard').style.display = 'block'; });
+
+    $('coinCard').style.display = 'block';
+    coins.forEach(function (c) {
+      var b = vyro.el('button', 'btn', 'Pay with ' + c); b.type = 'button';
+      b.addEventListener('click', function () { makeRequest(c); });
+      $('coinBtns').appendChild(b);
+    });
+  });
+</script>
+</body>
+</html>

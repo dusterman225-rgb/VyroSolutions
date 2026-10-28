@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Dashboard - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <img class="mark-small" src="images/logo.svg" alt="Vyro">
+    <div>
+      <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu">Menu &#9662;</button>
+      <div class="menu" id="menu">
+        <div class="mh">
+          <b id="mName">Loading...</b>
+          <small id="mProduct"></small>
+          <small id="mWho"></small>
+        </div>
+        <details>
+          <summary class="mg">Work <span class="badge" id="bMsg" style="display:none"></span></summary>
+          <a class="mi" href="leads.html">Leads</a>
+          <a class="mi" href="estimates.html">Estimates</a>
+          <a class="mi" href="jobs.html">Active jobs</a>
+          <a class="mi" href="customers.html">Customers</a>
+          <a class="mi" href="messages.html">Messages <span class="badge" id="bMsg2" style="display:none"></span></a>
+        </details>
+        <details>
+          <summary class="mg" id="mgMoney">Money</summary>
+          <a class="mi" href="invoices.html">Invoices</a>
+          <a class="mi" href="expenses.html">Expenses and bills</a>
+          <a class="mi" id="miRec" href="recurring.html">Recurring bills</a>
+          <a class="mi" id="miFin" href="finances.html" style="display:none">Finances</a>
+          <a class="mi" id="miPay" href="paysettings.html" style="display:none">Pay with Vyro</a>
+        </details>
+        <details>
+          <summary class="mg">Tools</summary>
+          <a class="mi" id="miDoc" href="documents.html" style="display:none">Documents</a>
+          <a class="mi" href="timelog.html">Time and mileage</a>
+          <a class="mi" id="miSub" href="subs.html">Subcontractors</a>
+          <a class="mi" href="assistant.html">Assistant</a>
+        </details>
+        <details>
+          <summary class="mg">Business</summary>
+          <a class="mi" href="profile.html">Business profile</a>
+          <a class="mi" href="team.html">Team</a>
+        </details>
+        <button class="mi out" id="out" type="button">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tag" id="bizTag" style="margin:22px 0 0">Dashboard</div>
+  <div id="wpBox"></div>
+
+  <div class="qa">
+    <a class="btn" href="leads.html?new=1">New lead</a>
+    <a class="btn" href="estimate.html">New estimate</a>
+    <a class="btn" href="invoice.html">New invoice</a>
+  </div>
+
+  <details class="sec" id="calSec" open>
+    <summary>Calendar</summary>
+    <div class="in" id="calBox"></div>
+  </details>
+
+  <div class="card" id="acceptedBanner" style="display:none">
+    <h2>Accepted online</h2>
+    <p id="acceptedText"></p>
+    <a class="btn" href="jobs.html">View active jobs</a>
+  </div>
+
+  <div class="card att" id="att">
+    <h2>Needs your attention</h2>
+    <div id="attBody"><div class="ok">Loading...</div></div>
+  </div>
+
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/recur.js"></script>
+<script src="js/public.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var PRODUCT_NAMES = { contractor: 'VyroContractor', restaurant: 'VyroRestaurant', retail: 'VyroRetail' };
+
+  function setMenu(open) {
+    $('menu').classList.toggle('open', open);
+    $('menuBtn').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  $('menuBtn').addEventListener('click', function (e) { e.stopPropagation(); setMenu(!$('menu').classList.contains('open')); });
+  document.addEventListener('click', function (e) { if (!$('menu').contains(e.target)) setMenu(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
+  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = 'login.html'; });
+
+  vyro.start(async function (ctx) {
+    if (ctx.biz.product === 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.contractor)) { location.replace('/restaurant/index.html'); return; }
+    var canMoney = ctx.role === 'owner' || ctx.role === 'supervisor';
+    $('mName').textContent = ctx.biz.name;
+    if (ctx.biz.name) $('bizTag').textContent = ctx.biz.name;
+    if (vyro.mountSwitcher) vyro.mountSwitcher(ctx, $('wpBox'));
+    $('mProduct').textContent = PRODUCT_NAMES[ctx.biz.product] || '';
+    $('mWho').textContent = ctx.role + ' \u00b7 ' + ctx.user.email;
+    if (ctx.role === 'owner') { $('miFin').style.display = 'block'; $('miPay').style.display = 'block'; }
+    if (canMoney) $('miDoc').style.display = 'block';
+    if (!canMoney) $('miSub').style.display = 'none';
+    var recurDone = Promise.resolve();
+    if (canMoney && window.vrecur) recurDone = vrecur.run(ctx).catch(function () { /* optional */ });
+    recurDone.then(function () { try { vcal.mount(ctx, $('calBox')); } catch (e) { $('calSec').style.display = 'none'; } });
+    if (ctx.role === 'employee') {
+      var qa = document.querySelector('.qa');
+      if (qa) { qa.textContent = ''; [['New lead', 'leads.html?new=1'], ['Jobs', 'jobs.html'], ['Messages', 'messages.html']].forEach(function (x) { var a = vyro.el('a', 'btn', x[0]); a.href = x[1]; qa.appendChild(a); }); }
+      var ah = document.querySelector('#attBody') && document.querySelector('#attBody').parentNode.querySelector('h2');
+      if (ah) ah.textContent = 'Your work';
+    }
+    if (!canMoney) {
+      var mg = $('mgMoney'); if (mg && mg.parentNode) mg.parentNode.style.display = 'none';
+      Array.prototype.forEach.call(document.querySelectorAll('.qa a'), function (a) { if (/invoice/.test(a.getAttribute('href') || '')) a.style.display = 'none'; });
+    }
+
+    // pull in estimates customers accepted through their email link
+    try {
+      var acc = await vpublic.syncAccepted(ctx);
+      if (acc.length) {
+        $('acceptedText').textContent = acc.map(function (a) { return a.by + ' accepted ' + a.number + ' (' + a.customer + ')'; }).join('. ') + '. A job was created for each.';
+        $('acceptedBanner').style.display = 'block';
+      }
+    } catch (e) { /* best effort; needs the latest Firestore rules */ }
+
+    var n = { newLeads: 0, staleLeads: 0, due: 0, sent: 0, jobs: 0, owed: 0, over: 0, bills: 0, billsOver: 0, unread: 0 }, failed = false;
+    var today = vutil.todayStr(), now = Date.now();
+
+    await Promise.all([
+      (async function () {
+        try {
+          var snap = await ctx.bizRef.collection('leads').get();
+          snap.forEach(function (d) {
+            var l = d.data();
+            if (l.status === 'New') {
+              n.newLeads++;
+              var t = l.createdAt && l.createdAt.toMillis ? l.createdAt.toMillis() : now;
+              if (now - t > 2 * 86400000) n.staleLeads++;
+            }
+            if (l.followUpOn && l.followUpOn <= today && l.status !== 'Won' && l.status !== 'Lost') n.due++;
+          });
+        } catch (e) { failed = true; }
+      })(),
+      (async function () { try { n.sent = (await ctx.bizRef.collection('estimates').where('status', '==', 'Sent').get()).size; } catch (e) { failed = true; } })(),
+      (async function () {
+        try {
+          (await ctx.bizRef.collection('jobs').get()).forEach(function (d) {
+            var s = d.data().status; if (s === 'Not Started' || s === 'In Progress' || s === 'On Hold') n.jobs++;
+          });
+        } catch (e) { failed = true; }
+      })(),
+      (async function () {
+        try {
+          (canMoney ? await ctx.bizRef.collection('invoices').get() : { forEach: function () {} }).forEach(function (d) {
+            var i = d.data();
+            if (i.status === 'Sent' || i.status === 'Partially Paid') {
+              n.owed += (i.totalCents || 0) - (i.paidCents || 0);
+              if (i.dueDate && i.dueDate < today) n.over++;
+            }
+          });
+        } catch (e) { failed = true; }
+      })(),
+      (async function () {
+        if (!canMoney) return;
+        try {
+          (await ctx.bizRef.collection('expenses').where('status', '==', 'Unpaid').get()).forEach(function (d) {
+            var x = d.data(); n.bills += x.amountCents || 0; if (x.dueDate && x.dueDate < today) n.billsOver++;
+          });
+        } catch (e) { failed = true; }
+      })(),
+      (async function () {
+        try { (await vyro.db.collection('portals').where('bizId', '==', ctx.bizId).get()).forEach(function (d) { n.unread += d.data().unreadCount || 0; }); } catch (e) { /* no portals yet */ }
+      })()
+    ]);
+
+    if (n.unread) { ['bMsg', 'bMsg2'].forEach(function (id) { $(id).textContent = n.unread; $(id).style.display = 'inline-block'; }); }
+
+    // only show what needs attention
+    var groups = [
+      ['Money', [
+        n.owed > 0 && ['Money owed to you', vutil.fmt(n.owed), 'invoices.html', false],
+        n.over > 0 && ['Overdue invoices', n.over, 'invoices.html', true],
+        n.bills > 0 && ['Bills to pay', vutil.fmt(n.bills) + (n.billsOver ? ' (' + n.billsOver + ' overdue)' : ''), 'expenses.html', n.billsOver > 0]
+      ]],
+      ['Work', [
+        n.jobs > 0 && ['Active jobs', n.jobs, 'jobs.html', false],
+        n.sent > 0 && canMoney && ['Estimates waiting for a reply', n.sent, 'estimates.html', false]
+      ]],
+      ['Leads', [
+        n.newLeads > 0 && ['New leads', n.newLeads + (n.staleLeads ? ' (' + n.staleLeads + ' waiting 2+ days)' : ''), 'leads.html', n.staleLeads > 0],
+        n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
+      ]],
+      ['Messages', [
+        n.unread > 0 && ['Unread customer messages', n.unread, 'messages.html', true]
+      ]]
+    ];
+    var box = $('attBody'); box.textContent = ''; var any = false;
+    groups.forEach(function (g) {
+      var rows = g[1].filter(Boolean); if (!rows.length) return; any = true;
+      box.appendChild(vyro.el('h3', '', g[0]));
+      rows.forEach(function (r) {
+        var a = vyro.el('a', 'arow'); a.href = r[2];
+        a.appendChild(vyro.el('span', '', r[0]));
+        a.appendChild(vyro.el('b', r[3] ? 'late' : '', String(r[1])));
+        box.appendChild(a);
+      });
+    });
+    if (!any) box.appendChild(vyro.el('div', 'ok', failed ? 'Some numbers could not load. Check the Firestore rules were published.' : 'You\'re all caught up.'));
+    else if (failed) $('err').textContent = 'Some numbers could not load. Check the Firestore rules were published.';
+  });
+</script>
+</body>
+</html>

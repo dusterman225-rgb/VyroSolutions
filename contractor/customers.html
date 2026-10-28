@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Customers - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Customers</div>
+  </div>
+
+  <div id="listView">
+    <div class="tabs"><a class="on" href="customers.html">Active</a><a id="viewArch" href="archived.html">Archived</a></div>
+    <div class="card">
+      <input class="search" id="q" type="search" placeholder="Search name, phone or email" autocomplete="off">
+      <div id="list"></div>
+      <div class="note" id="empty"></div>
+    </div>
+    <button class="btn" id="add" type="button">Add customer</button>
+    <a class="back" href="app.html">Back to dashboard</a>
+  </div>
+
+  <form class="card" id="form" style="display:none">
+    <h2 id="formTitle">New customer</h2>
+    <label class="field"><span>Name</span><input id="name" type="text" maxlength="120" required></label>
+    <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40" autocomplete="off"></label>
+    <label class="field"><span>Email</span><input id="email" type="email" maxlength="120" autocomplete="off"></label>
+    <label class="field"><span>Address</span><textarea id="address" rows="2" maxlength="300"></textarea></label>
+    <label class="field"><span>Preferred language</span><select id="lang"></select></label>
+    <label class="field"><span>Notes</span><textarea id="notes" rows="3" maxlength="1000"></textarea></label>
+    <button class="btn" id="save" type="submit">Save customer</button>
+    <button class="btn ghost" id="cancel" type="button">Cancel</button>
+    <button class="link" id="del" type="button" style="display:none;color:#ff8a8a">Delete customer</button>
+    <div class="note" id="msg"></div>
+  </form>
+
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/cascade.js"></script>
+<script>
+  var LANGS = [['en','English'],['es','Spanish'],['pt','Portuguese'],['fr','French'],['zh','Chinese'],
+               ['vi','Vietnamese'],['tl','Tagalog'],['ar','Arabic'],['ru','Russian'],['ko','Korean'],['other','Other']];
+  var $ = function (id) { return document.getElementById(id); };
+
+  LANGS.forEach(function (l) {
+    var o = document.createElement('option'); o.value = l[0]; o.textContent = l[1]; $('lang').appendChild(o);
+  });
+
+  vyro.start(function (ctx) {
+    var col = ctx.bizRef.collection('customers');
+    var canDelete = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var all = [];
+    var editingId = null;
+
+    function langName(code) {
+      for (var i = 0; i < LANGS.length; i++) { if (LANGS[i][0] === code) return LANGS[i][1]; }
+      return '';
+    }
+    function cleanPhone(p) { return (p || '').replace(/[^0-9+]/g, ''); }
+
+    function showList() { $('form').style.display = 'none'; $('listView').style.display = 'block'; $('msg').textContent = ''; }
+    function showForm(c) {
+      editingId = c ? c.id : null;
+      $('formTitle').textContent = c ? 'Edit customer' : 'New customer';
+      $('name').value = c ? c.name : '';
+      $('phone').value = c ? (c.phone || '') : '';
+      $('email').value = c ? (c.email || '') : '';
+      $('address').value = c ? (c.address || '') : '';
+      $('lang').value = c && c.language ? c.language : 'en';
+      $('notes').value = c ? (c.notes || '') : '';
+      $('del').style.display = (c && canDelete) ? 'block' : 'none';
+      $('listView').style.display = 'none'; $('form').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function render() {
+      var q = $('q').value.trim().toLowerCase();
+      var box = $('list'); box.textContent = '';
+      var active = all.filter(function (c) { return !c.archived; });
+      var nArch = all.length - active.length;
+      $('viewArch').textContent = 'Archived' + (nArch ? ' (' + nArch + ')' : '');
+      var shown = active.filter(function (c) {
+        if (!q) return true;
+        return (c.name || '').toLowerCase().indexOf(q) > -1 ||
+               (c.email || '').toLowerCase().indexOf(q) > -1 ||
+               cleanPhone(c.phone).indexOf(cleanPhone(q) || '\u0000') > -1;
+      });
+      $('empty').textContent = shown.length ? '' :
+        (active.length ? 'No customers match your search.' : 'No customers yet. Tap Add customer to start.');
+      shown.forEach(function (c) {
+        var row = vyro.el('div', 'item');
+        var left = vyro.el('div', 'grow');
+        left.appendChild(vyro.el('b', '', c.name));
+        var bits = [];
+        if (c.phone) bits.push(c.phone);
+        if (c.email) bits.push(c.email);
+        if (c.language && c.language !== 'en') bits.push(langName(c.language));
+        left.appendChild(vyro.el('small', '', bits.join(' \u00b7 ') || 'No contact details'));
+        left.addEventListener('click', function () { location.href = 'customer.html?id=' + c.id; });
+        row.appendChild(left);
+        if (cleanPhone(c.phone)) {
+          var call = vyro.el('a', 'mini', 'Call'); call.href = 'tel:' + cleanPhone(c.phone); row.appendChild(call);
+        }
+        if (c.address) {
+          var map = vyro.el('a', 'mini', 'Map');
+          map.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address);
+          map.target = '_blank'; map.rel = 'noopener'; row.appendChild(map);
+        }
+        if (canDelete) {
+          var dl = vyro.el('a', 'mini', 'Delete'); dl.href = '#'; dl.style.color = '#ff8a8a';
+          dl.addEventListener('click', function (ev) { ev.preventDefault(); removeCustomer(c.id, null); });
+          row.appendChild(dl);
+        }
+        box.appendChild(row);
+      });
+    }
+
+    async function removeCustomer(cid, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        var jobs = await vcascade.jobsOfCustomer(ctx.bizRef, cid);
+        var msg = jobs.length
+          ? 'Delete this customer AND their ' + jobs.length + (jobs.length === 1 ? ' job' : ' jobs') + ' and their customer portal? Their estimates and invoices are kept for your records. This cannot be undone.'
+          : 'Delete this customer? This cannot be undone.';
+        if (!confirm(msg)) { if (btn) btn.disabled = false; return; }
+        await vcascade.deleteCustomer(ctx.bizRef, cid);
+        await load(); showList();
+      } catch (err) { $('err').textContent = vyro.friendly(err); $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
+      if (btn) btn.disabled = false;
+    }
+
+    async function load() {
+      var snap = await col.orderBy('nameLower').get();
+      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      render();
+    }
+
+    $('q').addEventListener('input', render);
+    $('add').addEventListener('click', function () { showForm(null); });
+    $('cancel').addEventListener('click', showList);
+
+    $('form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var name = $('name').value.trim();
+      var phone = $('phone').value.trim();
+      var email = $('email').value.trim();
+      if (!name) { $('msg').textContent = 'Name is required.'; $('msg').className = 'note err'; return; }
+
+      if (!editingId) {
+        var dupe = all.some(function (c) {
+          return (email && (c.email || '').toLowerCase() === email.toLowerCase()) ||
+                 (cleanPhone(phone) && cleanPhone(c.phone) === cleanPhone(phone));
+        });
+        if (dupe && !confirm('A customer with this phone or email already exists (they may be in your archive). Add anyway?')) return;
+      }
+
+      var data = {
+        name: name, nameLower: name.toLowerCase(), phone: phone, email: email,
+        address: $('address').value.trim(), language: $('lang').value,
+        notes: $('notes').value.trim(), updatedAt: vyro.stamp()
+      };
+      var btn = $('save'); btn.disabled = true; $('msg').className = 'note'; $('msg').textContent = 'Saving...';
+      try {
+        if (editingId) {
+          await col.doc(editingId).update(data);
+        } else {
+          data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid; data.archived = false;
+          await col.add(data);
+        }
+        await load(); showList();
+      } catch (err) {
+        $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err';
+      }
+      btn.disabled = false;
+    });
+
+    $('del').addEventListener('click', async function () {
+      if (!editingId) return;
+      await removeCustomer(editingId, this);
+    });
+
+    var editId = new URLSearchParams(location.search).get('edit');
+    load().then(function () {
+      if (editId) {
+        var found = all.filter(function (x) { return x.id === editId; })[0];
+        if (found) showForm(found);
+      }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Estimate - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .paper{background:#fff;color:#111;border-radius:12px;padding:24px;margin-top:20px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .paper h1{margin:0;font-size:1.3rem;letter-spacing:.08em}
+  .paper h3{margin:18px 0 4px;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
+  .paper .muted{color:#555;font-size:.85rem;line-height:1.5;white-space:pre-wrap}
+  .paper .top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .paper table{width:100%;border-collapse:collapse;margin-top:16px;font-size:.9rem}
+  .paper th{text-align:left;border-bottom:2px solid #111;padding:6px 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
+  .paper td{border-bottom:1px solid #ddd;padding:8px 4px;vertical-align:top;word-break:break-word}
+  .paper .n{text-align:right;white-space:nowrap}
+  .paper .tot{margin-left:auto;max-width:280px;margin-top:12px}
+  .paper .tot div{display:flex;justify-content:space-between;padding:4px 0}
+  .paper .grand{font-weight:700;font-size:1.05rem;border-top:2px solid #111;margin-top:4px;padding-top:8px}
+  @media print{
+    body{background:#fff !important}
+    .noprint{display:none !important}
+    .wrap{padding:0;max-width:none}
+    .paper{margin:0;border-radius:0;padding:0}
+  }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="noprint brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Estimate preview</div>
+  </div>
+
+  <div class="paper" id="paper"></div>
+
+  <div class="noprint">
+    <button class="btn" id="print" type="button">Print or save as PDF</button>
+    <a class="btn ghost" id="mail" href="#">Email to customer</a>
+    <div class="note">The email opens in your mail app with the details filled in. Save the PDF first, then attach it. Automatic sending comes later.</div>
+    <a class="back" id="back" href="estimates.html">Back to estimate</a>
+    <div class="note err" id="err"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, cls, text) { return vyro.el(tag, cls, text); }
+
+  vyro.start(async function (ctx) {
+    var id = new URLSearchParams(location.search).get('id');
+    var s = await ctx.bizRef.collection('estimates').doc(id || 'x').get();
+    if (!s.exists) { $('err').textContent = 'Estimate not found.'; return; }
+    var e = s.data(), b = ctx.biz;
+    $('back').href = 'estimate.html?id=' + id;
+    var p = $('paper');
+
+    var top = h('div', 'top');
+    var left = h('div');
+    left.appendChild(h('h1', '', b.name || 'Estimate'));
+    var contact = [b.address, b.phone, b.email, b.license ? 'License ' + b.license : '', b.website].filter(Boolean).join('\n');
+    left.appendChild(h('div', 'muted', contact));
+    top.appendChild(left);
+    var right = h('div'); right.style.textAlign = 'right';
+    right.appendChild(h('h1', '', 'ESTIMATE'));
+    var created = e.createdAt && e.createdAt.toDate ? e.createdAt.toDate().toLocaleDateString() : '';
+    right.appendChild(h('div', 'muted', [e.number, created ? 'Date ' + created : '', e.validUntil ? 'Valid until ' + e.validUntil : ''].filter(Boolean).join('\n')));
+    top.appendChild(right);
+    p.appendChild(top);
+
+    p.appendChild(h('h3', '', 'Prepared for'));
+    p.appendChild(h('div', 'muted', [e.customerName, e.address, e.customerPhone, e.customerEmail].filter(Boolean).join('\n')));
+    if (e.title) { p.appendChild(h('h3', '', 'Project')); p.appendChild(h('div', '', e.title)); }
+
+    var tbl = h('table');
+    var head = h('tr');
+    ['Description', 'Qty', 'Price', 'Amount'].forEach(function (t, i) { head.appendChild(h('th', i ? 'n' : '', t)); });
+    tbl.appendChild(head);
+    (e.lineItems || []).forEach(function (it) {
+      var tr = h('tr');
+      tr.appendChild(h('td', '', (it.description || '') + (it.type ? ' (' + it.type + ')' : '')));
+      tr.appendChild(h('td', 'n', String(it.qty)));
+      tr.appendChild(h('td', 'n', vutil.fmt(it.unitCents)));
+      tr.appendChild(h('td', 'n', vutil.fmt(Math.round(it.qty * it.unitCents))));
+      tbl.appendChild(tr);
+    });
+    p.appendChild(tbl);
+
+    var tot = h('div', 'tot');
+    function line(label, val, cls) { var d = h('div', cls || ''); d.appendChild(h('span', '', label)); d.appendChild(h('span', '', val)); tot.appendChild(d); }
+    line('Subtotal', vutil.fmt(e.subtotalCents));
+    if (e.discountCents) line('Discount', '-' + vutil.fmt(e.discountCents));
+    if (e.taxCents) line('Tax (' + e.taxPct + '%)', vutil.fmt(e.taxCents));
+    line('Total', vutil.fmt(e.totalCents), 'grand');
+    if (e.depositPct) line('Deposit due (' + e.depositPct + '%)', vutil.fmt(Math.round(e.totalCents * e.depositPct / 100)));
+    p.appendChild(tot);
+
+    if (e.terms) { p.appendChild(h('h3', '', 'Terms')); p.appendChild(h('div', 'muted', e.terms)); }
+
+    $('print').addEventListener('click', function () { window.print(); });
+
+    var subject = 'Estimate ' + e.number + ' from ' + b.name;
+    var body = 'Hi ' + e.customerName + ',\n\nHere is your estimate ' + e.number + (e.title ? ' for ' + e.title : '') +
+      ' totaling ' + vutil.fmt(e.totalCents) + '.\n\nPlease let me know if you have any questions.\n\nThank you,\n' + b.name;
+    $('mail').href = 'mailto:' + encodeURIComponent(e.customerEmail || '').replace('%40', '@') +
+      '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  });
+</script>
+</body>
+</html>

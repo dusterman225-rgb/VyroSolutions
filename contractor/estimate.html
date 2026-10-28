@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Estimate - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag" id="pageTag">New estimate</div>
+  </div>
+
+  <div class="card" id="lockNote" style="display:none"><p id="lockText"></p></div>
+
+  <form id="form" autocomplete="off">
+    <details class="sec" id="secCust" open>
+      <summary>Customer <small id="custSum"></small></summary>
+      <div class="in">
+      <label class="field"><span>Customer</span><select id="cust"><option value="">Choose a customer...</option></select></label>
+      <label class="field" id="nameRow"><span>Name (no customer record yet)</span><input id="cname" type="text" maxlength="120"></label>
+      <div id="newCustBox">
+        <label class="field"><span>Customer email</span><input id="cemail" type="email" maxlength="120" autocomplete="off"></label>
+        <label class="field"><span>Customer phone</span><input id="cphone" type="tel" maxlength="40" autocomplete="off"></label>
+        <button class="btn ghost" id="mkCust" type="button">Save as a customer</button>
+        <div class="note" id="mkMsg"></div>
+      </div>
+      <a class="link" id="viewCust" href="#" style="display:none">View customer page</a>
+      <label class="field"><span>Job address</span><textarea id="caddr" rows="2" maxlength="300"></textarea></label>
+      </div>
+    </details>
+
+    <div class="card">
+      <h2>Estimate</h2>
+      <label class="field"><span>Project title</span><input id="title" type="text" maxlength="120" placeholder="Kitchen remodel"></label>
+      <label class="field"><span>Valid until</span><input id="validUntil" type="date"></label>
+    </div>
+
+    <div class="card">
+      <h2>Line items</h2>
+      <div id="lines"></div>
+      <button class="btn ghost" id="addLine" type="button">Add line</button>
+      <label class="field"><span>Discount ($)</span><input id="discount" type="text" inputmode="decimal" placeholder="0.00"></label>
+      <label class="field"><span>Sales tax (%)</span><input id="taxPct" type="text" inputmode="decimal" placeholder="0"></label>
+      <label class="field"><span>Deposit requested (%)</span><input id="depositPct" type="text" inputmode="decimal" placeholder="0"></label>
+    </div>
+
+    <div class="card totals">
+      <h2>Totals</h2>
+      <div class="row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
+      <div class="row"><span>Discount</span><b id="tDisc">$0.00</b></div>
+      <div class="row"><span>Tax</span><b id="tTax">$0.00</b></div>
+      <div class="row big"><span>Total</span><b id="tTotal">$0.00</b></div>
+      <div class="row"><span>Deposit due</span><b id="tDep">$0.00</b></div>
+    </div>
+
+    <details class="sec" id="secTerms" open>
+      <summary>Terms <small>shown to customer</small></summary>
+      <div class="in">
+        <label class="field"><span>Terms</span><textarea id="terms" rows="4" maxlength="2000"></textarea></label>
+      </div>
+    </details>
+    <details class="sec" id="secNotes">
+      <summary>Add notes <small>private</small></summary>
+      <div class="in">
+        <label class="field"><span>Internal notes (never shown to the customer)</span><textarea id="internalNotes" rows="3" maxlength="1000"></textarea></label>
+      </div>
+    </details>
+
+    <div class="card">
+      <button class="btn" id="bSend" type="button">Send</button>
+      <button class="btn ghost" id="bApprove" type="button" style="display:none">Mark as approved</button>
+      <button class="btn ghost" id="bReject" type="button" style="display:none">Mark as rejected</button>
+      <button class="btn ghost" id="bReopen" type="button" style="display:none">Reopen as draft</button>
+      <a class="btn ghost" id="bView" href="#" style="display:none">View, print or email</a>
+      <a class="btn ghost" id="bInvoice" href="#" style="display:none">Open job</a>
+      <button class="link" id="save" type="submit">Save without sending</button>
+      <button class="link" id="bVoid" type="button" style="display:none;color:#ff8a8a">Void estimate</button>
+      <button class="link" id="bDel" type="button" style="display:none;color:#ff8a8a">Delete estimate</button>
+      <div class="note" id="msg"></div>
+    </div>
+    <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
+      <div class="card" style="max-width:420px;width:100%;margin:auto">
+        <h2>Was the email sent?</h2>
+        <p>Press Send in your mail app, then check it shows in <b>Sent</b>, not Outbox.</p>
+        <button class="btn" id="askYes" type="button">Yes, it was sent</button>
+        <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
+        <button class="btn ghost" id="askNo" type="button">No, not yet</button>
+        <details class="more">
+          <summary>Having trouble?</summary>
+          <div class="in">
+            <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
+            <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+            <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
+          </div>
+        </details>
+        <div class="note" id="askMsg"></div>
+      </div>
+    </div>
+  </form>
+
+  <a class="back" href="estimates.html">Back to estimates</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/public.js"></script>
+<script>
+  var TYPES = ['Labor', 'Materials', 'Other'];
+  var DEFAULT_TERMS = 'Balance is due on completion unless agreed otherwise in writing. This estimate is valid until the date shown. Prices may change if the scope of work changes.';
+  var $ = function (id) { return document.getElementById(id); };
+  function pct(v) { return Math.min(100, Math.max(0, parseFloat(v) || 0)); }
+
+  vyro.start(async function (ctx) {
+    var params = new URLSearchParams(location.search);
+    var id = params.get('id');
+    var leadId = params.get('lead') || '';
+    var col = ctx.bizRef.collection('estimates');
+    var canDelete = ctx.role === 'owner' || ctx.role === 'supervisor';
+    var est = null;
+    var customers = {};
+
+    function say(t, cls) { $('msg').textContent = t; $('msg').className = 'note ' + (cls || ''); }
+
+    // ---------- line items ----------
+    function addRow(it) {
+      it = it || { type: 'Labor', description: '', qty: 1, unitCents: 0 };
+      var row = vyro.el('div', 'line');
+      var r1 = vyro.el('div', 'r1');
+      var type = vyro.el('select');
+      TYPES.forEach(function (t) { var o = vyro.el('option', '', t); o.value = t; type.appendChild(o); });
+      type.value = it.type || 'Labor';
+      var desc = vyro.el('input'); desc.type = 'text'; desc.maxLength = 200; desc.placeholder = 'Description'; desc.value = it.description || '';
+      r1.appendChild(type); r1.appendChild(desc); row.appendChild(r1);
+
+      var r = vyro.el('div', 'r');
+      var w1 = vyro.el('div'); w1.appendChild(vyro.el('small', '', 'Qty'));
+      var qty = vyro.el('input'); qty.type = 'text'; qty.inputMode = 'decimal'; qty.value = it.qty == null ? 1 : it.qty; w1.appendChild(qty);
+      var w2 = vyro.el('div'); w2.appendChild(vyro.el('small', '', 'Unit price $'));
+      var price = vyro.el('input'); price.type = 'text'; price.inputMode = 'decimal'; price.placeholder = '0.00';
+      price.value = it.unitCents ? (it.unitCents / 100).toFixed(2) : ''; w2.appendChild(price);
+      var w3 = vyro.el('div'); w3.appendChild(vyro.el('small', '', 'Amount'));
+      var amt = vyro.el('div', 'amt', '$0.00'); w3.appendChild(amt);
+      r.appendChild(w1); r.appendChild(w2); r.appendChild(w3); row.appendChild(r);
+
+      var rm = vyro.el('button', 'mini danger', 'Remove line'); rm.type = 'button'; rm.style.marginTop = '8px';
+      rm.addEventListener('click', function () { row.remove(); recalc(); });
+      row.appendChild(rm);
+
+      [type, desc, qty, price].forEach(function (x) { x.addEventListener('input', recalc); });
+      row._read = function () {
+        return { type: type.value, description: desc.value.trim(), qty: parseFloat(qty.value) || 0, unitCents: vutil.toCents(price.value) };
+      };
+      row._amt = amt;
+      $('lines').appendChild(row);
+    }
+
+    function getItems() {
+      var out = [];
+      Array.prototype.forEach.call($('lines').children, function (row) {
+        var it = row._read();
+        if (it.description || it.unitCents) out.push(it);
+      });
+      return out;
+    }
+
+    function calc() {
+      return vutil.totals(getItems(), vutil.toCents($('discount').value), parseFloat($('taxPct').value) || 0);
+    }
+
+    function recalc() {
+      Array.prototype.forEach.call($('lines').children, function (row) {
+        var it = row._read();
+        row._amt.textContent = vutil.fmt(Math.round(it.qty * it.unitCents));
+      });
+      var t = calc();
+      $('tSub').textContent = vutil.fmt(t.subtotalCents);
+      $('tDisc').textContent = '-' + vutil.fmt(t.discountCents);
+      $('tTax').textContent = vutil.fmt(t.taxCents);
+      $('tTotal').textContent = vutil.fmt(t.totalCents);
+      $('tDep').textContent = vutil.fmt(Math.round(t.totalCents * pct($('depositPct').value) / 100));
+    }
+
+    ['discount', 'taxPct', 'depositPct'].forEach(function (k) { $(k).addEventListener('input', recalc); });
+    $('addLine').addEventListener('click', function () { addRow(); });
+
+    // ---------- customers ----------
+    try {
+      var cs = await ctx.bizRef.collection('customers').orderBy('nameLower').get();
+      cs.forEach(function (d) {
+        var c = d.data(); customers[d.id] = c;
+        var o = vyro.el('option', '', c.name); o.value = d.id; $('cust').appendChild(o);
+      });
+    } catch (e) { /* optional */ }
+
+    // show the name box only when there is no customer record; link to the customer page otherwise
+    function syncCustomerUi() {
+      var cid = $('cust').value;
+      $('nameRow').style.display = cid ? 'none' : 'block'; $('newCustBox').style.display = cid ? 'none' : 'block';
+      $('viewCust').style.display = cid ? 'block' : 'none';
+      if (cid) $('viewCust').href = 'customer.html?id=' + cid;
+    }
+    function pickCustomer() {
+      var cid = $('cust').value, c = customers[cid];
+      if (c) {
+        $('cname').value = c.name; $('cemail').value = c.email || ''; $('cphone').value = c.phone || '';
+        $('caddr').value = c.address || '';
+      } else {
+        $('cemail').value = ''; $('cphone').value = '';
+      }
+      syncCustomerUi();
+    }
+    $('cust').addEventListener('change', pickCustomer);
+    // Make a customer record from what is typed on this estimate, then pick it.
+    $('mkCust').addEventListener('click', async function () {
+      var name = $('cname').value.trim(), btn = this, mm = $('mkMsg');
+      if (!name) { mm.textContent = 'Type the customer name first.'; mm.className = 'note err'; return; }
+      btn.disabled = true; mm.textContent = 'Saving...'; mm.className = 'note';
+      try {
+        var ref = ctx.bizRef.collection('customers').doc();
+        var c = { name: name, nameLower: name.toLowerCase(), phone: $('cphone').value.trim(), email: $('cemail').value.trim().toLowerCase(),
+          address: $('caddr').value.trim(), language: 'en', notes: '', fromEstimate: true, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp() };
+        await ref.set(c);
+        customers[ref.id] = c; var o = vyro.el('option', '', c.name); o.value = ref.id; $('cust').appendChild(o); $('cust').value = ref.id;
+        syncCustomerUi(); mm.textContent = ''; vyro.audit(ctx, 'customer created from estimate', c.name);
+        say('Customer saved. Their details will fill in on future estimates.', '');
+      } catch (e) { mm.textContent = vyro.friendly(e); mm.className = 'note err'; }
+      btn.disabled = false;
+    });
+
+    // ---------- load ----------
+    function fill(e) {
+      $('cust').value = e.customerId || '';
+      $('cname').value = e.customerName || ''; $('cemail').value = e.customerEmail || '';
+      $('cphone').value = e.customerPhone || ''; $('caddr').value = e.address || '';
+      $('title').value = e.title || ''; $('validUntil').value = e.validUntil || '';
+      $('lines').textContent = '';
+      (e.lineItems || []).forEach(addRow);
+      if (!(e.lineItems || []).length) addRow();
+      $('discount').value = e.discountCents ? (e.discountCents / 100).toFixed(2) : '';
+      $('taxPct').value = e.taxPct || ''; $('depositPct').value = e.depositPct || '';
+      $('terms').value = e.terms || ''; $('internalNotes').value = e.internalNotes || '';
+      syncCustomerUi();
+    }
+
+    if (id) {
+      var s = await col.doc(id).get();
+      if (!s.exists) { $('err').textContent = 'Estimate not found.'; return; }
+      est = s.data(); est.id = id; leadId = est.leadId || '';
+      fill(est);
+    } else {
+      $('terms').value = DEFAULT_TERMS;
+      var d = new Date(); d.setDate(d.getDate() + 30);
+      $('validUntil').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      addRow();
+      var custParam = params.get('customer');
+      if (custParam && customers[custParam]) {
+        $('cust').value = custParam; pickCustomer();
+      } else if (leadId) {
+        try {
+          var ls = await ctx.bizRef.collection('leads').doc(leadId).get();
+          if (ls.exists) {
+            var l = ls.data();
+            $('cname').value = l.name || ''; $('cemail').value = l.email || ''; $('cphone').value = l.phone || '';
+            $('caddr').value = l.address || ''; $('title').value = (l.jobDetails || '').slice(0, 80);
+            if (l.customerId && customers[l.customerId]) $('cust').value = l.customerId;
+          }
+        } catch (e) { /* ignore */ }
+      }
+      syncCustomerUi();
+    }
+    recalc();
+
+    // ---------- state / buttons ----------
+    var status = est ? est.status : 'Draft';
+    var locked = status === 'Approved' || status === 'Voided';
+    $('pageTag').textContent = est ? (est.number + ' · ' + status) : 'New estimate';
+
+    if (locked) {
+      Array.prototype.forEach.call($('form').querySelectorAll('input,select,textarea,.line .mini'), function (x) { x.disabled = true; });
+      $('addLine').style.display = 'none'; $('save').style.display = 'none';
+      $('lockNote').style.display = 'block';
+      var online = '';
+      if (est && est.approvedVia === 'customer link') {
+        online = 'Accepted online by ' + (est.acceptedBy || 'the customer') +
+          (est.acceptedAt && est.acceptedAt.toDate ? ' on ' + est.acceptedAt.toDate().toLocaleString() : '') + '. ';
+      }
+      $('lockText').textContent = status === 'Approved'
+        ? online + 'This estimate is approved and locked. To change it, void it and make a new one.'
+        : 'This estimate is voided. Reopen it as a draft to edit it.';
+    }
+    if (est) {
+      $('bView').style.display = 'block'; $('bView').href = 'estimate-view.html?id=' + est.id;
+      if (status !== 'Voided') $('bVoid').style.display = 'block';
+      if (canDelete) $('bDel').style.display = 'block';
+    }
+    if (status === 'Approved') { $('bInvoice').style.display = 'block'; $('bInvoice').href = 'job.html?id=' + est.id; }
+    var canSend = !est || status === 'Draft' || status === 'Sent';
+    $('bSend').style.display = canSend ? 'block' : 'none';
+    $('bSend').textContent = (!est || status === 'Draft') ? 'Send' : 'Send again';
+    if (params.get('linkerr') === '1') say('The estimate was saved, but the online accept link could not be created. Make sure the new Firestore rules are published, then tap Send again.', 'err');
+    if (status === 'Draft' || status === 'Sent') $('bApprove').style.display = 'block';
+    if (status === 'Sent') $('bReject').style.display = 'block';
+    if (status === 'Rejected' || status === 'Voided') $('bReopen').style.display = 'block';
+
+    // ---------- save ----------
+    async function save(newStatus, openSend) {
+      var name = $('cname').value.trim();
+      if (!name) { say('Choose a customer, or type a name.', 'err'); return; }
+      var items = getItems(), t = calc();
+      var st = newStatus || status;
+      if ((st === 'Sent' || st === 'Approved' || openSend) && (!items.length || t.totalCents <= 0)) {
+        say('Add at least one line item with a price first.', 'err'); return;
+      }
+      var data = {
+        customerId: $('cust').value || '', customerName: name, customerEmail: $('cemail').value.trim(),
+        customerPhone: $('cphone').value.trim(), address: $('caddr').value.trim(), leadId: leadId,
+        title: $('title').value.trim(), validUntil: $('validUntil').value,
+        lineItems: items, discountCents: t.discountCents, taxPct: parseFloat($('taxPct').value) || 0,
+        depositPct: pct($('depositPct').value), subtotalCents: t.subtotalCents, taxCents: t.taxCents,
+        totalCents: t.totalCents, terms: $('terms').value.trim(), internalNotes: $('internalNotes').value.trim(),
+        status: st, updatedAt: vyro.stamp()
+      };
+      if (newStatus === 'Voided') vyro.audit(ctx, 'estimate voided', (est && est.number) || '');
+      var token = (est && est.publicToken) || (openSend ? vpublic.makeToken() : '');
+      if (token) data.publicToken = token;
+      if (newStatus && newStatus !== status) {
+        var tsKey = { Sent: 'sentAt', Approved: 'approvedAt', Rejected: 'rejectedAt', Voided: 'voidedAt' }[newStatus];
+        if (tsKey) data[tsKey] = vyro.stamp();
+      }
+
+      Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = true; });
+      say('Saving...');
+      try {
+        var savedId;
+        if (est) {
+          await col.doc(est.id).update(data); savedId = est.id;
+        } else {
+          var ref = col.doc(), cref = ctx.bizRef.collection('counters').doc('estimate');
+          data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid;
+          await vyro.db.runTransaction(async function (tx) {
+            var cs = await tx.get(cref);
+            var n = cs.exists ? cs.data().n + 1 : 1;
+            tx.set(cref, { n: n });
+            data.number = 'EST-' + String(n).padStart(4, '0');
+            tx.set(ref, data);
+          });
+          savedId = ref.id;
+        }
+        // online accept link: publish when sending, close it when voided, rejected or approved by hand
+        if (openSend) {
+          try { await vpublic.publishEstimate(ctx, savedId, data, token); }
+          catch (pe) { location.replace('estimate.html?id=' + savedId + '&linkerr=1'); return; }
+        } else if (est && est.publicToken && ['Voided', 'Rejected', 'Approved'].indexOf(newStatus) > -1) {
+          try { await vpublic.closeEstimate(ctx, est.publicToken); } catch (ce) { /* optional */ }
+        }
+        // move the lead along when the estimate is sent
+        if (st === 'Sent' && status !== 'Sent' && leadId) {
+          try {
+            var lref = ctx.bizRef.collection('leads').doc(leadId);
+            var lsnap = await lref.get();
+            if (lsnap.exists && ['New', 'Contacted'].indexOf(lsnap.data().status) > -1) {
+              await lref.update({ status: 'Estimate Sent', statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+            }
+          } catch (e) { /* estimate is saved; lead update is optional */ }
+        }
+        // approving starts a job; voiding an approved estimate cancels its job
+        if (st === 'Approved' && status !== 'Approved') {
+          try {
+            var jref = ctx.bizRef.collection('jobs').doc(savedId);
+            var jsnap = await jref.get();
+            if (data.customerId) { try { await ctx.bizRef.collection('customers').doc(data.customerId).update({ archived: false, archivedAt: null }); } catch (e2) { /* optional */ } }
+            if (!jsnap.exists) {
+              await jref.set({
+                estimateId: savedId, estimateNumber: est ? est.number : data.number,
+                customerId: data.customerId, customerName: data.customerName, customerEmail: data.customerEmail,
+                customerPhone: data.customerPhone, address: data.address, title: data.title,
+                contractCents: data.totalCents, depositPct: data.depositPct, status: 'Not Started',
+                startDate: '', targetEndDate: '', internalNotes: '',
+                createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
+              });
+            } else if (jsnap.data().status === 'Cancelled') {
+              await jref.update({ status: 'Not Started', updatedAt: vyro.stamp() });
+            }
+            if (leadId) {
+              var l2 = ctx.bizRef.collection('leads').doc(leadId), l2s = await l2.get();
+              if (l2s.exists && ['New', 'Contacted', 'Estimate Sent'].indexOf(l2s.data().status) > -1) {
+                await l2.update({ status: 'Won', statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+              }
+            }
+          } catch (e) { /* estimate is saved; the Jobs page will create a missing job */ }
+          location.replace('job.html?id=' + savedId); return;
+        }
+        if (st === 'Voided' && status === 'Approved') {
+          try { await ctx.bizRef.collection('jobs').doc(savedId).update({ status: 'Cancelled', updatedAt: vyro.stamp() }); } catch (e) { /* no job */ }
+        }
+        if (openSend) {      // stay on the page: open the mail app, then ask whether it was sent
+          est = Object.assign({}, data, { id: savedId }); status = st;
+          history.replaceState(null, '', 'estimate.html?id=' + savedId);
+          Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = false; });
+          say(''); askSent(); return;
+        }
+        location.replace('estimate.html?id=' + savedId);
+      } catch (err) {
+        say(vyro.friendly(err), 'err');
+        Array.prototype.forEach.call(document.querySelectorAll('.btn,.link'), function (b) { b.disabled = false; });
+      }
+    }
+
+    $('form').addEventListener('submit', function (e) { e.preventDefault(); save(null); });
+    function emailParts() {
+      var t = calc(), to = $('cemail').value.trim();
+      var dep = Math.round(t.totalCents * pct($('depositPct').value) / 100);
+      var phone = (ctx.biz.phone || '').trim();
+      var link = est.publicToken ? location.origin + location.pathname.replace(/[^\/]*$/, '') + 'accept.html?t=' + est.publicToken : '';
+      var subject = 'Estimate ' + est.number + ' from ' + ctx.biz.name;
+      var body = 'Hi ' + $('cname').value.trim() + ',\n\nThank you for the opportunity. Here is estimate ' + est.number +
+        ($('title').value.trim() ? ' for ' + $('title').value.trim() : '') + '. The total is ' + vutil.fmt(t.totalCents) +
+        (dep ? ', with a deposit of ' + vutil.fmt(dep) + ' to get started' : '') +
+        ($('validUntil').value ? '. This estimate is valid until ' + $('validUntil').value : '') + '.\n\n' +
+        (link ? 'ACCEPT YOUR ESTIMATE HERE:\n<' + link + '>\n\n(If it does not open, copy the whole line above into your browser.)\n\n' : '') +
+        (phone ? 'Questions? Call ' + ctx.biz.name + ': ' + phone : 'Questions? Just reply to this email.') +
+        '\n\nThank you,\n' + ctx.biz.name;
+      return { to: to, subject: subject, body: body };
+    }
+    function ask(t, cls) { $('askMsg').textContent = t; $('askMsg').className = 'note ' + (cls || ''); }
+    function afterEmail(p) {
+      var warn = [];
+      if (!p.to) warn.push('This customer has no email on file. Type the address in your mail app.');
+      if (!(ctx.biz.phone || '').trim()) warn.push('Add your business phone in Business profile so customers get a Call line.');
+      ask(warn.join(' '), warn.length ? 'err' : '');
+    }
+    function openEmail() {
+      var p = emailParts(); afterEmail(p);
+      window.location.href = 'mailto:' + encodeURIComponent(p.to).replace('%40', '@') + '?subject=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body.replace(/\n/g, '\r\n'));
+    }
+    function openGmail() {
+      var p = emailParts(); afterEmail(p);
+      window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(p.to) + '&su=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body), '_blank');
+    }
+    async function copyEmail() {
+      var p = emailParts();
+      try {
+        await navigator.clipboard.writeText('To: ' + p.to + '\nSubject: ' + p.subject + '\n\n' + p.body);
+        afterEmail(p); ask('Copied. Paste it into any email app.', 'ok');
+      } catch (e) { ask('Could not copy on this device.', 'err'); }
+    }
+    $('bSend').addEventListener('click', function () { save(null, true); });
+    function askSent() {
+      $('askModal').style.display = 'flex';
+      $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
+      openEmail();
+    }
+    function markDone() { if (status === 'Draft') save('Sent'); else location.replace('estimate.html?id=' + est.id); }
+    $('askYes').addEventListener('click', markDone);
+    $('askHand').addEventListener('click', markDone);
+    $('askNo').addEventListener('click', function () { location.replace('estimate.html?id=' + est.id); });
+    $('askAgain').addEventListener('click', openEmail);
+    $('askGmail').addEventListener('click', openGmail);
+    $('askCopy').addEventListener('click', copyEmail);
+    $('bApprove').addEventListener('click', function () { save('Approved'); });
+    $('bReject').addEventListener('click', function () { save('Rejected'); });
+    $('bReopen').addEventListener('click', function () { save('Draft'); });
+    $('bVoid').addEventListener('click', function () { if (confirm('Void this estimate?')) save('Voided'); });
+    $('bDel').addEventListener('click', async function () {
+      if (!confirm('Delete this estimate permanently?')) return;
+      try { await col.doc(est.id).delete(); await vyro.audit(ctx, 'estimate deleted', est.number || est.id); location.href = 'estimates.html'; } catch (e) { say(vyro.friendly(e), 'err'); }
+    });
+  });
+</script>
+<script>
+// Fold Customer and Terms once they are filled in (existing invoices / estimate-based ones)
+(function () {
+  var qs = new URLSearchParams(location.search);
+  if (!(qs.get('id') || qs.get('customer') || qs.get('lead'))) return;   // a brand new estimate: never fold while the person is typing
+  var tries = 0, t = setInterval(function () {
+    tries++;
+    var q = function (i) { return document.getElementById(i); };
+    var filled = q('cust') && (q('cust').value || (q('cname') && q('cname').value.trim()));
+    if (filled) {
+      var nm = q('cust').selectedOptions && q('cust').value ? q('cust').selectedOptions[0].text : q('cname').value;
+      q('custSum').textContent = nm;
+      q('secCust').open = false;
+      if (q('terms').value.trim()) q('secTerms').open = false;
+      if (q('internalNotes').value.trim()) q('secNotes').open = true;
+      clearInterval(t);
+    }
+    if (tries > 16) clearInterval(t);
+  }, 250);
+})();
+</script>
+</body>
+</html>
