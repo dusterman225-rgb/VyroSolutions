@@ -1,0 +1,179 @@
+/* One list of every page, who sees it, and a plain-words description. Used by the home screen, the bottom bar and the menu sheet. */
+(function () {
+  var GROUPS = [['sell', 'Sell'], ['stock', 'Products and stock'], ['people', 'People'], ['money', 'Money'], ['settings', 'Settings']];
+  function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
+
+  function items(ctx) {
+    var R = window.vroles, role = ctx.role, staff = R.isStaff(ctx), ol = R.isOwnerLevel(ctx), emp = role === 'employee';
+    function I(id, label, short, href, group, desc, ok) { return { id: id, label: label, short: short, href: href, group: group, desc: desc, ok: !!ok, help: '' }; }
+    var any = staff || emp;
+    return [
+      I('checkout', 'Checkout', 'Sell', 'checkout.html', 'sell', 'Scan or search products, take payment, print a receipt.', any),
+      I('orders', 'Sales history', 'Sales', 'orders.html', 'sell', 'Find any sale, print a receipt, refund or cancel one.', any),
+      I('customers', 'Customers', 'People', 'customers.html', 'sell', 'Customer list with purchase history and loyalty points.', any),
+      I('products', 'Products', 'Products', 'products.html', 'stock', 'Products, prices, barcodes and categories.', any),
+      I('inventory', 'Inventory', 'Stock', 'inventory.html', 'stock', 'Stock counts, receive deliveries, fix counts, see what is low.', any),
+      I('purchasing', 'Vendors and purchase orders', 'Orders', 'purchasing.html', 'stock', 'Order from vendors and receive the delivery into stock.', R.can(ctx, 'supply')),
+      I('schedule', 'Schedule', 'Schedule', 'schedule.html', 'people', 'Who works when. Ask to swap a shift or offer to cover one.', any),
+      I('notifications', 'Notifications', 'Alerts', 'notifications.html', 'people', 'Swap requests and answers.', any),
+      I('timeclock', 'Time clock', 'Clock', 'timeclock.html', 'people', 'Clock in and out. See your hours.', any),
+      I('team', 'Team', 'Team', 'team.html', 'people', 'Add people, change titles and roles, remove people.', R.can(ctx, 'team')),
+      I('records', 'Employee records', 'Records', 'records.html', 'people', "One employee's hours and sales.", R.can(ctx, 'timekeeping')),
+      I('close', 'End of day close', 'Close', 'close.html', 'money', 'Sales, cash count and best sellers for a day.', staff),
+      I('finances', 'Sales reports', 'Reports', 'finances.html', 'money', 'Sales over time.', ol),
+      I('paysettings', 'Pay with Vyro setup', 'Vyro pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol),
+      I('settings', 'Settings', 'Settings', 'settings.html', 'settings', 'All your store setup in one place.', ol),
+      I('taxsettings', 'Tax and receipts', 'Tax', 'taxsettings.html', 'settings', 'Sales tax rate, discount limit, loyalty points and receipt footer.', R.can(ctx, 'colors')),
+      I('theme', 'Brand colours', 'Colours', 'theme.html', 'settings', "Make the app match your store's colours.", R.can(ctx, 'colors')),
+      I('signinlink', 'Staff sign-in link', 'Sign-in', 'signinlink.html', 'settings', "A sign-in link with your store's name and colours to give your team.", ol),
+      I('worklocation', 'Work location', 'Location', 'worklocation.html', 'settings', 'Require employees to be at work to use the app.', ol),
+      I('locations', 'Locations', 'Places', 'locations.html', 'settings', 'Add another store. See all of them together.', role === 'owner'),
+      I('profile', 'Business profile', 'Profile', 'profile.html', 'settings', 'Name, address, phone and email on receipts.', ol)
+    ].filter(function (x) { return x && x.ok; });
+  }
+
+  function primary(ctx, list) {
+    var ids = ['checkout', 'inventory', 'products', 'orders'];
+    var out = []; ids.forEach(function (id) { var f = list.filter(function (x) { return x.id === id; })[0]; if (f && out.length < 4) out.push(f); });
+    return out;
+  }
+
+  // Draws the grouped, searchable list of every page into box.
+  function renderAll(box, ctx, opts) {
+    opts = opts || {}; var list = items(ctx); box.textContent = '';
+    var inp = el('input'); inp.type = 'search'; inp.placeholder = 'Find a page...'; inp.style.cssText = 'width:100%;margin:8px 0'; box.appendChild(inp);
+    var holder = el('div'); box.appendChild(holder);
+    function row(x) { var a = el('a', 'vnav-row'); a.href = x.href; a.appendChild(el('b', '', x.label)); a.appendChild(el('small', '', x.desc)); return a; }
+    function draw() {
+      var q = inp.value.trim().toLowerCase(); holder.textContent = '';
+      if (q) { var hits = list.filter(function (x) { return (x.label + ' ' + x.desc).toLowerCase().indexOf(q) >= 0; }); hits.forEach(function (x) { holder.appendChild(row(x)); }); if (!hits.length) holder.appendChild(el('div', 'note', 'Nothing matches "' + inp.value + '".')); return; }
+      GROUPS.forEach(function (g) {
+        var l = list.filter(function (x) { return x.group === g[0]; }); if (!l.length) return;
+        var d = el('details', 'sec'); d.appendChild(el('summary', '', g[1] + ' (' + l.length + ')')); var inn = el('div', 'in'); l.forEach(function (x) { inn.appendChild(row(x)); }); d.appendChild(inn); holder.appendChild(d);
+      });
+    }
+    inp.addEventListener('input', draw); draw();
+  }
+
+  var css = '.vnav{position:fixed;left:0;right:0;bottom:0;z-index:900;display:flex;background:#0A1A2B;border-top:2px solid #4B9CD3;padding-bottom:env(safe-area-inset-bottom)}' +
+    '.vnav a,.vnav button{flex:1;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:0;color:#6FB6EA;font:inherit;font-size:.78rem;font-weight:600;text-decoration:none;cursor:pointer}' +
+    '.vnav .on{background:#4B9CD3;color:#05070A;font-weight:800}.vnav i{font-style:normal;font-size:1.25rem;line-height:1}' +
+    'body{padding-bottom:84px}.vnav-help{position:fixed;right:12px;bottom:70px;z-index:900;width:38px;height:38px;border-radius:50%;border:1px solid var(--line,#444);background:var(--panel,#0C1117);color:var(--blue,#4B9CD3);font-weight:800;cursor:pointer}' +
+    '.vnav-row{display:block;padding:12px 4px;border-bottom:1px solid var(--line,rgba(201,209,217,.14));text-decoration:none;color:inherit}.vnav-row b{display:block}.vnav-row small{display:block;opacity:.75;margin-top:2px}' +
+    '.vclock{position:fixed;top:0;left:0;right:0;z-index:950;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#c62828;color:#fff;padding:6px 12px;font-weight:700;font-size:.9rem}.vclock button{background:#fff;color:#c62828;border:0;border-radius:999px;padding:8px 16px;font:inherit;font-weight:800;cursor:pointer;min-height:36px}body.hasclock{padding-top:50px}.vnav-badge{position:absolute;top:4px;margin-left:14px;background:#e53935;color:#fff;border-radius:999px;font-size:.65rem;min-width:16px;padding:1px 4px;text-align:center}.vnav button{position:relative}.vtoast{background:#4B9CD3;color:#05070A;padding:14px 16px;border-radius:12px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer}#vyro-toasts{position:fixed;left:10px;right:10px;top:56px;z-index:960;display:flex;flex-direction:column;gap:6px}'+
+    '.vnav-sheet{max-height:80vh;overflow:auto}@media print{.vnav,.vnav-help{display:none !important}body{padding-bottom:0}}';
+
+
+  // ---- time clock helpers (shared by every page) ----
+  function ckey(ctx) { return 'vyroClock:' + ctx.bizId + ':' + ctx.user.uid; }
+  function setClock(ctx, s) { try { sessionStorage.setItem(ckey(ctx), s ? JSON.stringify({ id: s.id, startMs: s.startMs }) : 'none'); } catch (e) {} drawClock(ctx); }
+  async function clockGet(ctx) {
+    var c = null; try { c = sessionStorage.getItem(ckey(ctx)); } catch (e) {}
+    if (c === 'none') return null; if (c) { try { return JSON.parse(c); } catch (e) {} }
+    try {
+      var s = await ctx.bizRef.collection('shifts').where('uid', '==', ctx.user.uid).where('endMs', '==', 0).limit(1).get();
+      var d = s.docs[0]; var r = d ? { id: d.id, startMs: d.data().startMs } : null; setClock(ctx, r); return r;
+    } catch (e) { return null; }
+  }
+  async function clockIn(ctx) {
+    var ms = Date.now(), ref = await ctx.bizRef.collection('shifts').add({ uid: ctx.user.uid, name: vyro.who(ctx), startMs: ms, endMs: 0, date: vutil.todayStr(), createdAt: vyro.stamp() });
+    setClock(ctx, { id: ref.id, startMs: ms }); return true;
+  }
+  async function clockOut(ctx) {
+    var c = await clockGet(ctx); if (!c) { setClock(ctx, null); return false; }
+    try { await ctx.bizRef.collection('shifts').doc(c.id).update({ endMs: Date.now(), updatedAt: vyro.stamp() }); } catch (e) { setClock(ctx, null); throw e; }
+    setClock(ctx, null); return true;
+  }
+  var clockTick = null;
+  async function drawClock(ctx) {
+    var old = document.getElementById('vclock'); var c = null; try { var raw = sessionStorage.getItem(ckey(ctx)); c = raw && raw !== 'none' ? JSON.parse(raw) : null; } catch (e) {}
+    if (clockTick) { clearInterval(clockTick); clockTick = null; }
+    if (!c) { if (old) old.remove(); document.body.classList.remove('hasclock'); return; }
+    if (!old) {
+      old = el('div', 'vclock'); old.id = 'vclock'; var t = el('span'); t.id = 'vclockT'; var b = el('button', '', 'Clock out'); b.type = 'button';
+      b.addEventListener('click', async function () { if (!confirm('Clock out now?')) return; b.disabled = true; try { await clockOut(ctx); } catch (e) { alert('Could not clock out: ' + vyro.friendly(e)); } b.disabled = false; });
+      old.appendChild(t); old.appendChild(b); document.body.appendChild(old);
+    }
+    document.body.classList.add('hasclock');
+    function f() { var s = Math.floor((Date.now() - c.startMs) / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); document.getElementById('vclockT').textContent = 'Clocked in · ' + h + 'h ' + String(m).padStart(2, '0') + 'm'; }
+    f(); clockTick = setInterval(f, 30000);
+  }
+
+  // ---- notifications: swap requests and answers. Managers get the shared "mgmt" ones too. ----
+  function toast(text, red) {
+    var box = document.getElementById('vyro-toasts'); if (!box) { box = el('div'); box.id = 'vyro-toasts'; document.body.appendChild(box); }
+    var t = el('div', 'vtoast', text + ' (tap to open)'); if (red) { t.style.background = '#c62828'; t.style.color = '#fff'; } t.addEventListener('click', function () { location.href = 'notifications.html'; }); box.appendChild(t); setTimeout(function () { t.remove(); }, 12000);
+    try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) {}
+  }
+  var counts = {};
+  function watchNotes(ctx) {
+    var tos = [ctx.user.uid]; if (window.vroles && vroles.isStaff(ctx)) tos.push('mgmt');
+    tos.forEach(function (to) {
+      var first = true;
+      try {
+        ctx.bizRef.collection('notifications').where('to', '==', to).where('done', '==', false).limit(30).onSnapshot(function (s) {
+          counts[to] = s.size;
+          if (!first) s.docChanges().forEach(function (c) { if (c.type === 'added' && c.doc.data().byUid !== ctx.user.uid) toast(c.doc.data().text || 'New notification', c.doc.data().red); });
+          first = false;
+          var n = 0; Object.keys(counts).forEach(function (k) { n += counts[k]; }); window.vnav.unread = n;
+          var mb = document.getElementById('vnavMore'); if (mb) { var bd = mb.querySelector('.vnav-badge'); if (bd) bd.remove(); if (n) mb.appendChild(el('span', 'vnav-badge', String(n))); }
+          try { document.dispatchEvent(new CustomEvent('vyro-notif', { detail: { n: n } })); } catch (e) {}
+        }, function () {});
+      } catch (e) {}
+    });
+  }
+
+  var bg = null, box = null;
+  function sheet(build) { if (!bg) { bg = el('div', 'modal-bg'); box = el('div', 'modal vnav-sheet'); bg.appendChild(box); document.body.appendChild(bg); bg.addEventListener('click', function (e) { if (e.target === bg) bg.classList.remove('open'); }); } box.textContent = ''; build(box); bg.classList.add('open'); }
+
+
+  // ---- switch business: one tap from any page ----
+  var PRODUCT_NAME = { restaurant: 'VyroRestaurant', takeout: 'VyroTakeout', retail: 'VyroRetail', contractor: 'VyroContractor' };
+  function homeFor(w) {
+    var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
+    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
+  }
+  function switchSheet(ctx) {
+    sheet(function (b) {
+      b.appendChild(el('h2', '', 'Switch business'));
+      var holder = el('div', 'note', 'Loading your businesses...'); b.appendChild(holder);
+      window.vyro.myWorkplaces(ctx).then(function (list) {
+        holder.textContent = ''; list.sort(function (x, y) { return x.name.localeCompare(y.name); });
+        list.forEach(function (w) {
+          var here = w.id === ctx.bizId, a = el('button', 'btn' + (here ? '' : ' ghost'), w.name + (here ? ' (you are here)' : '')); a.type = 'button'; a.style.cssText = 'display:block;width:100%;text-align:left;margin:6px 0';
+          a.appendChild(el('small', '', ' ' + (window.vroles ? (window.vroles.ROLES[w.role] || w.role) : w.role) + ' · ' + (PRODUCT_NAME[w.product] || 'Vyro')));
+          a.addEventListener('click', async function () { if (here) { bg.classList.remove('open'); return; } a.disabled = true; try { await window.vyro.switchWorkplace(w.id, ctx.bizId); location.href = homeFor(w); } catch (e) { a.disabled = false; holder.textContent = 'Could not switch. Try again.'; } });
+          holder.appendChild(a);
+        });
+        if (!list.length) holder.textContent = 'No other businesses on this login.';
+      }).catch(function () { holder.textContent = 'Could not load your businesses.'; });
+      var all = el('a', 'btn ghost', 'Vyro owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
+      var inst = el('span'); inst.id = 'vInstall2'; inst.style.cssText = 'display:block;text-align:center;margin:10px 0'; b.appendChild(inst);
+      if (window.vinstall) { var ib = el('button', 'btn ghost', 'Install this app on your home screen'); ib.type = 'button'; ib.addEventListener('click', function () { window.vinstall.open(); }); inst.appendChild(ib); }
+      var so = el('button', 'btn ghost', 'Sign out'); so.type = 'button'; so.addEventListener('click', async function () { try { await window.vyro.signOut(); } catch (e) {} location.href = 'login.html'; }); b.appendChild(so);
+      var c = el('button', 'btn', 'Close'); c.type = 'button'; c.addEventListener('click', function () { bg.classList.remove('open'); }); b.appendChild(c);
+    });
+  }
+
+  function mount(ctx) {
+    if (document.getElementById('vnavBar') || !window.vroles) return;
+    var st = el('style'); st.textContent = css; document.head.appendChild(st);
+    var list = items(ctx), pri = primary(ctx, list), here = (location.pathname.split('/').pop() || 'index.html'); if (!/\.html$/.test(here)) here += '.html';
+    var bar = el('nav', 'vnav'); bar.id = 'vnavBar'; bar.setAttribute('aria-label', 'Main');
+    function tab(label, icon, href) { var a = el('a', here === href || (here === '' && href === 'index.html') ? 'on' : ''); a.href = href; a.appendChild(el('i', '', icon)); a.appendChild(el('span', '', label)); return a; }
+    bar.appendChild(tab('Home', '⌂', 'index.html'));
+    var icons = { checkout: '⚡', inventory: '▤', products: '▦', orders: '☰', schedule: '◷' };
+    pri.slice(0, 2).forEach(function (x) { bar.appendChild(tab(x.short, icons[x.id] || '●', x.href)); });
+    var more = el('button'); more.id = 'vnavMore'; more.type = 'button'; more.appendChild(el('i', '', '☰')); more.appendChild(el('span', '', 'More')); more.addEventListener('click', function () { sheet(function (b) { b.appendChild(el('h2', '', 'All pages')); renderAll(b, ctx); var c = el('button', 'btn ghost', 'Close'); c.type = 'button'; c.addEventListener('click', function () { bg.classList.remove('open'); }); b.appendChild(c); }); });
+    var swb = el('button'); swb.type = 'button'; swb.id = 'vnavSwitch'; swb.appendChild(el('i', '', '\u21c4')); swb.appendChild(el('span', '', 'Switch')); swb.addEventListener('click', function () { switchSheet(ctx); });
+    bar.appendChild(swb); bar.appendChild(more); document.body.appendChild(bar);
+    watchNotes(ctx); clockGet(ctx).then(function () { drawClock(ctx); });
+    var cur = list.filter(function (x) { return x.href === here; })[0];
+    if (cur && cur.help) {
+      var q = el('button', 'vnav-help', '?'); q.type = 'button'; q.setAttribute('aria-label', 'Help for this page');
+      q.addEventListener('click', function () { sheet(function (b) { b.appendChild(el('h2', '', cur.label)); b.appendChild(el('div', 'note', cur.desc)); b.appendChild(el('div', '', cur.help)); var c = el('button', 'btn', 'Got it'); c.type = 'button'; c.addEventListener('click', function () { bg.classList.remove('open'); }); b.appendChild(c); }); });
+      document.body.appendChild(q);
+    }
+  }
+  window.vnav = { unread: 0, clockGet: clockGet, clockIn: clockIn, clockOut: clockOut, setClock: setClock, items: items, primary: primary, renderAll: renderAll, mount: mount, GROUPS: GROUPS };
+})();
