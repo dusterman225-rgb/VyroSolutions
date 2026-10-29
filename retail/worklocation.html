@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Work location - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Work location</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <div class="note" style="text-align:left">Employees (cashiers and team members) can use VyroRetail only while they are at work. Owners and supervisors are never blocked. The check uses the phone's location and repeats every few minutes while the app is open.</div>
+    <div class="note" id="cur"></div>
+    <button class="btn" id="here" type="button">Use my current location as the store</button>
+    <label class="field"><span>How close counts as at work (metres)</span><input id="rad" type="number" inputmode="numeric" min="30" max="1000" value="150"></label>
+    <label class="field"><span><input id="req" type="checkbox" style="width:auto;margin-right:8px">Employees must be at work to use Vyro</span></label>
+    <button class="btn" id="save" type="button">Save</button>
+    <div class="note" id="msg"></div>
+    <div class="note" style="text-align:left;font-size:.78rem">Honest limits: this checks the phone's reported location, so a person who fakes their GPS could get around it. It protects against casual use away from work, not a determined cheater. Do this at the store, ideally near the middle of the building, and allow location when asked.</div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.isOwnerLevel(ctx)) { $('err').textContent = 'Only the owner can change this.'; return; }
+    var g = ctx.biz.geo || {}, pos = (typeof g.lat === 'number') ? { lat: g.lat, lng: g.lng } : null;
+    function show() { $('cur').textContent = pos ? 'Saved location: ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5) : 'No location saved yet.'; $('rad').value = g.radiusM || 150; $('req').checked = !!g.required; }
+    show();
+    $('here').addEventListener('click', function () {
+      $('msg').className = 'note'; $('msg').textContent = 'Finding your location...';
+      if (!navigator.geolocation) { $('msg').textContent = 'This browser cannot share its location.'; $('msg').className = 'note err'; return; }
+      navigator.geolocation.getCurrentPosition(function (p) { pos = { lat: p.coords.latitude, lng: p.coords.longitude }; $('msg').textContent = 'Got it (accurate to about ' + Math.round(p.coords.accuracy) + ' m). Tap Save.'; $('cur').textContent = 'New location: ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5); },
+        function () { $('msg').textContent = 'Could not get your location. Allow location for this site and try again.'; $('msg').className = 'note err'; }, { enableHighAccuracy: true, timeout: 20000 });
+    });
+    $('save').addEventListener('click', async function () {
+      var rad = Math.max(30, Math.min(1000, parseInt($('rad').value, 10) || 150));
+      if ($('req').checked && !pos) { $('msg').textContent = 'Set the store location first.'; $('msg').className = 'note err'; return; }
+      try { await ctx.bizRef.update({ geo: { lat: pos ? pos.lat : null, lng: pos ? pos.lng : null, radiusM: rad, required: $('req').checked } }); vyro.audit(ctx, 'work location', $('req').checked ? 'required ' + rad + ' m' : 'off'); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; }
+      catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+  });
+</script>
+</body>
+</html>

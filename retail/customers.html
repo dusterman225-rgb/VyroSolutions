@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Customers - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Customers</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <input id="q" type="search" placeholder="Search name, phone or email" style="width:100%">
+  </div>
+  <div id="list"></div><div class="note" id="none"></div>
+  <div class="card" id="formCard">
+    <h2 id="fHead">Add a customer</h2>
+    <label class="field"><span>Name</span><input id="name" maxlength="100"></label>
+    <label class="field"><span>Phone (optional)</span><input id="phone" inputmode="tel" maxlength="30"></label>
+    <label class="field"><span>Email (optional)</span><input id="email" type="email" maxlength="120"></label>
+    <label class="field"><span>Notes (optional)</span><input id="notes" maxlength="300" placeholder="Sizes, preferences..."></label>
+    <button class="btn" id="save" type="button">Save customer</button>
+    <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRetail(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRetail(ctx)) return;
+    var staff = vroles.isStaff(ctx), col = ctx.bizRef.collection('customers'), rows = [], editing = null, FV = firebase.firestore.FieldValue;
+    async function load() {
+      try { var s = await col.limit(1000).get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      rows.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }); draw();
+    }
+    function draw() {
+      var q = $('q').value.trim().toLowerCase(), box = $('list'); box.textContent = '';
+      var list = rows.filter(function (c) { return !q || (String(c.name) + ' ' + (c.phone || '') + ' ' + (c.email || '')).toLowerCase().indexOf(q) >= 0; });
+      $('none').textContent = rows.length ? (list.length ? '' : 'No match.') : 'No customers yet.';
+      list.slice(0, 100).forEach(function (c) {
+        var it = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', c.name)); l.appendChild(vyro.el('small', '', [c.phone, c.email, (c.points || 0) + ' points'].filter(Boolean).join(' · '))); it.appendChild(l);
+        var v = vyro.el('button', 'btn ghost', 'Open'); v.type = 'button'; v.addEventListener('click', function () { open(c); }); it.appendChild(v); box.appendChild(it);
+      });
+    }
+    $('q').addEventListener('input', draw);
+    function reset() { editing = null; ['name', 'phone', 'email', 'notes'].forEach(function (i) { $(i).value = ''; }); $('fHead').textContent = 'Add a customer'; $('cancel').style.display = 'none'; }
+    $('cancel').addEventListener('click', reset);
+    function open(c) {
+      sheet(c.name, function (b) {
+        b.appendChild(vyro.el('div', 'note', [c.phone, c.email].filter(Boolean).join(' · ') || 'No contact details'));
+        if (c.notes) b.appendChild(vyro.el('div', 'note', c.notes));
+        b.appendChild(vyro.el('div', '', 'Loyalty points: ' + (c.points || 0)));
+        var h = vyro.el('div', 'note', 'Loading purchases...'); b.appendChild(h);
+        ctx.bizRef.collection('orders').where('customerId', '==', c.id).get().then(function (s) {
+          var os = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (o) { return o.status === 'Paid'; }).sort(function (a, z) { return (z.clientAt || 0) - (a.clientAt || 0); });
+          var tot = 0; os.forEach(function (o) { tot += (o.totalCents || 0) - (o.refundedCents || 0); });
+          h.textContent = os.length + ' purchases · ' + vutil.fmt(tot) + ' spent'; h.className = 'note';
+          os.slice(0, 8).forEach(function (o) { var r = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', (o.number || '') + ' · ' + vutil.fmt(o.totalCents || 0))); l.appendChild(vyro.el('small', '', new Date(o.clientAt || 0).toLocaleDateString() + ' · ' + (o.items || []).map(function (i) { return i.qty + ' x ' + i.name; }).join(', '))); r.appendChild(l); var a = vyro.el('a', 'link', 'Receipt'); a.href = 'receipt.html?id=' + o.id; r.appendChild(a); b.appendChild(r); });
+        }).catch(function (e) { h.textContent = vyro.friendly(e); });
+        var ed = vyro.el('button', 'btn', 'Edit details'); ed.type = 'button'; ed.addEventListener('click', function () { editing = c; $('name').value = c.name || ''; $('phone').value = c.phone || ''; $('email').value = c.email || ''; $('notes').value = c.notes || ''; $('fHead').textContent = 'Edit customer'; $('cancel').style.display = 'block'; closeSheet(); $('formCard').scrollIntoView(); }); b.appendChild(ed);
+        if (staff) {
+          var pt = vyro.el('button', 'btn ghost', 'Adjust points'); pt.type = 'button'; pt.addEventListener('click', async function () { var v = prompt('Add or take away points (use a minus sign to take away):', '0'); if (v === null) return; var n = Math.round(parseFloat(v)); if (!isFinite(n) || !n) return; try { await col.doc(c.id).update({ points: FV.increment(n), updatedAt: vyro.stamp() }); closeSheet(); await load(); } catch (e) { alert(vyro.friendly(e)); } }); b.appendChild(pt);
+          var del = vyro.el('button', 'btn ghost', 'Delete customer'); del.type = 'button'; del.addEventListener('click', async function () { if (!confirm('Delete ' + c.name + '? Past sales keep their record.')) return; try { await col.doc(c.id).delete(); closeSheet(); await load(); } catch (e) { alert(vyro.friendly(e)); } }); b.appendChild(del);
+        }
+        var x = vyro.el('button', 'btn ghost', 'Close'); x.type = 'button'; x.addEventListener('click', closeSheet); b.appendChild(x);
+      });
+    }
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(); if (!n) { say('msg', 'Enter the name.', 'err'); return; }
+      var d = { name: n, phone: $('phone').value.trim(), email: $('email').value.trim(), notes: $('notes').value.trim(), updatedAt: vyro.stamp() };
+      this.disabled = true;
+      try { if (editing) await col.doc(editing.id).update(d); else { d.points = 0; d.createdAt = vyro.stamp(); await col.add(d); } say('msg', 'Saved.', 'ok'); reset(); await load(); }
+      catch (e) { say('msg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    await load();
+  });
+
+</script>
+</body>
+</html>

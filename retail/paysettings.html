@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Pay with Vyro setup - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Pay with Vyro setup</div>
+  </div>
+  <div id="testBanner" style="display:none;margin:8px 0;padding:6px 12px;border:1px solid #d4af37;border-radius:999px;text-align:center;font-size:.78rem;color:#d4af37">TEST MODE: no real money</div>
+  <div class="card" style="margin-top:0">
+    <h2>Get paid in crypto</h2>
+    <p>Customers scan a QR code in the Vyro app: on the kiosk, on the screen at the counter, or on the small code printed on their check. Money goes straight to your wallet and you receive the full amount. The customer pays Vyro's small 1% service fee on top, inside the Vyro app.</p>
+    <label class="field"><span>Your wallet address (Solana)</span><input id="wallet" type="text" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <div class="note">Payments to a wrong address can't be reversed. Double-check it.</div>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="cUsdc" style="width:auto"><span>Accept USDC (a stable dollar coin)</span></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="cSol" style="width:auto"><span>Accept SOL</span></label>
+    <button class="btn" id="save" type="button">Save</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="note" style="font-size:.78rem;text-align:left">Honest limit: the payment is found by the page that is open, and until Vyro's server-side checking is added, a staff member with technical skill could mark a Vyro payment as received without it being real. Compare your wallet's incoming payments with the day's close report.</div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script><script src="../shared/chain-config.js"></script><script src="js/chain.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!window.vchain || !window.VYRO_CHAIN) { $('err').textContent = 'Setup problem: copy js/chain-config.js from your contractor repo into this repo\'s js folder.'; return; }
+    if (vchain.cfg.network !== 'mainnet') $('testBanner').style.display = 'block';
+    if (!vroles.isOwnerLevel(ctx)) { $('wallet').disabled = true; $('cUsdc').disabled = true; $('cSol').disabled = true; $('save').style.display = 'none'; $('msg').textContent = 'Only the owner or general manager can change payment settings.'; }
+    $('wallet').value = ctx.biz.payWallet || ''; var coins = ctx.biz.payCoins || []; $('cUsdc').checked = coins.indexOf('USDC') > -1; $('cSol').checked = coins.indexOf('SOL') > -1;
+    $('save').addEventListener('click', async function () {
+      var w = $('wallet').value.trim(), cs = []; if ($('cUsdc').checked) cs.push('USDC'); if ($('cSol').checked) cs.push('SOL');
+      if (!vchain.isAddress(w)) { $('msg').textContent = 'That does not look like a Solana wallet address. Copy it again from your wallet app.'; $('msg').className = 'note err'; return; }
+      if (!cs.length) { $('msg').textContent = 'Pick at least one coin.'; $('msg').className = 'note err'; return; }
+      if (!confirm('Customers\' payments will go to:\n\n' + w + '\n\nIs this exactly your wallet address?')) return;
+      this.disabled = true;
+      try { await ctx.bizRef.update({ payWallet: w, payCoins: cs }); await vyro.audit(ctx, 'payment wallet changed', w + ' / ' + cs.join(',')); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; }
+      catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      this.disabled = false;
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Products - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Products</div>
+  </div>
+  <div class="card" id="formCard" style="margin-top:0">
+    <h2 id="fHead">Add a product</h2>
+    <label class="field"><span>Name</span><input id="name" maxlength="100" autocomplete="off"></label>
+    <label class="field"><span>Price ($)</span><input id="price" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <label class="field"><span>Barcode (scan or type)</span><input id="barcode" maxlength="40" inputmode="numeric" autocomplete="off"></label>
+    <button class="btn ghost" id="scanBtn" type="button" style="display:none">Scan with camera</button>
+    <label class="field"><span>SKU or item number (optional)</span><input id="sku" maxlength="40" autocomplete="off"></label>
+    <label class="field"><span>Category (optional)</span><input id="cat" list="cats" maxlength="40" placeholder="e.g. Shirts"></label><datalist id="cats"></datalist>
+    <label class="field"><span>What you pay for it ($, optional, for profit reports)</span><input id="cost" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <label class="field" id="stockRow"><span>Starting stock (how many you have now)</span><input id="stock" type="number" inputmode="numeric" step="1" value="0"></label>
+    <label class="field"><span>Warn me when stock drops to (0 = no warning)</span><input id="lowAt" type="number" inputmode="numeric" step="1" min="0" value="0"></label>
+    <label class="field"><span>Vendor (optional)</span><input id="vendor" list="vends" maxlength="60"></label><datalist id="vends"></datalist>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="taxable" checked style="width:auto"><span>Charge sales tax on this product</span></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="active" checked style="width:auto"><span>Sell this product (untick to hide it from checkout)</span></label>
+    <button class="btn" id="save" type="button">Save product</button>
+    <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <details class="sec" id="impBox" style="display:none"><summary>Add many products from a spreadsheet</summary><div class="in">
+    <div class="note" style="text-align:left">Paste rows, one product per line, separated by commas or tabs: name, price, barcode, sku, category, cost, stock, low-stock level. Only name and price are needed. In a spreadsheet, select the cells, copy and paste here.</div>
+    <textarea id="imp" rows="6" style="width:100%" placeholder="Blue T-shirt, 19.99, 0123456789012, TS-BL, Shirts, 7.50, 24, 5"></textarea>
+    <button class="btn ghost" id="impGo" type="button">Add these products</button>
+    <div class="note" id="impMsg"></div>
+  </div></details>
+  <div class="card">
+    <input id="q" type="search" placeholder="Search by name, barcode or SKU" style="width:100%;margin-bottom:8px">
+    <div class="tabs" id="tabs" style="flex-wrap:wrap"></div>
+    <div id="list"></div><div class="note" id="none"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script src="js/scan.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRetail(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRetail(ctx)) return;
+    var can = vroles.can(ctx, 'menu'), col = ctx.bizRef.collection('products'), rows = [], editing = null, catF = '';
+    if (!can) { $('formCard').style.display = 'none'; $('none').textContent = 'You can look products up here. A manager adds and changes them.'; }
+    else { $('impBox').style.display = 'block'; }
+    if (window.vscan && vscan.supported()) { $('scanBtn').style.display = 'block'; $('scanBtn').addEventListener('click', function () { vscan.open(function (v) { $('barcode').value = v; }); }); }
+    try { var vs = await ctx.bizRef.collection('vendors').get(); vs.forEach(function (d) { var o = document.createElement('option'); o.value = d.data().name || ''; $('vends').appendChild(o); }); } catch (e) {}
+    async function load() {
+      try { var s = await vcache.get(ctx, 'products'); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      rows.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true }); });
+      var cats = {}; rows.forEach(function (r) { if (r.category) cats[r.category] = 1; }); $('cats').textContent = ''; Object.keys(cats).sort().forEach(function (c) { var o = document.createElement('option'); o.value = c; $('cats').appendChild(o); });
+      draw();
+    }
+    function draw() {
+      var q = $('q').value.trim().toLowerCase(), cats = {}; rows.forEach(function (r) { if (r.category) cats[r.category] = 1; });
+      var tb = $('tabs'); tb.textContent = ''; var all = vyro.el('button', catF === '' ? 'on' : '', 'All'); all.type = 'button'; all.addEventListener('click', function () { catF = ''; draw(); }); tb.appendChild(all);
+      Object.keys(cats).sort().forEach(function (c) { var b = vyro.el('button', catF === c ? 'on' : '', c); b.type = 'button'; b.addEventListener('click', function () { catF = c; draw(); }); tb.appendChild(b); });
+      var list = rows.filter(function (r) { return (!catF || r.category === catF) && (!q || (String(r.name) + ' ' + (r.barcode || '') + ' ' + (r.sku || '')).toLowerCase().indexOf(q) >= 0); });
+      var box = $('list'); box.textContent = '';
+      $('none').textContent = rows.length ? (list.length ? '' : 'Nothing matches.') : 'No products yet.';
+      list.slice(0, 200).forEach(function (r) {
+        var it = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', r.name + (r.active === false ? ' (hidden)' : '')));
+        l.appendChild(vyro.el('small', '', [vutil.fmt(r.priceCents || 0), r.category, r.barcode ? 'barcode ' + r.barcode : '', r.sku ? 'SKU ' + r.sku : '', r.taxable === false ? 'no tax' : ''].filter(Boolean).join(' · ')));
+        it.appendChild(l);
+        if (can) { var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.addEventListener('click', function () { startEdit(r); }); it.appendChild(e); }
+        box.appendChild(it);
+      });
+      if (list.length > 200) box.appendChild(vyro.el('div', 'note', 'Showing the first 200. Search to narrow it down.'));
+    }
+    $('q').addEventListener('input', draw);
+    function reset() { editing = null; ['name', 'price', 'barcode', 'sku', 'cat', 'cost', 'vendor'].forEach(function (i) { $(i).value = ''; }); $('stock').value = '0'; $('lowAt').value = '0'; $('taxable').checked = true; $('active').checked = true; $('stockRow').style.display = 'block'; $('fHead').textContent = 'Add a product'; $('cancel').style.display = 'none'; }
+    function startEdit(r) {
+      editing = r; $('name').value = r.name || ''; $('price').value = ((r.priceCents || 0) / 100).toFixed(2); $('barcode').value = r.barcode || ''; $('sku').value = r.sku || ''; $('cat').value = r.category || '';
+      $('cost').value = r.costCents ? (r.costCents / 100).toFixed(2) : ''; $('lowAt').value = r.lowAt || 0; $('vendor').value = r.vendor || ''; $('taxable').checked = r.taxable !== false; $('active').checked = r.active !== false;
+      $('stockRow').style.display = 'none'; $('fHead').textContent = 'Edit product'; $('cancel').style.display = 'block';
+      var del = $('delBtn'); if (!del) { del = vyro.el('button', 'btn ghost', 'Delete product'); del.id = 'delBtn'; del.type = 'button'; $('cancel').parentNode.insertBefore(del, $('msg')); del.addEventListener('click', async function () { if (!editing || !confirm('Delete ' + editing.name + '? Past sales keep their record.')) return; try { await col.doc(editing.id).delete(); await vcache.bump(ctx, 'products'); vyro.audit(ctx, 'product deleted', editing.name); reset(); del.style.display = 'none'; await load(); } catch (e) { say('msg', vyro.friendly(e), 'err'); } }); }
+      del.style.display = 'block'; window.scrollTo(0, 0);
+    }
+    $('cancel').addEventListener('click', function () { reset(); var d = $('delBtn'); if (d) d.style.display = 'none'; say('msg', ''); });
+    function clash(field, val, selfId) { if (!val) return null; return rows.filter(function (r) { return r.id !== selfId && String(r[field] || '').toLowerCase() === val.toLowerCase(); })[0]; }
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(); if (!n) { say('msg', 'Enter the product name.', 'err'); return; }
+      var price = vutil.toCents($('price').value); if ($('price').value === '' || price < 0 || price > 10000000) { say('msg', 'Enter a price from $0 to $100,000.', 'err'); return; }
+      var bc = $('barcode').value.trim(), sku = $('sku').value.trim(), self = editing && editing.id, c;
+      if ((c = clash('barcode', bc, self))) { say('msg', 'Another product (' + c.name + ') already has that barcode.', 'err'); return; }
+      if ((c = clash('sku', sku, self))) { say('msg', 'Another product (' + c.name + ') already has that SKU.', 'err'); return; }
+      var d = { name: n, priceCents: price, barcode: bc, sku: sku, category: $('cat').value.trim().slice(0, 40), costCents: vutil.toCents($('cost').value), lowAt: Math.max(0, Math.round(parseFloat($('lowAt').value) || 0)), vendor: $('vendor').value.trim().slice(0, 60), taxable: $('taxable').checked, active: $('active').checked, updatedAt: vyro.stamp() };
+      this.disabled = true; say('msg', 'Saving...');
+      try {
+        if (editing) await col.doc(editing.id).update(d);
+        else { d.stock = Math.round(parseFloat($('stock').value) || 0); d.createdAt = vyro.stamp(); var ref = await col.add(d); if (d.stock) { try { await ctx.bizRef.collection('stockLog').add({ productId: ref.id, name: n, change: d.stock, after: d.stock, why: 'Starting stock', byName: vyro.who(ctx), byUid: ctx.user.uid, at: Date.now() }); } catch (e) {} } }
+        await vcache.bump(ctx, 'products'); vyro.audit(ctx, editing ? 'product changed' : 'product added', n);
+        say('msg', 'Saved.', 'ok'); reset(); var dd = $('delBtn'); if (dd) dd.style.display = 'none'; await load();
+      } catch (e) { say('msg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    $('impGo').addEventListener('click', async function () {
+      var lines = $('imp').value.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean), out = [], bad = 0;
+      lines.forEach(function (l) {
+        var p = (l.indexOf('\t') >= 0 ? l.split('\t') : l.split(',')).map(function (x) { return x.trim(); });
+        if (/^name$/i.test(p[0])) return;
+        var price = parseFloat(String(p[1] || '').replace(/[$,]/g, ''));
+        if (!p[0] || !isFinite(price) || price < 0) { bad++; return; }
+        out.push({ name: p[0].slice(0, 100), priceCents: Math.round(price * 100), barcode: (p[2] || '').slice(0, 40), sku: (p[3] || '').slice(0, 40), category: (p[4] || '').slice(0, 40), costCents: vutil.toCents(p[5] || ''), stock: Math.round(parseFloat(p[6]) || 0), lowAt: Math.max(0, Math.round(parseFloat(p[7]) || 0)), vendor: '', taxable: true, active: true });
+      });
+      if (!out.length) { say('impMsg', 'No good rows found. Each line needs a name and a price.', 'err'); return; }
+      if (out.length > 1000) { say('impMsg', 'Add at most 1000 at a time.', 'err'); return; }
+      if (!confirm('Add ' + out.length + ' products?' + (bad ? ' (' + bad + ' bad lines will be skipped.)' : ''))) return;
+      this.disabled = true; say('impMsg', 'Adding...');
+      try {
+        for (var i = 0; i < out.length; i += 400) {
+          var b = vyro.db.batch(); out.slice(i, i + 400).forEach(function (x) { x.createdAt = vyro.stamp(); x.updatedAt = vyro.stamp(); b.set(col.doc(), x); }); await b.commit();
+        }
+        await vcache.bump(ctx, 'products'); vyro.audit(ctx, 'products imported', String(out.length));
+        say('impMsg', out.length + ' products added.' + (bad ? ' ' + bad + ' lines skipped.' : ''), 'ok'); $('imp').value = ''; await load();
+      } catch (e) { say('impMsg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    reset(); await load();
+  });
+
+</script>
+</body>
+</html>

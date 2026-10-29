@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Purchasing - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Purchasing</div>
+  </div>
+  <div class="tabs" id="tabs"><button type="button" class="on" id="tPO">Purchase orders</button><button type="button" id="tV">Vendors</button></div>
+  <div id="poView">
+    <button class="btn" id="newPO" type="button">New purchase order</button>
+    <div id="poList"></div><div class="note" id="poNone"></div>
+  </div>
+  <div id="vView" style="display:none">
+    <div class="card" style="margin-top:0">
+      <h2 id="vHead">Add a vendor</h2>
+      <label class="field"><span>Vendor name</span><input id="vName" maxlength="80"></label>
+      <label class="field"><span>Contact person (optional)</span><input id="vContact" maxlength="80"></label>
+      <label class="field"><span>Phone (optional)</span><input id="vPhone" inputmode="tel" maxlength="30"></label>
+      <label class="field"><span>Email (optional)</span><input id="vEmail" type="email" maxlength="120"></label>
+      <label class="field"><span>Notes (optional)</span><input id="vNotes" maxlength="200" placeholder="Minimum order, delivery days..."></label>
+      <button class="btn" id="vSave" type="button">Save vendor</button>
+      <button class="btn ghost" id="vCancel" type="button" style="display:none">Cancel edit</button>
+      <div class="note" id="vMsg"></div>
+    </div>
+    <div id="vList"></div><div class="note" id="vNone"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRetail(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRetail(ctx)) return;
+    if (!vroles.can(ctx, 'supply')) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = 'Only the owner, or a manager allowed to manage stock, can use this page.'; return; }
+    var FV = firebase.firestore.FieldValue, vcol = ctx.bizRef.collection('vendors'), pocol = ctx.bizRef.collection('purchases'), pcol = ctx.bizRef.collection('products'), logc = ctx.bizRef.collection('stockLog');
+    var vendors = [], pos = [], vEdit = null;
+    $('tPO').addEventListener('click', function () { $('tPO').className = 'on'; $('tV').className = ''; $('poView').style.display = 'block'; $('vView').style.display = 'none'; });
+    $('tV').addEventListener('click', function () { $('tV').className = 'on'; $('tPO').className = ''; $('vView').style.display = 'block'; $('poView').style.display = 'none'; });
+    async function loadV() {
+      try { var s = await vcol.get(); vendors = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      vendors.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      var box = $('vList'); box.textContent = ''; $('vNone').textContent = vendors.length ? '' : 'No vendors yet.';
+      vendors.forEach(function (v) {
+        var it = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', v.name)); l.appendChild(vyro.el('small', '', [v.contact, v.phone, v.email, v.notes].filter(Boolean).join(' · '))); it.appendChild(l);
+        var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.addEventListener('click', function () { vEdit = v; $('vName').value = v.name || ''; $('vContact').value = v.contact || ''; $('vPhone').value = v.phone || ''; $('vEmail').value = v.email || ''; $('vNotes').value = v.notes || ''; $('vHead').textContent = 'Edit vendor'; $('vCancel').style.display = 'block'; window.scrollTo(0, 0); }); it.appendChild(e);
+        var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button'; x.addEventListener('click', async function () { if (!confirm('Delete ' + v.name + '? Existing purchase orders keep their record.')) return; try { await vcol.doc(v.id).delete(); await loadV(); } catch (er) { say('vMsg', vyro.friendly(er), 'err'); } }); it.appendChild(x);
+        box.appendChild(it);
+      });
+    }
+    function vReset() { vEdit = null; ['vName', 'vContact', 'vPhone', 'vEmail', 'vNotes'].forEach(function (i) { $(i).value = ''; }); $('vHead').textContent = 'Add a vendor'; $('vCancel').style.display = 'none'; }
+    $('vCancel').addEventListener('click', function () { vReset(); say('vMsg', ''); });
+    $('vSave').addEventListener('click', async function () {
+      var n = $('vName').value.trim(); if (!n) { say('vMsg', 'Enter the vendor name.', 'err'); return; }
+      var d = { name: n, contact: $('vContact').value.trim(), phone: $('vPhone').value.trim(), email: $('vEmail').value.trim(), notes: $('vNotes').value.trim(), updatedAt: vyro.stamp() };
+      this.disabled = true;
+      try { if (vEdit) await vcol.doc(vEdit.id).update(d); else { d.createdAt = vyro.stamp(); await vcol.add(d); } say('vMsg', 'Saved.', 'ok'); vReset(); await loadV(); }
+      catch (e) { say('vMsg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    function statusPill(s) { return s === 'Received' ? 'Paid' : s === 'Cancelled' ? 'Voided' : 'Open'; }
+    async function loadPO() {
+      try { var s = await pocol.orderBy('createdMs', 'desc').limit(60).get(); pos = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      var box = $('poList'); box.textContent = ''; $('poNone').textContent = pos.length ? '' : 'No purchase orders yet.';
+      pos.forEach(function (p) {
+        var it = vyro.el('div', 'item'), l = vyro.el('div', 'grow'), b = vyro.el('b'); b.appendChild(vyro.el('span', 'pill ' + statusPill(p.status), p.status)); b.appendChild(document.createTextNode(' ' + p.number + ' · ' + (p.vendorName || 'No vendor'))); l.appendChild(b);
+        l.appendChild(vyro.el('small', '', (p.lines || []).length + ' items · ' + vutil.fmt(p.totalCents || 0) + ' · ' + new Date(p.createdMs || 0).toLocaleDateString() + (p.expected ? ' · expected ' + p.expected : '') + (p.receivedMs ? ' · received ' + new Date(p.receivedMs).toLocaleDateString() : '')));
+        it.appendChild(l);
+        var v = vyro.el('button', 'btn ghost', 'Open'); v.type = 'button'; v.addEventListener('click', function () { openPO(p); }); it.appendChild(v);
+        box.appendChild(it);
+      });
+    }
+    function poText(p) { var v = vendors.filter(function (x) { return x.id === p.vendorId; })[0]; return 'Purchase order ' + p.number + (ctx.biz.name ? ' from ' + ctx.biz.name : '') + '\n' + (p.lines || []).map(function (l) { return l.qty + ' x ' + l.name + (l.sku ? ' (' + l.sku + ')' : '') + (l.costCents ? ' @ ' + vutil.fmt(l.costCents) : ''); }).join('\n') + (p.expected ? '\nNeeded by ' + p.expected : '') + (p.note ? '\n' + p.note : ''); }
+    function openPO(p) {
+      sheet(p.number + ' · ' + (p.vendorName || 'No vendor'), function (b) {
+        var rec = p.status === 'Ordered', qtys = [];
+        (p.lines || []).forEach(function (l, i) {
+          var r = vyro.el('div', 'item'), lt = vyro.el('div', 'grow'); lt.appendChild(vyro.el('b', '', l.name)); lt.appendChild(vyro.el('small', '', 'ordered ' + l.qty + (l.costCents ? ' @ ' + vutil.fmt(l.costCents) : '') + (p.status === 'Received' ? ' · received ' + (l.recvQty != null ? l.recvQty : l.qty) : ''))); r.appendChild(lt);
+          if (rec) { var q = document.createElement('input'); q.type = 'number'; q.inputMode = 'numeric'; q.min = '0'; q.value = l.qty; q.style.cssText = 'width:76px'; qtys[i] = q; r.appendChild(q); }
+          b.appendChild(r);
+        });
+        b.appendChild(vyro.el('div', 'total-row big', '')).innerHTML = '';
+        var tr = b.lastChild; tr.appendChild(vyro.el('span', '', 'Total')); tr.appendChild(vyro.el('b', '', vutil.fmt(p.totalCents || 0)));
+        var m = vyro.el('div', 'note', ''); b.appendChild(m);
+        if (rec) {
+          var upc = document.createElement('label'); upc.style.cssText = 'display:flex;gap:10px;align-items:center;margin:8px 0'; var uc = document.createElement('input'); uc.type = 'checkbox'; uc.checked = true; uc.style.width = 'auto'; upc.appendChild(uc); upc.appendChild(vyro.el('span', '', 'Update each product’s cost to this order’s cost')); b.appendChild(upc);
+          var go = vyro.el('button', 'btn', 'Receive into stock'); go.type = 'button'; b.appendChild(go);
+          go.addEventListener('click', async function () {
+            var rows = (p.lines || []).map(function (l, i) { return { l: l, n: Math.max(0, Math.round(parseFloat(qtys[i].value) || 0)) }; });
+            if (!confirm('Add the received amounts to stock?')) return; go.disabled = true; m.textContent = 'Saving...'; m.className = 'note';
+            try {
+              var bt = vyro.db.batch(), lines2 = p.lines.map(function (l, i) { var x = {}; Object.keys(l).forEach(function (k) { x[k] = l[k]; }); x.recvQty = rows[i].n; return x; });
+              rows.forEach(function (r) { if (!r.l.productId || !r.n) return; var u = { stock: FV.increment(r.n), updatedAt: vyro.stamp() }; if (uc.checked && r.l.costCents) u.costCents = r.l.costCents; bt.update(pcol.doc(r.l.productId), u); bt.set(logc.doc(), { productId: r.l.productId, name: r.l.name, change: r.n, why: 'Received ' + p.number, byName: vyro.who(ctx), byUid: ctx.user.uid, at: Date.now() }); });
+              bt.update(pocol.doc(p.id), { status: 'Received', lines: lines2, receivedMs: Date.now(), receivedBy: vyro.who(ctx), updatedAt: vyro.stamp() });
+              await bt.commit(); try { await vcache.bump(ctx, 'products'); } catch (e) {} vyro.audit(ctx, 'purchase received', p.number); closeSheet(); await loadPO();
+            } catch (e) { m.textContent = vyro.friendly(e) + ' (If a product was deleted, remove that line by cancelling and making a new order.)'; m.className = 'note err'; go.disabled = false; }
+          });
+          var cn = vyro.el('button', 'btn ghost', 'Cancel this order'); cn.type = 'button'; cn.addEventListener('click', async function () { if (!confirm('Cancel ' + p.number + '?')) return; try { await pocol.doc(p.id).update({ status: 'Cancelled', updatedAt: vyro.stamp() }); closeSheet(); await loadPO(); } catch (e) { m.textContent = vyro.friendly(e); m.className = 'note err'; } }); b.appendChild(cn);
+        }
+        var v = vendors.filter(function (x) { return x.id === p.vendorId; })[0], txt = poText(p);
+        if (v && v.email) { var em = vyro.el('a', 'btn ghost', 'Email this order'); em.href = 'mailto:' + encodeURIComponent(v.email).replace('%40', '@') + '?subject=' + encodeURIComponent('Purchase order ' + p.number) + '&body=' + encodeURIComponent(txt); em.style.cssText = 'display:block;text-align:center'; b.appendChild(em); }
+        if (v && v.phone) { var sm = vyro.el('a', 'btn ghost', 'Text this order'); sm.href = 'sms:' + encodeURIComponent(v.phone) + '?&body=' + encodeURIComponent(txt); sm.style.cssText = 'display:block;text-align:center'; b.appendChild(sm); }
+        var x = vyro.el('button', 'btn ghost', 'Close'); x.type = 'button'; x.addEventListener('click', closeSheet); b.appendChild(x);
+      });
+    }
+    $('newPO').addEventListener('click', function () {
+      var lines = [], prods = [];
+      sheet('New purchase order', async function (b) {
+        var vs = document.createElement('select'); vs.style.cssText = 'width:100%;margin-bottom:8px'; var o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Vendor (choose)'; vs.appendChild(o0);
+        vendors.forEach(function (v) { var o = document.createElement('option'); o.value = v.id; o.textContent = v.name; vs.appendChild(o); }); b.appendChild(vs);
+        var exp = document.createElement('input'); exp.type = 'date'; exp.style.cssText = 'width:100%;margin-bottom:8px'; b.appendChild(exp);
+        var lowB = vyro.el('button', 'btn ghost', 'Add everything that is low or out for this vendor'); lowB.type = 'button'; b.appendChild(lowB);
+        var inp = document.createElement('input'); inp.type = 'search'; inp.placeholder = 'Search a product to add'; inp.style.cssText = 'width:100%;margin-top:8px'; b.appendChild(inp);
+        var hits = vyro.el('div'); b.appendChild(hits); var lbox = vyro.el('div'); b.appendChild(lbox);
+        var tr = vyro.el('div', 'total-row big'); tr.appendChild(vyro.el('span', '', 'Total')); var tt = vyro.el('b', '', '$0.00'); tr.appendChild(tt); b.appendChild(tr);
+        var m = vyro.el('div', 'note', ''); b.appendChild(m);
+        try { var s = await pcol.get(); prods = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { m.textContent = vyro.friendly(e); m.className = 'note err'; }
+        function total() { var t = 0; lines.forEach(function (l) { t += l.qty * l.costCents; }); tt.textContent = vutil.fmt(t); return t; }
+        function drawL() {
+          lbox.textContent = '';
+          lines.forEach(function (l, i) {
+            var r = vyro.el('div', 'item'), lt = vyro.el('div', 'grow'); lt.appendChild(vyro.el('b', '', l.name)); r.appendChild(lt);
+            var q = document.createElement('input'); q.type = 'number'; q.inputMode = 'numeric'; q.min = '1'; q.value = l.qty; q.style.width = '64px'; q.addEventListener('input', function () { l.qty = Math.max(1, Math.round(parseFloat(q.value) || 1)); total(); });
+            var c = document.createElement('input'); c.type = 'number'; c.inputMode = 'decimal'; c.step = '0.01'; c.min = '0'; c.value = (l.costCents / 100).toFixed(2); c.style.width = '76px'; c.addEventListener('input', function () { l.costCents = vutil.toCents(c.value); total(); });
+            var x = vyro.el('button', 'btn ghost', 'x'); x.type = 'button'; x.style.cssText = 'width:auto;padding:8px 12px'; x.addEventListener('click', function () { lines.splice(i, 1); drawL(); });
+            r.appendChild(q); r.appendChild(c); r.appendChild(x); lbox.appendChild(r);
+          }); total();
+        }
+        function add(p, qty) { var l = lines.filter(function (x) { return x.productId === p.id; })[0]; if (l) { l.qty += qty; } else lines.push({ productId: p.id, name: p.name, sku: p.sku || '', qty: qty, costCents: p.costCents || 0 }); }
+        inp.addEventListener('input', function () {
+          hits.textContent = ''; var q = inp.value.trim().toLowerCase(); if (!q) return;
+          prods.filter(function (p) { return (String(p.name) + ' ' + (p.barcode || '') + ' ' + (p.sku || '')).toLowerCase().indexOf(q) >= 0; }).slice(0, 6).forEach(function (p) { var a = vyro.el('button', 'btn ghost', p.name + ' (' + (p.stock || 0) + ' in stock)'); a.type = 'button'; a.style.textAlign = 'left'; a.addEventListener('click', function () { add(p, 1); inp.value = ''; hits.textContent = ''; drawL(); }); hits.appendChild(a); });
+        });
+        lowB.addEventListener('click', function () {
+          var vname = ''; vendors.forEach(function (v) { if (v.id === vs.value) vname = v.name.toLowerCase(); }); var n = 0;
+          prods.forEach(function (p) { if (p.active === false || !((p.lowAt || 0) > 0 && (p.stock || 0) <= p.lowAt)) return; if (vname && String(p.vendor || '').toLowerCase() !== vname) return; add(p, Math.max(1, p.lowAt * 2 - (p.stock || 0))); n++; });
+          m.textContent = n ? n + ' products added. Change the amounts if you like.' : 'Nothing is low' + (vname ? ' for this vendor (products need this vendor typed in their Vendor box).' : '.'); m.className = 'note ' + (n ? 'ok' : ''); drawL();
+        });
+        var sv = vyro.el('button', 'btn', 'Save order'); sv.type = 'button'; b.appendChild(sv);
+        var cx = vyro.el('button', 'btn ghost', 'Cancel'); cx.type = 'button'; cx.addEventListener('click', closeSheet); b.appendChild(cx);
+        sv.addEventListener('click', async function () {
+          if (!lines.length) { m.textContent = 'Add at least one product.'; m.className = 'note err'; return; } if (lines.length > 100) { m.textContent = 'Up to 100 products per order.'; m.className = 'note err'; return; }
+          sv.disabled = true; var vd = vendors.filter(function (v) { return v.id === vs.value; })[0];
+          try {
+            await pocol.add({ number: 'PO-' + String(Date.now() % 100000).padStart(5, '0'), vendorId: vd ? vd.id : '', vendorName: vd ? vd.name : '', status: 'Ordered', lines: lines, totalCents: total(), expected: exp.value || '', note: '', byName: vyro.who(ctx), byUid: ctx.user.uid, createdMs: Date.now(), createdAt: vyro.stamp(), updatedAt: vyro.stamp() });
+            vyro.audit(ctx, 'purchase order', String(lines.length)); closeSheet(); await loadPO();
+          } catch (e) { m.textContent = vyro.friendly(e); m.className = 'note err'; sv.disabled = false; }
+        });
+      });
+    });
+    await loadV(); await loadPO();
+  });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Tax and receipts - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Tax and receipts</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>Sales tax % added at checkout</span><input id="tax" type="number" inputmode="decimal" step="0.001" min="0" max="30"></label>
+    <label class="field"><span>Team members may give up to this % off (0 = only managers can discount)</span><input id="emp" type="number" inputmode="decimal" step="1" min="0" max="100"></label>
+    <h2 style="margin:16px 0 4px">Loyalty points (optional)</h2>
+    <label class="field"><span>Points earned per $1 spent (0 = no loyalty points)</span><input id="earn" type="number" inputmode="decimal" step="0.1" min="0" max="100"></label>
+    <label class="field"><span>Points that equal $1 off (for example 100)</span><input id="redeem" type="number" inputmode="decimal" step="1" min="0" max="100000"></label>
+    <h2 style="margin:16px 0 4px">Receipts</h2>
+    <label class="field"><span>Line printed at the bottom of every receipt</span><input id="foot" maxlength="200" placeholder="e.g. Returns within 30 days with receipt."></label>
+    <button class="btn" id="save" type="button">Save</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRetail(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRetail(ctx)) return;
+    if (!vroles.can(ctx, 'colors')) { $('err').textContent = 'Only the owner, or a manager allowed to change tax, can use this page.'; document.querySelector('.card').style.display = 'none'; return; }
+    var ref = ctx.bizRef.collection('settings').doc('pos');
+    try { var s = await ref.get(); if (s.exists) { var d = s.data(); $('tax').value = d.taxPct || ''; $('emp').value = d.serverDiscountPct || ''; $('earn').value = d.loyaltyPerDollar || ''; $('redeem').value = d.loyaltyRedeem || ''; $('foot').value = d.receiptNote || ''; } } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('save').addEventListener('click', async function () {
+      var t = parseFloat($('tax').value) || 0; if (t < 0 || t > 30) { say('msg', 'Tax must be from 0 to 30.', 'err'); return; }
+      var earn = Math.max(0, Math.min(100, parseFloat($('earn').value) || 0)), red = Math.max(0, Math.min(100000, parseFloat($('redeem').value) || 0));
+      if (earn > 0 && !(red > 0)) { say('msg', 'Say how many points equal $1 off, or set points earned to 0.', 'err'); return; }
+      this.disabled = true;
+      try { await ref.set({ taxPct: t, serverDiscountPct: Math.max(0, Math.min(100, parseFloat($('emp').value) || 0)), loyaltyPerDollar: earn, loyaltyRedeem: red, receiptNote: $('foot').value.trim().slice(0, 200), updatedAt: vyro.stamp() }, { merge: true }); say('msg', 'Saved.', 'ok'); }
+      catch (e) { say('msg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+  });
+
+</script>
+</body>
+</html>

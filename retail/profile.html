@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Business profile - VyroRetail</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Home"></a>
+    <div class="tag">Business profile</div>
+  </div>
+
+  <div class="card">
+    <h2>Your name</h2>
+    <label class="field"><span>Name shown to your team</span><input id="myName" type="text" maxlength="80" autocomplete="name"></label>
+    <button class="btn ghost" id="saveMe" type="button">Save my name</button>
+    <div class="note" id="meMsg"></div>
+  </div>
+  <form class="card" id="f">
+    <h2>Store details</h2>
+    <label class="field"><span>Store name</span><input id="name" type="text" maxlength="120" required></label>
+    <label class="field"><span>Phone</span><input id="phone" type="tel" autocomplete="tel"></label>
+    <label class="field"><span>Email</span><input id="bemail" type="email" autocomplete="email"></label>
+    <label class="field"><span>Address (shown on receipts)</span><textarea id="address" rows="3" autocomplete="street-address"></textarea></label>
+    <button class="btn" id="save" type="submit">Save changes</button>
+    <div class="note" id="msg"></div>
+  </form>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  vyro.start(function (ctx) {
+    vtheme.load(ctx);
+    var owner = ctx.role === 'owner' || ctx.role === 'gm', F = { name: 'name', phone: 'phone', email: 'bemail', address: 'address' };
+    $('myName').value = (ctx.me && ctx.me.name) || '';
+    $('saveMe').addEventListener('click', async function () {
+      var n = $('myName').value.trim(), mm = $('meMsg');
+      if (!n) { mm.textContent = 'Type your name.'; mm.className = 'note err'; return; }
+      this.disabled = true; mm.className = 'note'; mm.textContent = 'Saving...';
+      try { await ctx.bizRef.collection('members').doc(ctx.user.uid).update({ name: n }); mm.textContent = 'Saved.'; mm.className = 'note ok'; }
+      catch (e) { mm.textContent = vyro.friendly(e); mm.className = 'note err'; }
+      this.disabled = false;
+    });
+    Object.keys(F).forEach(function (k) { var i = $(F[k]); i.value = ctx.biz[k] || ''; i.disabled = !owner; });
+    if (!owner) { $('save').style.display = 'none'; $('msg').textContent = 'Only the owner or general manager can edit these details.'; return; }
+    $('f').addEventListener('submit', async function (e) {
+      e.preventDefault(); var d = { updatedAt: vyro.stamp() };
+      Object.keys(F).forEach(function (k) { d[k] = $(F[k]).value.trim(); });
+      if (!d.name) { $('msg').textContent = 'The store needs a name.'; $('msg').className = 'note err'; return; }
+      $('save').disabled = true;
+      try { await ctx.bizRef.update(d); vyro.audit(ctx, 'profile saved', d.name); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; }
+      catch (er) { $('msg').textContent = vyro.friendly(er); $('msg').className = 'note err'; }
+      $('save').disabled = false;
+    });
+  });
+</script>
+</body>
+</html>

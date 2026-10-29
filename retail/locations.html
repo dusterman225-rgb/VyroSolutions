@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Locations - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Locations</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <h2>Your locations</h2>
+    <div id="list"></div>
+    <div class="note" id="none"></div>
+  </div>
+  <div class="card">
+    <h2>Add a location</h2>
+    <div class="note" style="text-align:left">Each location has its own team, stock and sales. You own all of them with this one login. Give a location its own general manager under Team, and that person sees only their location.</div>
+    <label class="field"><span>Location name</span><input id="nm" maxlength="60" placeholder="e.g. Main Street"></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="copy" checked style="width:auto"><span>Copy the product list (names, prices, barcodes, no stock counts) from the location I am in now</span></label>
+    <button class="btn" id="add" type="button">Add location</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="btn ghost" href="chain.html">See all locations together</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role !== 'owner') { $('err').textContent = 'Only the owner can manage locations.'; return; }
+    async function draw() {
+      var list = (await vyro.myWorkplaces(ctx)).filter(function (w) { return w.role === 'owner' && w.product === 'retail'; });
+      list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      var box = $('list'); box.textContent = '';
+      list.forEach(function (w) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', w.name)); left.appendChild(vyro.el('small', '', w.id === ctx.bizId ? 'You are working in this one' : 'Tap Open to work in it')); row.appendChild(left);
+        if (w.id !== ctx.bizId) { var b = vyro.el('button', 'btn ghost', 'Open'); b.type = 'button'; b.style.marginTop = '0'; b.addEventListener('click', async function () { b.disabled = true; try { await vyro.switchWorkplace(w.id, ctx.bizId); location.href = 'index.html'; } catch (e) { b.disabled = false; } }); row.appendChild(b); }
+        box.appendChild(row);
+      });
+      $('none').textContent = list.length > 1 ? '' : 'You have one location so far.';
+    }
+    await draw();
+    $('add').addEventListener('click', async function () {
+      var n = $('nm').value.trim(); if (!n) { $('msg').textContent = 'Enter a location name.'; $('msg').className = 'note err'; return; }
+      this.disabled = true; $('msg').textContent = 'Creating...'; $('msg').className = 'note';
+      try {
+        var ref = await vyro.createLocation(n, 'retail', vyro.who(ctx)), copied = 0;
+        if ($('copy').checked) {
+          var ms = await ctx.bizRef.collection('products').get(), batch = vyro.db.batch();
+          ms.forEach(function (d) { var x = d.data(); batch.set(ref.collection('products').doc(), { name: x.name, sku: x.sku || '', barcode: x.barcode || '', category: x.category || '', priceCents: x.priceCents || 0, costCents: x.costCents || 0, taxable: x.taxable !== false, active: x.active !== false, stock: 0, lowAt: x.lowAt || 0, vendor: x.vendor || '', createdAt: vyro.stamp(), updatedAt: vyro.stamp() }); copied++; });
+          if (copied) await batch.commit();
+        }
+        vyro.audit(ctx, 'location added', n);
+        $('msg').textContent = n + ' was added' + (copied ? ' with ' + copied + ' products' : '') + '. Use the Open button above to work in it, then set up its tax rate, stock and team.'; $('msg').className = 'note ok'; $('nm').value = ''; await draw();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+      this.disabled = false;
+    });
+  });
+</script>
+</body>
+</html>
