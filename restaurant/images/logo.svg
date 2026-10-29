@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4B9CD3"/>
+      <stop offset="0.55" stop-color="#C9D1D9"/>
+      <stop offset="1" stop-color="#4B9CD3"/>
+    </linearGradient>
+    <linearGradient id="gv" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="96" y2="102">
+      <stop offset="0" stop-color="#8CCBF2"/>
+      <stop offset="0.5" stop-color="#4B9CD3"/>
+      <stop offset="1" stop-color="#C9D1D9"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <polygon points="60,6 106,33 106,87 60,114 14,87 14,33" fill="#05070A" stroke="url(#g)" stroke-width="3" filter="url(#glow)"/>
+  <polygon points="60,16 97,38 97,82 60,104 23,82 23,38" fill="none" stroke="#4B9CD3" stroke-opacity=".25" stroke-width="1"/>
+
+  <polygon points="60,17 66,24 60,31 54,24" fill="#4B9CD3" filter="url(#glow)"/>
+
+  <g transform="translate(32.2 37.4) scale(.58)" filter="url(#glow)">
+    <polygon points="2,8 30,8 48,72 66,8 94,8 48,102" fill="url(#gv)"/>
+    <polygon points="2,8 16,8 48,87 48,102" fill="#000" fill-opacity=".28"/>
+    <polygon points="94,8 80,8 48,87 48,102" fill="#000" fill-opacity=".28"/>
+  </g>
+</svg>
