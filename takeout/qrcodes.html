@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Table QR codes - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>@media print{.brand,#intro,.back,.note,.btn{display:none}body{background:#fff}.card{border:1px solid #999}}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">QR ordering codes</div>
+  </div>
+  <div class="card" id="intro" style="margin-top:0"><div class="note" style="text-align:left">Print these. A <b>table</b> code goes on a table: guests order and the server confirms. The <b>counter</b> code goes at the register or on the door: customers scan it, order on their own phone, and get a customer number to tell the cashier, who collects payment and sends it to the kitchen. Guests scan it with their phone camera, order from their own phone, and the order appears on the point of sale for a server to confirm before it goes to the kitchen. Guests pay their server, nothing is charged on their phone.</div>
+  <button class="btn" id="print" type="button">Print</button></div>
+  <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px"></div><div class="note" id="e"></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.isStaff(ctx)) { $('err').textContent = 'QR codes are made by managers.'; return; }
+    var rows = [], svc = ctx.biz.service || 'restaurant';
+    try { var s = await ctx.bizRef.collection('tables').get(); rows = s.docs.map(function (d) { return d.data(); }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    function card(url, title, sub) {
+      var c = vyro.el('div', 'card'); c.style.cssText = 'text-align:center;background:#fff;color:#000;break-inside:avoid';
+      var holder = document.createElement('div'); holder.style.cssText = 'width:130px;height:130px;margin:0 auto';
+      try { var qr = window.qrcode(0, 'M'); qr.addData(url); qr.make(); holder.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); var sv = holder.querySelector('svg'); if (sv) { sv.setAttribute('width', '130'); sv.setAttribute('height', '130'); } } catch (e) { holder.textContent = 'QR failed'; }
+      c.appendChild(holder); var b = vyro.el('b', '', title); b.style.cssText = 'display:block;font-size:1.3rem;margin-top:6px;color:#000'; c.appendChild(b); var sm = vyro.el('small', '', sub); sm.style.color = '#333'; c.appendChild(sm); $('grid').appendChild(c);
+    }
+    var base0 = new URL('order.html', location.href).href;
+    if (svc !== 'restaurant') card(base0 + '?b=' + encodeURIComponent(ctx.bizId) + '&n=' + encodeURIComponent(ctx.biz.name || ''), 'Order here', 'Scan to order, then tell the cashier your number');
+    rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
+    var base = new URL('order.html', location.href).href;
+    rows.forEach(function (t) {
+      var url = base + '?b=' + encodeURIComponent(ctx.bizId) + '&t=' + encodeURIComponent(t.name) + '&n=' + encodeURIComponent(ctx.biz.name || '');
+      var c = vyro.el('div', 'card'); c.style.cssText = 'text-align:center;background:#fff;color:#000;break-inside:avoid';
+      var holder = document.createElement('div'); holder.style.cssText = 'width:130px;height:130px;margin:0 auto';
+      try { var qr = window.qrcode(0, 'M'); qr.addData(url); qr.make(); holder.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); var sv = holder.querySelector('svg'); if (sv) { sv.setAttribute('width', '130'); sv.setAttribute('height', '130'); } } catch (e) { holder.textContent = 'QR failed'; }
+      c.appendChild(holder); var b = vyro.el('b', '', 'Table ' + t.name); b.style.cssText = 'display:block;font-size:1.3rem;margin-top:6px;color:#000'; c.appendChild(b); var sm = vyro.el('small', '', 'Scan to order'); sm.style.color = '#333'; c.appendChild(sm);
+      $('grid').appendChild(c);
+    });
+    $('e').textContent = (rows.length || svc !== 'restaurant') ? 'Anonymous sign-in must be switched on in Firebase for guests to order (Authentication, Sign-in method, Anonymous).' : (svc === 'quick' ? '' : 'No tables yet. Set them up in the Point of sale first.');
+    $('print').addEventListener('click', function () { window.print(); });
+  });
+</script>
+</body>
+</html>

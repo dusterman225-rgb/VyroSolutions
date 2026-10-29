@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Schedule - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>
+.wk{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.dcol{flex:0 0 172px;scroll-snap-align:start;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:8px;background:rgba(255,255,255,.02)}
+.dcol.today{border-color:#4B9CD3;box-shadow:0 0 0 1px #4B9CD3}
+.dcol h3{margin:0 0 6px;font-size:.9rem;text-align:center}.dcol h3 small{display:block;font-weight:400;opacity:.7}
+.shift{border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px;margin-bottom:6px;font-size:.85rem}
+.shift b{display:block}.shift small{display:block;opacity:.8;margin-top:2px}
+.shift .btn{width:100%;margin:6px 0 0;padding:8px 6px;font-size:.78rem;letter-spacing:0}
+.shift.swap{border-color:#ffb25c}.shift.mine{background:rgba(75,156,211,.12)}
+.pend .item{flex-wrap:wrap}
+.wkbar{display:flex;align-items:center;gap:8px;border:0}.wkbar b{flex:1;text-align:center;white-space:nowrap;font-size:.95rem}.wkbar .btn{margin:0;width:44px;flex:0 0 44px;padding:10px 0;font-size:1.2rem;letter-spacing:0}
+.red{border:2px solid #e53935;background:rgba(229,57,53,.14);border-radius:10px;padding:8px;margin:6px 0;font-weight:700;color:#ff8a80}
+.sw{border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px;margin:8px 0}.sw .btn{margin:6px 6px 0 0;width:auto;padding:9px 14px;letter-spacing:0;font-size:.85rem}
+.opt{display:block;width:100%;text-align:left;margin:4px 0;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:transparent;color:inherit;font:inherit;cursor:pointer}.opt small{display:block;opacity:.75}
+</style>
+<script>window.VYRO_NO_WORKCHECK = true;</script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Schedule</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <div class="row wkbar"><button class="btn ghost" id="prev" type="button" aria-label="Previous week">&lsaquo;</button><b id="wk"></b><button class="btn ghost" id="next" type="button" aria-label="Next week">&rsaquo;</button></div>
+    <div class="tabs" id="flt"><button type="button" class="on" data-f="all">Everyone</button><button type="button" data-f="mine">My shifts</button></div>
+  </div>
+  <div class="card" id="swCard" style="display:none"><h2 style="margin:0 0 4px">Shift swaps</h2><div id="swList"></div></div>
+  <div class="card" id="otCard" style="display:none"><h2 style="margin:0 0 4px">Overtime this week</h2><div id="otList"></div></div>
+  <div class="note" id="slide" style="text-align:center">Slide sideways to see the whole week.</div>
+  <div class="wk" id="days"></div>
+  <details class="sec" id="addSec" style="display:none"><summary>Add a shift</summary><div class="in">
+    <label class="field"><span>Who</span><select id="who"></select></label>
+    <label class="field"><span>Day</span><input id="date" type="date"></label>
+    <label class="field"><span>Start</span><input id="st" type="time" value="09:00"></label>
+    <label class="field"><span>End</span><input id="en" type="time" value="17:00"></label>
+    <label class="field"><span>Note (optional)</span><input id="note" maxlength="60" placeholder="e.g. opening, patio"></label>
+    <button class="btn" id="add" type="button">Add shift</button><div class="note" id="msg"></div>
+  </div></details>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box" style="max-height:80vh;overflow:auto"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role === 'kiosk') { $('err').textContent = 'Not available on the kiosk login.'; return; }
+    var col = ctx.bizRef.collection('schedule'), scol = ctx.bizRef.collection('swaps'), ocol = ctx.bizRef.collection('overtime');
+    var edit = vroles.can(ctx, 'timekeeping'), me = ctx.user.uid, rows = [], members = [], byId = {}, mine = false, unsub = null, start = mondayOf(new Date()), swaps = {}, today = dk(new Date());
+    function mondayOf(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+    function dk(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function pd(s) { var p = s.split('-'); return new Date(+p[0], p[1] - 1, +p[2]); }
+    function t12(t) { var p = String(t || '').split(':'), h = parseInt(p[0], 10); return (h % 12 || 12) + (p[1] && p[1] !== '00' ? ':' + p[1] : '') + (h < 12 ? 'a' : 'p'); }
+    function mins(x) { var a = String(x.start).split(':'), b = String(x.end).split(':'); return (+b[0] * 60 + +b[1]) - (+a[0] * 60 + +a[1]); }
+    function overlap(p, q) { return p.date === q.date && p.start < q.end && q.start < p.end; }
+    function wkOf(date) { return dk(mondayOf(pd(date))); }
+    function titleOf(m) { return (m && (m.title || m.role)) || ''; }
+    function nice(x) { return pd(x.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + t12(x.start) + '-' + t12(x.end); }
+    function hh(m) { return (Math.round(m / 6) / 10) + 'h'; }
+    function limitMin(m) { return Math.round(((m && m.weeklyHours) || (m && m.empType === 'part' ? 20 : 40)) * 60); }
+    function err(e) { $('err').textContent = vyro.friendly(e); }
+    try { var ms = await vcache.get(ctx, 'members'); ms.forEach(function (d) { var m = d.data(); m.id = d.id; if (m.role !== 'kiosk') { members.push(m); byId[m.id] = m; } }); } catch (e) {}
+    members.sort(function (a, b) { return vyro.nameOf(a).localeCompare(vyro.nameOf(b)); });
+    var meM = byId[me] || ctx.me || {};
+    if (edit) { $('addSec').style.display = 'block'; members.forEach(function (m) { var o = document.createElement('option'); o.value = m.id; o.textContent = vyro.nameOf(m); $('who').appendChild(o); }); }
+
+    function tell(to, text, swapId, red) { return ctx.bizRef.collection('notifications').add({ to: to, text: String(text).slice(0, 200), kind: 'swap', schedId: swapId || '', red: !!red, byUid: me, byName: vyro.who(ctx), done: false, createdAt: vyro.stamp() }).catch(function () {}); }
+    async function closeMgmtNotes(id) { try { var q = await ctx.bizRef.collection('notifications').where('to', '==', 'mgmt').where('schedId', '==', id).get(); q.forEach(function (d) { d.ref.update({ done: true, updatedAt: vyro.stamp() }).catch(function () {}); }); } catch (e) {} }
+    async function allShifts() { var s = await col.where('date', '>=', dk(mondayOf(new Date()))).get(); return s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); }
+
+    // Who would be over their weekly hours if X goes to B and Y (if any) comes to A?
+    function overList(all, X, Y, aId, bId) {
+      var after = all.map(function (s) { if (s.id === X.id) return Object.assign({}, s, { uid: bId }); if (Y && s.id === Y.id) return Object.assign({}, s, { uid: aId }); return s; });
+      var weeks = {}; weeks[wkOf(X.date)] = 1; if (Y) weeks[wkOf(Y.date)] = 1; var out = [];
+      [aId, bId].forEach(function (u) { Object.keys(weeks).forEach(function (w) {
+        var tot = 0; after.forEach(function (s) { if (s.uid === u && wkOf(s.date) === w) tot += mins(s); }); var lim = limitMin(byId[u]);
+        if (tot > lim) out.push({ uid: u, name: vyro.nameOf(byId[u] || {}), week: w, over: tot - lim, total: tot, limit: lim });
+      }); });
+      return out;
+    }
+    function overText(list) { return list.map(function (o) { return o.name + ' would work ' + hh(o.total) + ' of ' + hh(o.limit) + ' (' + hh(o.over) + ' overtime)'; }).join('; '); }
+    // A shift can go to someone only if they are not already working at that time (their own swapped-away shift excluded).
+    function clash(all, who, shift, except) { return all.some(function (s) { return s.uid === who && s.id !== shift.id && s.id !== except && overlap(s, shift); }); }
+
+    // ---- swap pages ----
+    var bg = $('bg'), box = $('box');
+    bg.addEventListener('click', function (e) { if (e.target === bg) bg.classList.remove('open'); });
+    function openSheet(title, build) { box.textContent = ''; box.appendChild(vyro.el('h2', '', title)); build(box); var c = vyro.el('button', 'btn ghost', 'Close'); c.type = 'button'; c.addEventListener('click', function () { bg.classList.remove('open'); }); box.appendChild(c); bg.classList.add('open'); }
+    async function startSwap(X) {
+      if (!meM.empType) { alert('A manager has to set whether you are full time or part time before you can swap. Ask them to open Team and save your hours.'); return; }
+      var all; try { all = await allShifts(); } catch (e) { err(e); return; }
+      var cands = members.filter(function (m) { return m.id !== me && titleOf(m) === titleOf(meM) && m.empType === meM.empType; });
+      openSheet('Swap ' + nice(X), function (b) {
+        b.appendChild(vyro.el('div', 'note', 'You can swap with ' + (meM.empType === 'full' ? 'full-time' : 'part-time') + ' team members with your title (' + titleOf(meM) + '). Shifts that overlap your hours are hidden. They approve first, then a manager.'));
+        var any = false;
+        cands.forEach(function (B) {
+          var bs = all.filter(function (s) { return s.uid === B.id && s.date >= today && s.id !== X.id; }), opts = [];
+          if (!clash(all, B.id, X, '')) opts.push({ kind: 'cover', Y: null });
+          bs.forEach(function (Y) { if (!clash(all, B.id, X, Y.id) && !clash(all, me, Y, X.id)) opts.push({ kind: 'trade', Y: Y }); });
+          if (!opts.length) return; any = true;
+          b.appendChild(vyro.el('b', '', vyro.nameOf(B)));
+          opts.forEach(function (o) {
+            var ov = overList(all, X, o.Y, me, B.id), t = vyro.el('button', 'opt'); t.type = 'button';
+            t.appendChild(vyro.el('span', '', o.Y ? 'Take their ' + nice(o.Y) : 'They just cover mine (nothing back)'));
+            if (ov.length) { var w = vyro.el('small', '', 'Over hours: ' + overText(ov)); w.style.color = '#ff8a80'; t.appendChild(w); }
+            t.addEventListener('click', function () { sendSwap(X, B, o.Y, all); }); b.appendChild(t);
+          });
+        });
+        if (!any) b.appendChild(vyro.el('div', 'note err', 'Nobody with your title and hours type has a swap that fits without overlapping.'));
+      });
+    }
+    async function sendSwap(X, B, Y, all) {
+      var note = prompt('Message for ' + vyro.nameOf(B) + ' (optional)'); if (note === null) return;
+      var d = { aUid: me, aName: vyro.who(ctx), aShiftId: X.id, aDate: X.date, aStart: X.start, aEnd: X.end, bUid: B.id, bName: vyro.nameOf(B), bShiftId: Y ? Y.id : '', bDate: Y ? Y.date : '', bStart: Y ? Y.start : '', bEnd: Y ? Y.end : '',
+        empType: meM.empType, title: titleOf(meM), status: 'pending_b', note: note.slice(0, 80), bReason: '', mgrReason: '', over: '', createdAt: vyro.stamp(), updatedAt: vyro.stamp() };
+      try {
+        var r = await scol.add(d); bg.classList.remove('open');
+        await tell(B.id, vyro.who(ctx) + ' asked to ' + (Y ? 'swap their ' + nice(X) + ' for your ' + nice(Y) : 'give you their ' + nice(X)) + '. Approve or decline on the Schedule page.', r.id);
+      } catch (e) { err(e); }
+    }
+    function bsum(sw) { return sw.bShiftId ? 'swap ' + sw.aName + "'s " + nice({ date: sw.aDate, start: sw.aStart, end: sw.aEnd }) + ' for ' + sw.bName + "'s " + nice({ date: sw.bDate, start: sw.bStart, end: sw.bEnd }) : sw.bName + ' covers ' + sw.aName + "'s " + nice({ date: sw.aDate, start: sw.aStart, end: sw.aEnd }); }
+    async function answerB(sw, yes) {
+      var why = prompt((yes ? 'Approve' : 'Decline') + ' this swap.\nReason (optional). Cancel to go back:'); if (why === null) return; why = why.trim().slice(0, 100);
+      if (!yes) { await scol.doc(sw.id).update({ status: 'declined', bReason: why, updatedAt: vyro.stamp() }); await tell(sw.aUid, sw.bName + ' declined your swap request.' + (why ? ' Reason: ' + why : ''), sw.id); return; }
+      var all = await allShifts(), X = all.filter(function (s) { return s.id === sw.aShiftId; })[0], Y = sw.bShiftId ? all.filter(function (s) { return s.id === sw.bShiftId; })[0] : null;
+      if (!X || X.uid !== sw.aUid || (sw.bShiftId && (!Y || Y.uid !== sw.bUid)) || clash(all, sw.bUid, X, Y ? Y.id : '') || (Y && clash(all, sw.aUid, Y, X.id))) { alert('One of the shifts changed or now overlaps, so this swap cannot go ahead. It has been declined.'); await scol.doc(sw.id).update({ status: 'declined', bReason: 'Shifts changed', updatedAt: vyro.stamp() }); return; }
+      var ov = overList(all, X, Y, sw.aUid, sw.bUid), otx = ov.length ? overText(ov) : '';
+      await scol.doc(sw.id).update({ status: 'pending_mgr', bReason: why, over: otx, updatedAt: vyro.stamp() });
+      await tell('mgmt', (ov.length ? 'OVERTIME WARNING. ' : '') + sw.bName + ' agreed to ' + bsum(sw) + '. Needs your approval.' + (ov.length ? ' ' + otx + '.' : ''), sw.id, ov.length);
+      await tell(sw.aUid, sw.bName + ' approved. A manager will decide next.' + (why ? ' Note: ' + why : ''), sw.id);
+    }
+    async function cancelSwap(sw) {
+      if (!confirm('Cancel this swap request?')) return; await scol.doc(sw.id).update({ status: 'cancelled', updatedAt: vyro.stamp() }); await tell(sw.bUid, sw.aName + ' cancelled the swap request.', sw.id); await closeMgmtNotes(sw.id);
+    }
+    async function mgrDecide(sw, yes) {
+      var why = prompt((yes ? 'Approve' : 'Reject') + ' this swap.\nReason (optional, leave blank for none). Cancel to go back:'); if (why === null) return; why = why.trim().slice(0, 100);
+      var tail = why ? ' Reason: ' + why : '';
+      if (!yes) {
+        await scol.doc(sw.id).update({ status: 'rejected', mgrReason: why, updatedAt: vyro.stamp() });
+        await tell(sw.aUid, 'A manager REJECTED the swap.' + tail, sw.id); await tell(sw.bUid, 'A manager REJECTED the swap.' + tail, sw.id); await closeMgmtNotes(sw.id); return;
+      }
+      var all = await allShifts(), X = all.filter(function (s) { return s.id === sw.aShiftId; })[0], Y = sw.bShiftId ? all.filter(function (s) { return s.id === sw.bShiftId; })[0] : null;
+      if (!X || X.uid !== sw.aUid || (sw.bShiftId && (!Y || Y.uid !== sw.bUid)) || clash(all, sw.bUid, X, Y ? Y.id : '') || (Y && clash(all, sw.aUid, Y, X.id))) { alert('A shift changed or now overlaps since this was requested. Reject it and ask them to request again.'); return; }
+      var ov = overList(all, X, Y, sw.aUid, sw.bUid), batch = vyro.db.batch();
+      batch.update(col.doc(X.id), { uid: sw.bUid, name: sw.bName, updatedAt: vyro.stamp() });
+      if (Y) batch.update(col.doc(Y.id), { uid: sw.aUid, name: sw.aName, updatedAt: vyro.stamp() });
+      batch.update(scol.doc(sw.id), { status: 'approved', mgrReason: why, updatedAt: vyro.stamp() });
+      ov.forEach(function (o) { batch.set(ocol.doc(o.uid + '_' + o.week), { uid: o.uid, name: o.name, weekStart: o.week, minutes: o.over, swapId: sw.id, updatedAt: vyro.stamp() }); });
+      await batch.commit();
+      await tell(sw.aUid, 'Swap APPROVED: ' + bsum(sw) + '.' + tail, sw.id); await tell(sw.bUid, 'Swap APPROVED: ' + bsum(sw) + '.' + tail, sw.id); await closeMgmtNotes(sw.id);
+    }
+    function run(fn) { return function () { var b = this; b.disabled = true; Promise.resolve().then(fn).catch(err).then(function () { b.disabled = false; }); }; }
+    function sbtn(label, cls, fn) { var b = vyro.el('button', 'btn ' + cls, label); b.type = 'button'; b.addEventListener('click', run(fn)); return b; }
+    function openSwapIds() { var o = {}; Object.keys(swaps).forEach(function (k) { var s = swaps[k]; if (s.status === 'pending_b' || s.status === 'pending_mgr') { o[s.aShiftId] = 1; if (s.bShiftId) o[s.bShiftId] = 1; } }); return o; }
+    function drawSwaps() {
+      var list = Object.keys(swaps).map(function (k) { return swaps[k]; }), box2 = $('swList'); box2.textContent = '';
+      var forMe = list.filter(function (s) { return s.status === 'pending_b' && s.bUid === me; });
+      var forMgr = edit ? list.filter(function (s) { return s.status === 'pending_mgr'; }) : [];
+      var open = list.filter(function (s) { return s.aUid === me && (s.status === 'pending_b' || s.status === 'pending_mgr'); });
+      var done = list.filter(function (s) { return (s.aUid === me || s.bUid === me) && ['approved', 'rejected', 'declined', 'cancelled'].indexOf(s.status) >= 0; }).sort(function (a, b) { return ms2(b.updatedAt) - ms2(a.updatedAt); }).slice(0, 4);
+      function ms2(t) { return t && t.toMillis ? t.toMillis() : Date.now(); }
+      $('swCard').style.display = forMe.length || forMgr.length || open.length || done.length ? 'block' : 'none';
+      function block(title, arr, make) { if (!arr.length) return; box2.appendChild(vyro.el('b', '', title)); arr.forEach(function (s) { var c = vyro.el('div', 'sw'); make(s, c); box2.appendChild(c); }); }
+      block('Waiting for your answer', forMe, function (s, c) { c.appendChild(vyro.el('div', '', s.aName + ' wants to ' + bsum(s) + '.' + (s.note ? ' "' + s.note + '"' : ''))); c.appendChild(sbtn('Approve', '', function () { return answerB(s, true); })); c.appendChild(sbtn('Decline', 'ghost', function () { return answerB(s, false); })); });
+      block('Waiting for a manager', forMgr, function (s, c) { if (s.over) c.appendChild(vyro.el('div', 'red', 'OVERTIME: ' + s.over)); c.appendChild(vyro.el('div', '', bsum(s) + '. ' + s.bName + ' agreed.' + (s.bReason ? ' Note: ' + s.bReason : ''))); c.appendChild(sbtn('Approve', '', function () { return mgrDecide(s, true); })); c.appendChild(sbtn('Reject', 'ghost', function () { return mgrDecide(s, false); })); });
+      block('My requests', open, function (s, c) { c.appendChild(vyro.el('div', '', bsum(s))); c.appendChild(vyro.el('small', '', s.status === 'pending_b' ? 'Waiting for ' + s.bName + ' to approve.' : s.bName + ' approved. Waiting for a manager.')); c.appendChild(sbtn('Cancel request', 'ghost', function () { return cancelSwap(s); })); });
+      block('Recent', done, function (s, c) { c.appendChild(vyro.el('div', '', bsum(s))); c.appendChild(vyro.el('small', '', { approved: 'APPROVED', rejected: 'Rejected by a manager', declined: 'Declined by ' + s.bName, cancelled: 'Cancelled' }[s.status] + (s.mgrReason || s.bReason ? ': ' + (s.mgrReason || s.bReason) : ''))); });
+      draw();
+    }
+    function listen(q) { return q.onSnapshot(function (s) { s.docs.forEach(function (d) { var x = d.data(); x.id = d.id; swaps[d.id] = x; }); drawSwaps(); }, function (e) { err(e); }); }
+    if (edit) listen(scol); else { listen(scol.where('aUid', '==', me)); listen(scol.where('bUid', '==', me)); }
+
+    // ---- the week ----
+    var otUnsub = null;
+    function load() {
+      if (unsub) unsub(); var end = new Date(start); end.setDate(end.getDate() + 6);
+      var o = { month: 'short', day: 'numeric', year: 'numeric' };
+      $('wk').textContent = start.toLocaleDateString([], o) + ' - ' + end.toLocaleDateString([], o);
+      unsub = col.where('date', '>=', dk(start)).onSnapshot(function (s) { rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.date <= dk(end); }); draw(); }, function (e) { err(e); });
+      if (edit) { if (otUnsub) otUnsub(); otUnsub = ocol.where('weekStart', '==', dk(start)).onSnapshot(function (s) { var b = $('otList'); b.textContent = ''; $('otCard').style.display = s.size ? 'block' : 'none'; s.docs.forEach(function (d) { var x = d.data(); b.appendChild(vyro.el('div', 'row', x.name + ': ' + hh(x.minutes) + ' overtime from swaps')); }); }, function () {}); }
+    }
+    function draw() {
+      var box3 = $('days'); box3.textContent = ''; var pend = openSwapIds();
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(start); d.setDate(d.getDate() + i); var k = dk(d), list = rows.filter(function (x) { return x.date === k && (!mine || x.uid === me); }).sort(function (a, b) { return String(a.start).localeCompare(String(b.start)); });
+        var c = vyro.el('div', 'dcol' + (k === today ? ' today' : '')), h = vyro.el('h3', '', d.toLocaleDateString([], { weekday: 'short' })); h.appendChild(vyro.el('small', '', d.toLocaleDateString([], { month: 'short', day: 'numeric' }))); c.appendChild(h);
+        if (!list.length) c.appendChild(vyro.el('div', 'note', mine ? 'Off' : 'Nobody'));
+        list.forEach(function (x) {
+          var s = vyro.el('div', 'shift' + (x.uid === me ? ' mine' : '') + (pend[x.id] ? ' swap' : ''));
+          s.appendChild(vyro.el('b', '', x.name)); s.appendChild(vyro.el('span', '', t12(x.start) + ' - ' + t12(x.end)));
+          if (x.note) s.appendChild(vyro.el('small', '', x.note)); if (pend[x.id]) s.appendChild(vyro.el('small', '', 'SWAP PENDING'));
+          if (x.uid === me && x.date >= today && !pend[x.id]) s.appendChild(sbtn('Request swap', 'ghost', function () { return startSwap(x); }));
+          if (edit) s.appendChild(sbtn('Delete', 'ghost', function () { if (confirm('Delete this shift?')) return col.doc(x.id).delete(); }));
+          c.appendChild(s);
+        });
+        box3.appendChild(c);
+      }
+    }
+    $('prev').addEventListener('click', function () { start.setDate(start.getDate() - 7); load(); }); $('next').addEventListener('click', function () { start.setDate(start.getDate() + 7); load(); });
+    Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (b) { b.addEventListener('click', function () { mine = b.getAttribute('data-f') === 'mine'; Array.prototype.forEach.call(document.querySelectorAll('#flt button'), function (x) { x.classList.toggle('on', x === b); }); draw(); }); });
+    $('date').value = dk(new Date());
+    $('add').addEventListener('click', async function () {
+      var m = byId[$('who').value]; if (!m || !$('date').value) { $('msg').textContent = 'Pick a person and a day.'; $('msg').className = 'note err'; return; }
+      if ($('en').value <= $('st').value) { $('msg').textContent = 'End time must be after the start (for overnight, make two shifts).'; $('msg').className = 'note err'; return; }
+      var nu = { uid: m.id, name: vyro.nameOf(m), date: $('date').value, start: $('st').value, end: $('en').value };
+      try {
+        var same = await col.where('date', '==', nu.date).get();
+        if (same.docs.some(function (z) { var o = z.data(); return o.uid === nu.uid && overlap(o, nu); })) { $('msg').textContent = vyro.nameOf(m) + ' already has a shift that overlaps those hours.'; $('msg').className = 'note err'; return; }
+        nu.note = $('note').value.trim().slice(0, 60); nu.createdAt = vyro.stamp(); nu.updatedAt = vyro.stamp();
+        await col.add(nu); $('msg').textContent = 'Added.'; $('msg').className = 'note ok'; $('note').value = '';
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    load();
+  });
+</script>
+</body>
+</html>
