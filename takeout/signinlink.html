@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Staff sign-in link - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Staff sign-in link</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <h2 style="margin:0 0 4px">Your team's sign-in link</h2>
+    <div class="note">Give this link to your team. It shows your restaurant's name and colours. It is the same Vyro sign in underneath, so people who work at two places still use one login.</div>
+    <div class="note"><b id="theLink" style="word-break:break-all"></b></div>
+    <button class="btn" id="copy" type="button">Copy link</button>
+    <a class="btn ghost" id="open" href="#" target="_blank" rel="noopener">Preview</a>
+    <div id="qr" style="max-width:180px;margin:12px 0"></div>
+    <div class="note" id="qMsg"></div>
+  </div>
+  <div class="card">
+    <h2 style="margin:0 0 4px">Make it yours</h2>
+    <label class="field"><span>Link name (letters and numbers only)</span><input id="slug" type="text" maxlength="30" autocapitalize="off" autocomplete="off"></label>
+    <label class="field"><span>Name shown on the sign-in page</span><input id="bname" type="text" maxlength="80"></label>
+    <label class="field"><span>Short line under the name (optional)</span><input id="tag" type="text" maxlength="120" placeholder="Staff sign in"></label>
+    <label class="field"><span>Logo web address (optional, must start with https://)</span><input id="logo" type="url" maxlength="300" placeholder="https://"></label>
+    <label class="field" style="display:flex;gap:8px;align-items:center"><input id="useTheme" type="checkbox" style="width:auto"><span>Use my brand colours on the sign-in page</span></label>
+    <button class="btn" id="save" type="button">Save</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="back" href="settings.html">Back to Settings</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script><script src="js/nav.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function say(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.isOwnerLevel(ctx)) { $('qMsg').textContent = 'Only the owner or general manager can set this up.'; $('save').style.display = 'none'; return; }
+    try { localStorage.setItem('vlink_' + ctx.bizId, '1'); } catch (e) {}
+    var slug = '', data = null;
+    function show() {
+      var base = location.origin + '/' + slug + '/login';
+      $('theLink').textContent = base; $('open').href = base; $('slug').value = slug;
+      $('copy').onclick = async function () { try { await navigator.clipboard.writeText(base); $('qMsg').textContent = 'Copied.'; } catch (e) { $('qMsg').textContent = 'Press and hold the link to copy it.'; } };
+      try { var qr = window.qrcode(0, 'M'); qr.addData(base); qr.make(); $('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) { $('qr').textContent = ''; }
+    }
+    async function load() {
+      var qs = await vyro.db.collection('publicBrands').where('bizId', '==', ctx.bizId).get();
+      if (qs.empty) { slug = await vyro.makeBrand(ctx.bizId, ctx.biz.name || 'Restaurant', ctx.biz.product || 'restaurant'); if (!slug) { $('qMsg').textContent = 'Could not create the link. Publish the newest firestore.rules in Firebase, then reload.'; return false; } qs = await vyro.db.collection('publicBrands').where('bizId', '==', ctx.bizId).get(); }
+      slug = qs.docs[0].id; data = qs.docs[0].data();
+      $('bname').value = data.name || ''; $('tag').value = data.tagline || ''; $('logo').value = data.logoUrl || ''; $('useTheme').checked = !!data.accent;
+      show(); return true;
+    }
+    if (!(await load())) return;
+    $('slug').addEventListener('input', function () { this.value = this.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
+    $('save').addEventListener('click', async function () {
+      var btn = this, ns = $('slug').value.trim(), name = $('bname').value.trim(), logo = $('logo').value.trim();
+      if (!/^[a-z0-9]{3,30}$/.test(ns)) { say('The link name needs 3 to 30 letters or numbers.', 'err'); return; }
+      if (!name) { say('Enter the name to show.', 'err'); return; }
+      if (logo && !/^https:\/\//.test(logo)) { say('The logo address must start with https://', 'err'); return; }
+      btn.disabled = true; say('Saving...');
+      try {
+        if (ns !== slug && !(await vyro.brandFree(ns, ctx.bizId))) { say('That link name is taken or reserved. Try another.', 'err'); btn.disabled = false; return; }
+        var doc = { name: name, bizId: ctx.bizId, product: data.product || 'restaurant', tagline: $('tag').value.trim(), logoUrl: logo, createdAt: data.createdAt || vyro.stamp(), updatedAt: vyro.stamp() };
+        if ($('useTheme').checked) {
+          var t = null; try { var td = await ctx.bizRef.collection('settings').doc('theme').get(); if (td.exists) t = td.data(); } catch (e) {}
+          if (t && t.accent) { doc.accent = t.accent; doc.bg = t.bg; doc.text = t.text; }
+          else { say('You have not picked brand colours yet. Choose them under Brand colours first.', 'err'); btn.disabled = false; return; }
+        }
+        if (ns !== slug) {
+          await vyro.db.collection('publicBrands').doc(ns).set(doc);
+          try { await vyro.db.collection('publicBrands').doc(slug).delete(); } catch (e) {}
+          await ctx.bizRef.update({ slug: ns }); slug = ns;
+        } else { await vyro.db.collection('publicBrands').doc(slug).set(doc); }
+        data = doc; show(); say('Saved. Your link is ready to share.', 'ok'); vyro.audit(ctx, 'sign-in link changed', slug);
+      } catch (e) { say(vyro.friendly(e), 'err'); }
+      btn.disabled = false;
+    });
+  });
+</script>
+</body>
+</html>
