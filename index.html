@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
+<title>Sign in - Vyro Network</title>
+<link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head><body><div class="wrap">
+
+<div class="top"><span class="brand">VYRO</span><span id="vInstall"></span></div>
+<h1>Vyro owner account</h1>
+<p class="note">For business owners. One sign-in for all your businesses, your apps, your plan and billing.</p>
+<div class="card" id="inCard">
+  <h2>Owner sign in</h2>
+  <label>Email</label><input id="email" type="email" autocomplete="username">
+  <label>Password</label><input id="pw" type="password" autocomplete="current-password">
+  <button class="btn" id="go" type="button">Sign in</button>
+  <button class="btn ghost" id="forgot" type="button">Forgot password</button>
+  <div class="note">New here? <a href="#" id="toUp">Create a Vyro account</a></div>
+</div>
+<div class="card hide" id="upCard">
+  <h2>Create your Vyro account</h2>
+  <label>Your name</label><input id="uname" autocomplete="name">
+  <label>Email</label><input id="uemail" type="email" autocomplete="username">
+  <label>Password (8 or more characters)</label><input id="upw" type="password" autocomplete="new-password">
+  <label style="display:flex;gap:8px;align-items:flex-start;color:var(--text)"><input id="terms" type="checkbox" style="width:auto;margin-top:4px"><span>I accept the <a href="legal.html" target="_blank">terms and privacy policy</a> (draft).</span></label>
+  <button class="btn" id="mk" type="button">Create account</button>
+  <div class="note">Already have one? <a href="#" id="toIn">Sign in</a></div>
+</div>
+<div class="note err" id="err"></div><div class="note ok" id="msg"></div>
+
+<h2 style="color:#4B9CD3;font-weight:800;text-align:center;margin:22px 0 4px">Sign in to a VyroBusiness</h2>
+<div class="note" style="text-align:center">Owners can also sign in straight to their app.</div>
+<div class="apps" id="portals" style="margin-top:10px">
+  <a class="app live" href="restaurant/login.html"><b>VyroRestaurant</b><small>Restaurants</small></a>
+  <a class="app live" href="takeout/login.html"><b>VyroTakeout</b><small>Takeout and fast food</small></a>
+  <a class="app live" href="contractor/login.html"><b>VyroContractor</b><small>Contractors</small></a>
+  <div class="app" style="opacity:.55"><b>VyroRetail</b><small>Coming soon</small></div>
+</div>
+<div class="card"><h2>Employee or customer?</h2><div class="note">Use your own business's sign-in link (it looks like vyro.com/yourbusiness/login). Ask your manager or contractor for it. It is not on this page.</div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="shared/firebase-config.js"></script><script src="shared/install.js"></script><script src="js/net-config.js"></script><script src="js/net.js"></script>
+<script>
+
+var $=function(i){return document.getElementById(i)}; 
+$('toUp').onclick=function(e){e.preventDefault();$('inCard').classList.add('hide');$('upCard').classList.remove('hide');$('err').textContent=''};
+$('toIn').onclick=function(e){e.preventDefault();$('upCard').classList.add('hide');$('inCard').classList.remove('hide');$('err').textContent=''};
+vnet.auth.onAuthStateChanged(function(u){ if(u && !window.__busy){ location.replace('dashboard.html?go=1'); } });
+async function run(fn){ $('err').textContent='';$('msg').textContent=''; window.__busy=true; try{ await fn(); location.replace('dashboard.html?go=1'); }catch(e){ window.__busy=false; $('err').textContent=vnet.friendly(e); } }
+$('go').onclick=function(){ run(function(){ return vnet.signIn($('email').value,$('pw').value); }); };
+$('pw').addEventListener('keydown',function(e){ if(e.key==='Enter') $('go').click(); });
+$('mk').onclick=function(){ if(!$('uname').value.trim()){ $('err').textContent='Enter your name.'; return; } if(!$('terms').checked){ $('err').textContent='Please accept the terms to continue.'; return; } if($('upw').value.length<8){ $('err').textContent='Use a password with at least 8 characters.'; return; } run(function(){ return vnet.signUp($('uname').value.trim(),$('uemail').value,$('upw').value); }); };
+$('forgot').onclick=async function(){ $('err').textContent=''; if(!$('email').value){ $('err').textContent='Type your email above first.'; return; } try{ await vnet.resetPassword($('email').value); $('msg').textContent='If that email has an account, a reset link is on its way.'; }catch(e){ $('err').textContent=vnet.friendly(e); } };
+
+</script></body></html>
