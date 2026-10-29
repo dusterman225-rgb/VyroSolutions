@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Ingredient supply - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Ingredient supply</div>
+  </div>
+
+  <div class="strip">
+    <div><small>Items</small><b id="sN">-</b></div>
+    <div><small>Low</small><b id="sLow">-</b></div>
+    <div><small>Out</small><b id="sOut">-</b></div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <input class="search" id="q" type="search" placeholder="Search supply" autocomplete="off">
+    <div id="list"></div>
+    <div class="note" id="empty"></div>
+  </div>
+  <details class="sec" id="addSec" style="display:none">
+    <summary>Add or edit a supply item</summary>
+    <div class="in">
+      <label class="field"><span>Ingredient</span><input id="name" maxlength="60"></label>
+      <label class="field"><span>On hand now</span><input id="onHand" type="number" inputmode="decimal" step="0.1" min="0"></label>
+      <label class="field"><span>Unit (lb, cases, bottles...)</span><input id="unit" maxlength="20"></label>
+      <label class="field"><span>Vendor (who you buy it from, optional)</span><input id="vendor" maxlength="40"></label>
+      <label class="field"><span>Low when at or below</span><input id="lowAt" type="number" inputmode="decimal" step="0.1" min="0"></label>
+      <button class="btn" id="save" type="button">Save item</button>
+      <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+      <button class="btn ghost" id="import" type="button">Add every ingredient from the menu recipes</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <div class="note">Supply counts are typed in by your team. Vyro does not subtract them when you sell something, because recipe amounts are never saved.</div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    var manage = vroles.can(ctx, 'supply'), col = ctx.bizRef.collection('supply'), rows = [], editing = null;
+    if (!manage && ctx.role !== 'cook' && ctx.role !== 'supervisor' && !vroles.isOwnerLevel(ctx)) { deny('Supply is for cooks and managers.'); return; }
+    if (manage) $('addSec').style.display = 'block';
+    function state(r) { var n = Number(r.onHand) || 0, low = Number(r.lowAt) || 0; return n <= 0 ? 'Out' : (n <= low ? 'Low' : 'OK'); }
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      var order = { Out: 0, Low: 1, OK: 2 };
+      rows.sort(function (a, b) { var x = order[state(a)] - order[state(b)]; return x || ((a.name || '').toLowerCase() < (b.name || '').toLowerCase() ? -1 : 1); });
+      draw();
+    }
+    async function setCount(r, v) {
+      v = Math.max(0, Math.round(v * 100) / 100);
+      try { await col.doc(r.id).update({ onHand: v, updatedAt: vyro.stamp(), updatedBy: vyro.who(ctx) }); r.onHand = v; vcache.bump(ctx, 'supply'); draw(); } catch (e) { $('err').textContent = vyro.friendly(e); }
+    }
+    function draw() {
+      var q = $('q').value.trim().toLowerCase(), box = $('list'); box.textContent = ''; var low = 0, out = 0;
+      rows.forEach(function (r) { var s = state(r); if (s === 'Low') low++; if (s === 'Out') out++; });
+      rows.filter(function (r) { return !q || (r.name || '').toLowerCase().indexOf(q) >= 0; }).forEach(function (r) {
+        var st = state(r), row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + (st === 'OK' ? 'Paid' : st === 'Low' ? 'Unpaid' : 'Voided'), st)); top.appendChild(document.createTextNode(r.name));
+        left.appendChild(top); left.appendChild(vyro.el('small', '', (Number(r.onHand) || 0) + ' ' + (r.unit || '') + (r.updatedBy ? ' \u00b7 updated by ' + r.updatedBy : '')));
+        row.appendChild(left);
+        var q2 = vyro.el('div', 'qty'), m = vyro.el('button', '', '\u2212'), p = vyro.el('button', '', '+'); m.type = p.type = 'button';
+        m.addEventListener('click', function () { setCount(r, (Number(r.onHand) || 0) - 1); }); p.addEventListener('click', function () { setCount(r, (Number(r.onHand) || 0) + 1); });
+        q2.appendChild(m); q2.appendChild(p); row.appendChild(q2);
+        var set = vyro.el('button', 'btn ghost', 'Set'); set.type = 'button'; set.style.marginTop = '0';
+        set.addEventListener('click', function () { var v = prompt('How many ' + (r.unit || '') + ' of ' + r.name + ' are on hand now?', r.onHand); if (v === null) return; var n = parseFloat(v); if (n >= 0) setCount(r, n); });
+        row.appendChild(set);
+        if (manage) {
+          var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.style.marginTop = '0'; e.addEventListener('click', function () { edit(r); }); row.appendChild(e);
+          var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button'; x.style.marginTop = '0';
+          x.addEventListener('click', async function () { if (!confirm('Delete ' + r.name + '?')) return; try { await col.doc(r.id).delete(); await vcache.bump(ctx, 'supply'); load(); } catch (er) { $('err').textContent = vyro.friendly(er); } });
+          row.appendChild(x);
+        }
+        box.appendChild(row);
+      });
+      $('sN').textContent = rows.length; $('sLow').textContent = low; $('sOut').textContent = out; $('empty').textContent = rows.length ? '' : 'No supply items yet.';
+    }
+    $('q').addEventListener('input', draw);
+    function edit(r) {
+      editing = r ? r.id : null; r = r || {};
+      $('name').value = r.name || ''; $('onHand').value = r.onHand != null ? r.onHand : ''; $('unit').value = r.unit || ''; $('lowAt').value = r.lowAt != null ? r.lowAt : ''; $('vendor').value = r.vendor || '';
+      $('cancel').style.display = editing ? 'block' : 'none'; $('addSec').open = true; $('addSec').scrollIntoView();
+    }
+    $('cancel').addEventListener('click', function () { edit(null); });
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(); if (!n) { $('msg').textContent = 'Enter the ingredient name.'; $('msg').className = 'note err'; return; }
+      var d = { name: n, onHand: Math.max(0, parseFloat($('onHand').value) || 0), unit: $('unit').value.trim(), lowAt: Math.max(0, parseFloat($('lowAt').value) || 0), vendor: $('vendor').value.trim(), updatedAt: vyro.stamp(), updatedBy: vyro.who(ctx) };
+      try { if (editing) await col.doc(editing).set(d, { merge: true }); else { d.createdAt = vyro.stamp(); await col.add(d); } await vcache.bump(ctx, 'supply'); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; edit(null); load(); }
+      catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    $('import').addEventListener('click', async function () {
+      try {
+        var have = {}; rows.forEach(function (r) { have[(r.name || '').toLowerCase()] = 1; });
+        var ms = await ctx.bizRef.collection('menu').get(), add = {};
+        ms.forEach(function (d) { (d.data().ingredients || []).forEach(function (i) { var k = i.toLowerCase(); if (!have[k]) add[k] = i; }); });
+        var names = Object.keys(add).slice(0, 200); if (!names.length) { $('msg').textContent = 'Every ingredient is already on the list.'; $('msg').className = 'note'; return; }
+        var batch = vyro.db.batch(); names.forEach(function (k) { batch.set(col.doc(), { name: add[k], onHand: 0, unit: '', lowAt: 0, createdAt: vyro.stamp(), updatedAt: vyro.stamp(), updatedBy: vyro.who(ctx) }); });
+        await batch.commit(); await vcache.bump(ctx, 'supply'); $('msg').textContent = 'Added ' + names.length + ' ingredients with a count of 0. Set the real counts.'; $('msg').className = 'note ok'; load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    load();
+  });
+</script>
+</body>
+</html>

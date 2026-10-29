@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Service type - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">How you serve</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <div class="note" style="text-align:left">Choose how your business works. This sets the screens your team sees. You can change it any time.</div>
+    <button class="btn ghost" data-s="restaurant" type="button">Restaurant<br><small>Tables, host, reservations, server orders</small></button>
+    <button class="btn ghost" data-s="quick" type="button">Fast food or take-out<br><small>One fast order screen. No tables.</small></button>
+    <button class="btn ghost" data-s="both" type="button">Both<br><small>Table service and a fast take-out screen</small></button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.isOwnerLevel(ctx)) { $('err').textContent = 'Only the owner can change this.'; return; }
+    var cur = ctx.biz.service || '';
+    function mark() { Array.prototype.forEach.call(document.querySelectorAll('[data-s]'), function (b) { b.className = 'btn' + (b.getAttribute('data-s') === cur ? '' : ' ghost'); }); if (!cur) $('msg').textContent = 'Nothing chosen yet. Tables and the full restaurant screens show until you choose.'; }
+    mark();
+    Array.prototype.forEach.call(document.querySelectorAll('[data-s]'), function (b) {
+      b.addEventListener('click', async function () {
+        var v = b.getAttribute('data-s');
+        try { await ctx.bizRef.update({ service: v }); cur = v; mark(); vyro.audit(ctx, 'service type', v); $('msg').className = 'note ok'; $('msg').textContent = 'Saved. Go back home to see your screens.'; }
+        catch (e) { $('msg').className = 'note err'; $('msg').textContent = vyro.friendly(e); }
+      });
+    });
+  });
+</script>
+</body>
+</html>

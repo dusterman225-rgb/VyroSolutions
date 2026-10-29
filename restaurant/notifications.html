@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Notifications - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<script>window.VYRO_NO_WORKCHECK = true;</script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Notifications</div>
+  </div>
+
+  <div class="card" style="margin-top:0">
+    <div class="note" id="sub">Loading...</div>
+    <button class="btn ghost" id="clear" type="button" style="display:none">Dismiss all</button>
+  </div>
+  <div id="list"></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (ctx.role === 'kiosk') { $('err').textContent = 'Not available on the kiosk login.'; return; }
+    var tos = [ctx.user.uid]; if (vroles.isStaff(ctx)) tos.push('mgmt');
+    var by = {};
+    function when(t) { var ms = t && t.toMillis ? t.toMillis() : Date.now(); return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    function draw() {
+      var all = []; tos.forEach(function (k) { (by[k] || []).forEach(function (x) { all.push(x); }); });
+      all.sort(function (a, b) { return (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : Date.now()) - (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : Date.now()); });
+      $('sub').textContent = all.length ? all.length + ' to read.' + (tos.length > 1 ? ' Alerts for managers are shared: dismissing one hides it for every manager.' : '') : 'Nothing new.';
+      $('clear').style.display = all.length ? 'block' : 'none';
+      var box = $('list'); box.textContent = '';
+      all.forEach(function (x) {
+        var c = vyro.el('div', 'card'); c.style.marginTop = '10px'; if (x.red) { c.style.border = '2px solid #e53935'; c.style.background = 'rgba(229,57,53,.14)'; } c.appendChild(vyro.el('div', '', (x.red ? '\u26a0 ' : '') + x.text)); c.appendChild(vyro.el('small', '', when(x.createdAt) + (x.byName ? ' \u00b7 from ' + x.byName : '')));
+        var a = vyro.el('a', 'btn', 'Open schedule'); a.href = 'schedule.html'; c.appendChild(a);
+        var d = vyro.el('button', 'btn ghost', 'Dismiss'); d.type = 'button'; d.addEventListener('click', function () { d.disabled = true; x.ref.update({ done: true, updatedAt: vyro.stamp() }).catch(function (e) { $('err').textContent = vyro.friendly(e); d.disabled = false; }); }); c.appendChild(d);
+        box.appendChild(c);
+      });
+    }
+    tos.forEach(function (to) {
+      ctx.bizRef.collection('notifications').where('to', '==', to).where('done', '==', false).limit(30).onSnapshot(function (s) { by[to] = s.docs.map(function (d) { var x = d.data(); x.id = d.id; x.ref = d.ref; return x; }); draw(); }, function (e) { $('err').textContent = vyro.friendly(e); });
+    });
+    $('clear').addEventListener('click', function () { tos.forEach(function (k) { (by[k] || []).forEach(function (x) { x.ref.update({ done: true, updatedAt: vyro.stamp() }).catch(function () {}); }); }); });
+  });
+</script>
+</body>
+</html>
