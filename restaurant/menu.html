@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Menu and recipes - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Menu and recipes</div>
+  </div>
+
+  <details class="sec" id="taxCard"><summary>Sales tax and discount limit</summary><div class="in">
+    <label class="field"><span>Sales tax % added at the point of sale</span><input id="tax" type="number" inputmode="decimal" step="0.001" min="0" max="30"></label>
+    <label class="field"><span>Servers may give up to this % off (0 = only managers can discount)</span><input id="srvDisc" type="number" inputmode="decimal" step="1" min="0" max="100"></label>
+    <button class="btn ghost" id="taxSave" type="button">Save tax</button>
+    <div class="note" id="taxMsg"></div>
+  </div></details>
+  <div id="list"></div>
+  <div class="note" id="empty"></div>
+  <details class="sec" id="formSec" open>
+    <summary id="formTitle">Add a menu item</summary>
+    <div class="in">
+      <label class="field"><span>Item name</span><input id="name" maxlength="80"></label>
+      <label class="field"><span>Category (Drinks, Mains...)</span><input id="cat" maxlength="40" list="cats"></label>
+      <datalist id="cats"></datalist>
+      <label class="field"><span>Price ($)</span><input id="price" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="active" checked style="width:auto"><span>On the menu (untick to hide it from the point of sale)</span></label>
+
+      <h3 style="margin:16px 0 4px">Recipe ingredients</h3>
+      <div class="note">Paste a recipe or load a .txt file. Vyro pulls out only the ingredient names. The amounts and the steps are NOT saved, so your recipe stays private. Check the list below and fix anything it got wrong.</div>
+      <label class="field"><span>Paste the recipe here (not saved)</span><textarea id="recipe" rows="5" maxlength="20000"></textarea></label>
+      <input id="file" type="file" accept=".txt,text/plain" style="display:none">
+      <div class="row" style="gap:8px"><button class="btn ghost" id="loadFile" type="button">Load a .txt file</button><button class="btn" id="find" type="button">Find ingredients</button></div>
+      <label class="field"><span>Ingredients (one per line, you can edit)</span><textarea id="ings" rows="6" maxlength="4000"></textarea></label>
+      <div class="note" id="ingNote"></div>
+      <h3 style="margin:16px 0 4px">Extra prices</h3>
+      <div class="note">What a customer pays to add an EXTRA of each ingredient. Leave blank for free. The server sees this price next to the ingredient.</div>
+      <div id="extraBox"></div>
+      <button class="btn" id="save" type="button">Save item</button>
+      <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+  <div class="note">Photos and PDFs of recipes can't be read here. Type or paste the text, or save the recipe as a .txt file first.</div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script src="js/ingredients.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+  function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.restaurant)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRestaurant(ctx)) return;
+    if (!vroles.can(ctx, 'menu')) { deny('You do not have permission to edit the menu.'); return; }
+    if (!vroles.can(ctx, 'colors')) $('taxCard').style.display = 'none';
+    var col = ctx.bizRef.collection('menu'), settings = ctx.bizRef.collection('settings').doc('pos'), rows = [], editing = null;
+    try { var ss = await settings.get(); if (ss.exists) { $('tax').value = ss.data().taxPct || ''; $('srvDisc').value = ss.data().serverDiscountPct || ''; } } catch (e) {}
+    $('taxSave').addEventListener('click', async function () {
+      var t = parseFloat($('tax').value) || 0;
+      if (t < 0 || t > 30) { $('taxMsg').textContent = 'Enter a number from 0 to 30.'; $('taxMsg').className = 'note err'; return; }
+      try { await settings.set({ taxPct: t, serverDiscountPct: Math.max(0, Math.min(100, parseFloat($('srvDisc').value) || 0)), updatedAt: vyro.stamp() }, { merge: true }); $('taxMsg').textContent = 'Saved.'; $('taxMsg').className = 'note ok'; }
+      catch (e) { $('taxMsg').textContent = vyro.friendly(e); $('taxMsg').className = 'note err'; }
+    });
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); }
+      catch (e) { $('err').textContent = vyro.friendly(e); }
+      rows.sort(function (a, b) { return ((a.category || '') + a.name).toLowerCase() < ((b.category || '') + b.name).toLowerCase() ? -1 : 1; });
+      draw();
+    }
+    function draw() {
+      var box = $('list'); box.textContent = ''; var cats = {}, groups = {};
+      $('empty').textContent = rows.length ? '' : 'No menu items yet. Add your first one below.';
+      rows.forEach(function (r) { var c = r.category || 'Other'; if (r.category) cats[r.category] = 1; (groups[c] = groups[c] || []).push(r); });
+      Object.keys(groups).sort().forEach(function (c) {
+        var d = vyro.el('details', 'sec'); d.open = true; d.appendChild(vyro.el('summary', '', c + ' (' + groups[c].length + ')')); var inn = vyro.el('div', 'in'); d.appendChild(inn);
+        groups[c].forEach(function (r) {
+          var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+          left.appendChild(vyro.el('b', '', r.name + (r.active === false ? ' (hidden)' : '')));
+          left.appendChild(vyro.el('small', '', [vutil.fmt(r.priceCents), (r.ingredients || []).length ? r.ingredients.length + ' ingredients' : 'no recipe'].filter(Boolean).join(' \u00b7 ')));
+          row.appendChild(left);
+          var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.addEventListener('click', function () { edit(r); });
+          var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button';
+          x.addEventListener('click', async function () { if (!confirm('Delete ' + r.name + '?')) return; try { await col.doc(r.id).delete(); await vcache.bump(ctx, 'menu'); load(); } catch (er) { $('err').textContent = vyro.friendly(er); } });
+          row.appendChild(e); row.appendChild(x); inn.appendChild(row);
+        });
+        box.appendChild(d);
+      });
+      var dl = $('cats'); dl.textContent = '';
+      Object.keys(cats).forEach(function (c) { var o = document.createElement('option'); o.value = c; dl.appendChild(o); });
+    }
+    function edit(r) {
+      editing = r ? r.id : null; r = r || {};
+      $('name').value = r.name || ''; $('cat').value = r.category || ''; $('price').value = r.priceCents != null ? (r.priceCents / 100).toFixed(2) : '';
+      $('active').checked = r.active !== false; $('recipe').value = ''; $('ings').value = (r.ingredients || []).join('\n'); $('ingNote').textContent = ''; extraVals = {}; (r.extras || []).forEach(function (x) { extraVals[String(x.n).toLowerCase()] = (x.c / 100).toFixed(2); }); drawExtras();
+      $('formTitle').textContent = editing ? 'Edit menu item' : 'Add a menu item'; $('cancel').style.display = editing ? 'block' : 'none';
+      $('formSec').open = true; $('formSec').scrollIntoView();
+    }
+    $('cancel').addEventListener('click', function () { edit(null); });
+    $('loadFile').addEventListener('click', function () { $('file').value = ''; $('file').click(); });
+    $('file').addEventListener('change', function () {
+      var f = this.files && this.files[0]; if (!f) return;
+      if (f.size > 200000) { $('ingNote').textContent = 'That file is too big for a recipe.'; $('ingNote').className = 'note err'; return; }
+      var rd = new FileReader(); rd.onload = function () { $('recipe').value = String(rd.result || '').slice(0, 20000); $('find').click(); }; rd.readAsText(f);
+    });
+    $('find').addEventListener('click', function () {
+      var list = vingredients.extract($('recipe').value);
+      if (!list.length) { $('ingNote').textContent = 'No ingredients found. Paste the recipe text, or type the ingredients below.'; $('ingNote').className = 'note err'; return; }
+      $('ings').value = list.join('\n'); $('ingNote').textContent = 'Found ' + list.length + '. Check them, then save. The recipe text above is not saved.'; $('ingNote').className = 'note ok';
+    });
+    var extraVals = {};
+    function drawExtras() {
+      var box = $('extraBox'); box.textContent = '';
+      $('ings').value.split('\n').map(function (s) { return s.trim().slice(0, 60); }).filter(Boolean).forEach(function (n) {
+        var k = n.toLowerCase(), row = vyro.el('div', 'row'); row.appendChild(vyro.el('span', '', n));
+        var inp = document.createElement('input'); inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.01'; inp.min = '0'; inp.placeholder = '$ extra'; inp.style.width = '110px'; inp.value = extraVals[k] != null ? extraVals[k] : '';
+        inp.addEventListener('input', function () { extraVals[k] = inp.value; }); row.appendChild(inp); box.appendChild(row);
+      });
+    }
+    $('ings').addEventListener('input', drawExtras); $('find').addEventListener('click', function () { setTimeout(drawExtras, 50); });
+    $('save').addEventListener('click', async function () {
+      var n = $('name').value.trim(), p = vutil.toCents($('price').value);
+      if (!n) { $('msg').textContent = 'Enter an item name.'; $('msg').className = 'note err'; return; }
+      if (!(p >= 0) || $('price').value === '') { $('msg').textContent = 'Enter a price.'; $('msg').className = 'note err'; return; }
+      var seen = {}, ings = $('ings').value.split('\n').map(function (s) { return s.trim().slice(0, 60); }).filter(function (s) { var k = s.toLowerCase(); if (!s || seen[k]) return false; seen[k] = 1; return true; }).slice(0, 80);
+      var extras = []; ings.forEach(function (n2) { var v = extraVals[n2.toLowerCase()]; if (v !== undefined && v !== '' && vutil.toCents(v) > 0) extras.push({ n: n2, c: vutil.toCents(v) }); });
+      var d = { name: n, category: $('cat').value.trim(), priceCents: p, active: $('active').checked, ingredients: ings, extras: extras, updatedAt: vyro.stamp() };
+      try {
+        if (editing) await col.doc(editing).set(d, { merge: true }); else { d.createdAt = vyro.stamp(); await col.add(d); } await vcache.bump(ctx, 'menu');
+        $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; edit(null); load();
+      } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
+    });
+    load();
+  });
+</script>
+</body>
+</html>
