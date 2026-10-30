@@ -24,6 +24,13 @@
     <button class="btn ghost" id="taxSave" type="button">Save tax</button>
     <div class="note" id="taxMsg"></div>
   </div></details>
+  <details class="sec" id="srcSec"><summary>Menu source: same as my restaurant, or its own</summary><div class="in">
+    <div class="note" style="text-align:left">Run a restaurant and a takeout counter with the same food? Copy the restaurant's menu here. Own a different kind of restaurant? Skip this and build a separate menu below. You can change copied items afterward. Copying again refreshes the copied items and keeps the ones you added yourself.</div>
+    <label class="field"><span>Copy the menu from</span><select id="srcPick"></select></label>
+    <label class="check" style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" id="srcPrices" checked style="width:auto"><span>Copy the prices too</span></label>
+    <button class="btn" id="srcGo" type="button">Copy menu now</button>
+    <div class="note" id="srcMsg"></div>
+  </div></details>
   <div id="list"></div>
   <div class="note" id="empty"></div>
   <details class="sec" id="formSec" open>
@@ -151,6 +158,25 @@
         $('msg').textContent = 'Saved.'; $('msg').className = 'note ok'; edit(null); load();
       } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
     });
+    // ---- same menu as a restaurant I own, or a menu of its own ----
+    (async function () {
+      if (!vroles.isOwnerLevel(ctx) && !vroles.can(ctx, 'menu')) { $('srcSec').style.display = 'none'; return; }
+      var list = []; try { list = (await vyro.myWorkplaces(ctx)).filter(function (w) { return w.id !== ctx.bizId && (w.role === 'owner' || w.role === 'gm') && (w.product === 'restaurant' || w.product === 'takeout' || (w.apps && (w.apps.restaurant || w.apps.takeout))); }); } catch (e) {}
+      var pick = $('srcPick'); if (!list.length) { $('srcSec').querySelector('.note').textContent = 'You do not own another restaurant or takeout business on this login yet, so there is nothing to copy. Build this menu below.'; $('srcPick').style.display = 'none'; $('srcGo').style.display = 'none'; $('srcPrices').parentNode.style.display = 'none'; return; }
+      list.forEach(function (w) { var o = document.createElement('option'); o.value = w.id; o.textContent = w.name; pick.appendChild(o); });
+      $('srcGo').addEventListener('click', async function () {
+        var src = pick.value, nm = pick.options[pick.selectedIndex].textContent, btn = this; if (!confirm('Copy the menu from ' + nm + '? Items copied before from it are replaced; items you added yourself stay.')) return;
+        btn.disabled = true; $('srcMsg').textContent = 'Copying...'; $('srcMsg').className = 'note';
+        try {
+          var from = await vyro.db.collection('businesses').doc(src).collection('menu').get(), mine = await col.where('copiedFrom', '==', src).get(), n = 0, ops = [];
+          mine.forEach(function (d) { ops.push(['del', d.ref]); });
+          from.forEach(function (d) { var x = d.data(); ops.push(['set', col.doc(), { name: x.name, category: x.category || '', priceCents: $('srcPrices').checked ? (x.priceCents || 0) : 0, active: x.active !== false, ingredients: x.ingredients || [], extras: x.extras || [], copiedFrom: src, createdAt: vyro.stamp(), updatedAt: vyro.stamp() }]); n++; });
+          for (var i = 0; i < ops.length; i += 400) { var b = vyro.db.batch(); ops.slice(i, i + 400).forEach(function (o) { if (o[0] === 'del') b.delete(o[1]); else b.set(o[1], o[2]); }); await b.commit(); }
+          await vcache.bump(ctx, 'menu'); $('srcMsg').textContent = n + ' items copied from ' + nm + '.' + ($('srcPrices').checked ? '' : ' Prices are $0: set them below.'); $('srcMsg').className = 'note ok'; await load();
+        } catch (e) { $('srcMsg').textContent = vyro.friendly(e) + ' (You need to be on the other business\'s team to copy its menu.)'; $('srcMsg').className = 'note err'; }
+        btn.disabled = false;
+      });
+    })();
     load();
   });
 </script>

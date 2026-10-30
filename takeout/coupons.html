@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Coupons - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Coupons</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <h2 style="margin:0 0 4px">Coupons</h2>
+    <div class="note" id="masterNote"></div>
+    <button class="btn ghost" id="master" type="button">...</button>
+  </div>
+  <div id="list"></div><div class="note" id="none"></div>
+  <div class="card">
+    <h2 id="fHead">Make a coupon</h2>
+    <label class="field"><span>Code (letters and numbers, 3 to 20)</span><input id="code" maxlength="20" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase"></label>
+    <button class="btn ghost" id="gen" type="button">Make a random code</button>
+    <label class="field"><span>Note to yourself (optional)</span><input id="label" maxlength="60" placeholder="e.g. Summer newsletter"></label>
+    <label class="field"><span>What it gives</span><select id="type"><option value="pct">Percent off</option><option value="flat">Dollars off</option></select></label>
+    <label class="field"><span id="vLbl">Percent off (1 to 100)</span><input id="val" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <label class="field" id="capRow"><span>Most it can take off ($, optional)</span><input id="cap" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <label class="field"><span>Customer must spend at least ($, optional)</span><input id="min" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <label class="field"><span>Starts (optional)</span><input id="start" type="date"></label>
+    <label class="field"><span>Ends (optional)</span><input id="end" type="date"></label>
+    <label class="field"><span>Can be used this many times in total (0 = no limit)</span><input id="uses" type="number" inputmode="numeric" step="1" min="0" value="0"></label>
+    <button class="btn" id="save" type="button">Create coupon</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script src="../shared/coupon.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyApp(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyApp(ctx)) return;
+    if (!vroles.isOwnerLevel(ctx)) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = 'Only the owner and general managers can make or change coupons.'; return; }
+    var col = ctx.bizRef.collection('coupons'), pos = ctx.bizRef.collection('settings').doc('pos'), rows = [], off = false;
+    async function loadMaster() { try { var s = await pos.get(); off = !!(s.exists && s.data().couponsOff === true); } catch (e) {} drawMaster(); }
+    function drawMaster() { $('master').textContent = off ? 'Turn coupons ON' : 'Turn all coupons OFF'; $('masterNote').textContent = off ? 'Coupons are OFF. Cashiers cannot use any coupon code.' : 'Coupons are ON. Each coupon below can also be switched on or off by itself.'; $('masterNote').className = 'note ' + (off ? 'err' : 'ok'); }
+    $('master').addEventListener('click', async function () { this.disabled = true; try { await pos.set({ couponsOff: !off, updatedAt: vyro.stamp() }, { merge: true }); off = !off; vyro.audit(ctx, off ? 'coupons turned off' : 'coupons turned on', ''); drawMaster(); } catch (e) { say('masterNote', vyro.friendly(e), 'err'); } this.disabled = false; });
+    async function load() {
+      try { var s = await col.get(); rows = s.docs.map(function (d) { var x = d.data(); x.code = d.id; return x; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      rows.sort(function (a, b) { return (b.createdMs || 0) - (a.createdMs || 0); }); draw();
+    }
+    function draw() {
+      var box = $('list'); box.textContent = ''; $('none').textContent = rows.length ? '' : 'No coupons yet. Make one below.';
+      rows.forEach(function (c) {
+        var it = vyro.el('div', 'item'), l = vyro.el('div', 'grow'), b = vyro.el('b', '', c.code + (c.active ? '' : ' (off)')); l.appendChild(b);
+        var bad = vcoupon.why(Object.assign({}, c, { active: true }), c.minSubCents || 0);
+        l.appendChild(vyro.el('small', '', vcoupon.describe(c) + ' · used ' + (c.usedCount || 0) + (c.maxUses ? ' of ' + c.maxUses : '') + (c.startDate || c.endDate ? ' · ' + (c.startDate || '') + ' to ' + (c.endDate || 'no end') : '') + (c.label ? ' · ' + c.label : '') + (bad && c.active ? ' · ' + bad : '')));
+        it.appendChild(l);
+        var t = vyro.el('button', 'btn' + (c.active ? ' ghost' : ''), c.active ? 'Turn off' : 'Turn on'); t.type = 'button'; t.addEventListener('click', async function () { t.disabled = true; try { await col.doc(c.code).update({ active: !c.active, updatedAt: vyro.stamp() }); vyro.audit(ctx, c.active ? 'coupon off' : 'coupon on', c.code); await load(); } catch (e) { $('err').textContent = vyro.friendly(e); } });
+        var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button'; x.addEventListener('click', async function () { if (!confirm('Delete coupon ' + c.code + '? Past sales keep their record.')) return; try { await col.doc(c.code).delete(); await load(); } catch (e) { $('err').textContent = vyro.friendly(e); } });
+        it.appendChild(t); it.appendChild(x); box.appendChild(it);
+      });
+    }
+    function typeUi() { var p = $('type').value === 'pct'; $('vLbl').textContent = p ? 'Percent off (1 to 100)' : 'Dollars off'; $('capRow').style.display = p ? 'block' : 'none'; }
+    $('type').addEventListener('change', typeUi); typeUi();
+    $('code').addEventListener('input', function () { this.value = vcoupon.clean(this.value); });
+    $('gen').addEventListener('click', function () { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '', r = new Uint8Array(8); crypto.getRandomValues(r); for (var i = 0; i < 8; i++) s += a[r[i] % a.length]; $('code').value = s; });
+    $('save').addEventListener('click', async function () {
+      var code = vcoupon.clean($('code').value), type = $('type').value, v = parseFloat($('val').value);
+      if (code.length < 3) { say('msg', 'The code needs 3 to 20 letters or numbers. Tap "Make a random code" if you like.', 'err'); return; }
+      if (!(v > 0) || (type === 'pct' && v > 100) || (type === 'flat' && v > 100000)) { say('msg', type === 'pct' ? 'Percent off must be from 1 to 100.' : 'Enter the dollars off.', 'err'); return; }
+      if ($('start').value && $('end').value && $('end').value < $('start').value) { say('msg', 'The end date is before the start date.', 'err'); return; }
+      var d = { code: code, type: type, active: true, usedCount: 0, label: $('label').value.trim(), minSubCents: vutil.toCents($('min').value), maxUses: Math.max(0, Math.round(parseFloat($('uses').value) || 0)), startDate: $('start').value || '', endDate: $('end').value || '', createdBy: vyro.who(ctx), createdMs: Date.now(), createdAt: vyro.stamp(), updatedAt: vyro.stamp() };
+      if (type === 'pct') { d.value = v; d.maxOffCents = vutil.toCents($('cap').value); } else { d.valueCents = Math.round(v * 100); }
+      this.disabled = true; say('msg', 'Saving...');
+      try {
+        var ex = await col.doc(code).get(); if (ex.exists) { say('msg', 'A coupon with that code already exists. Choose another code.', 'err'); this.disabled = false; return; }
+        await col.doc(code).set(d); vyro.audit(ctx, 'coupon made', code); say('msg', 'Coupon ' + code + ' is ready. Give customers this code.', 'ok');
+        ['code', 'label', 'val', 'cap', 'min', 'start', 'end'].forEach(function (i) { $(i).value = ''; }); $('uses').value = '0'; await load();
+      } catch (e) { say('msg', vyro.friendly(e), 'err'); }
+      this.disabled = false;
+    });
+    await loadMaster(); await load();
+  });
+
+</script>
+</body>
+</html>
