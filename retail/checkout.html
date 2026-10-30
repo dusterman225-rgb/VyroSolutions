@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Checkout - Vyro Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>.tabs button{background:transparent;color:inherit}.tabs button.on{background:#4B9CD3;border-color:#4B9CD3;color:#05070A;font-weight:700}.pos-item small.lo{color:#ffb25c}.pos-item small.ou{color:#ff8a80}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
+    <div class="tag">Checkout</div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <input id="q" type="search" inputmode="search" autocomplete="off" autocapitalize="off" placeholder="Scan or type a barcode, SKU or name" style="width:100%">
+    <div class="row" style="gap:8px;border:0;flex-wrap:wrap;margin-top:8px">
+      <button class="btn ghost" id="scanBtn" type="button" style="flex:1;display:none">Scan with camera</button>
+      <button class="btn ghost" id="miscBtn" type="button" style="flex:1">Other item</button>
+    </div>
+    <div class="note" id="scanMsg"></div>
+  </div>
+  <div class="tabs" id="cats" style="flex-wrap:wrap"></div>
+  <div class="pos-grid" id="items"></div>
+  <div class="note" id="none"></div>
+  <div class="card" id="cartCard">
+    <button class="btn ghost" id="custBtn" type="button">Add a customer (optional)</button>
+    <div id="cart"></div>
+    <div class="note" id="cartEmpty">Scan or tap products to add them.</div>
+    <div class="total-row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
+    <div class="total-row" id="dRow" style="display:none"><span id="dLbl">Discount</span><b id="tDisc"></b></div>
+    <div class="total-row" id="pRow" style="display:none"><span id="pLbl">Points used</span><b id="tPts"></b></div>
+    <div class="total-row" id="xRow" style="display:none"><span id="xLbl">Sales tax</span><b id="tTax"></b></div>
+    <div class="total-row big"><span>Total</span><b id="tot">$0.00</b></div>
+    <div class="row" style="gap:8px;border:0;flex-wrap:wrap">
+      <button class="btn ghost" id="discBtn" type="button" style="flex:1">Discount</button>
+      <button class="btn ghost" id="cpBtn" type="button" style="flex:1">Coupon</button>
+      <button class="btn ghost" id="ptsBtn" type="button" style="flex:1;display:none">Use points</button>
+    </div>
+    <div class="row" style="gap:8px;border:0;flex-wrap:wrap">
+      <button class="btn" id="payCash" type="button" style="flex:1">Cash</button>
+      <button class="btn" id="payCard" type="button" style="flex:1">Card</button>
+      <button class="btn ghost" id="payOther" type="button" style="flex:1">Other</button>
+      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyro (crypto QR)</button>
+    </div>
+    <button class="btn ghost" id="clear" type="button">Clear sale</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="note err" id="qBanner" style="display:none"></div>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<div class="modal-bg" id="bg"><div class="modal" id="box"></div></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script src="js/vcache.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/discount.js"></script>
+<script src="../shared/coupon.js"></script>
+<script src="js/scan.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="../shared/chain-config.js"></script>
+<script src="js/chain.js"></script>
+<script src="js/vpay.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyRetail(ctx) { if (ctx.biz.product && ctx.biz.product !== 'retail' && !(ctx.biz.apps && ctx.biz.apps.retail)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function sheet(title, build) { var b = $('box'); b.textContent = ''; b.appendChild(vyro.el('h2', '', title)); build(b); $('bg').classList.add('open'); }
+  function closeSheet() { $('bg').classList.remove('open'); }
+  $('bg').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+  function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
+
+  vyro.start(async function (ctx) {
+    if (!onlyRetail(ctx)) return;
+    var R = vroles, staff = R.isStaff(ctx), who = vyro.who(ctx), FV = firebase.firestore.FieldValue;
+    var ocol = ctx.bizRef.collection('orders'), pcol = ctx.bizRef.collection('products'), ccol = ctx.bizRef.collection('customers');
+    var prods = [], cat = '', cart = [], taxPct = 0, empPct = 0, earnRate = 0, redeemRate = 0, busy = false, disc = null, cust = null, ptsUsed = 0, miscN = 0;
+    try {
+      var ts = await ctx.bizRef.collection('settings').doc('pos').get();
+      if (ts.exists) { var sd = ts.data(); taxPct = Number(sd.taxPct) || 0; empPct = Number(sd.serverDiscountPct) || 0; earnRate = Number(sd.loyaltyPerDollar) || 0; redeemRate = Number(sd.loyaltyRedeem) || 0; }
+      var ms = await vcache.get(ctx, 'products');
+      prods = ms.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (m) { return m.active !== false; });
+      prods.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true }); });
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    // ---- stock changes made while offline wait here and are sent when the internet is back ----
+    function pkey() { return 'vstockq_' + ctx.bizRef.id; }
+    function pend() { try { return JSON.parse(localStorage.getItem(pkey()) || '{}'); } catch (e) { return {}; } }
+    function addPend(lines) { var p = pend(); lines.forEach(function (l) { if (l.productId) p[l.productId] = (p[l.productId] || 0) + l.qty; }); try { localStorage.setItem(pkey(), JSON.stringify(p)); } catch (e) {} }
+    async function flushStock() {
+      var p = pend(), ids = Object.keys(p); if (!ids.length || !navigator.onLine) return;
+      for (var i = 0; i < ids.length; i++) { try { await pcol.doc(ids[i]).update({ stock: FV.increment(-p[ids[i]]), updatedAt: vyro.stamp() }); } catch (e) { if (e && e.code !== 'not-found') return; } delete p[ids[i]]; try { localStorage.setItem(pkey(), JSON.stringify(p)); } catch (e) {} }
+      try { localStorage.removeItem(pkey()); } catch (e) {}
+    }
+    try { if (vqueue.count(ctx)) await vqueue.flush(ctx); await flushStock(); } catch (e) {}
+
+    var cats = []; prods.forEach(function (m) { var c = m.category || 'Other'; if (cats.indexOf(c) < 0) cats.push(c); }); cats.sort(); cat = cats[0] || '';
+    function drawCats() {
+      var box = $('cats'); box.textContent = '';
+      cats.forEach(function (c) { var b = vyro.el('button', c === cat ? 'on' : '', c); b.type = 'button'; b.addEventListener('click', function () { cat = c; $('q').value = ''; drawCats(); drawItems(); }); box.appendChild(b); });
+    }
+    function stockTag(m) { var s = m.stock || 0; return s <= 0 ? ['out', 'out of stock'] : (m.lowAt && s <= m.lowAt ? ['lo', s + ' left'] : null); }
+    function drawItems() {
+      var g = $('items'); g.textContent = ''; var q = $('q').value.trim().toLowerCase();
+      var list = q ? prods.filter(function (m) { return (String(m.name) + ' ' + (m.barcode || '') + ' ' + (m.sku || '')).toLowerCase().indexOf(q) >= 0; }) : prods.filter(function (m) { return (m.category || 'Other') === cat; });
+      $('none').textContent = prods.length ? (list.length ? '' : 'No product matches.') : 'No products yet. A manager adds them under Products.';
+      list.slice(0, 60).forEach(function (m) {
+        var b = vyro.el('button', 'pos-item'); b.type = 'button'; var th = m.img || m.imgUrl; if (th) { var im = document.createElement('img'); im.src = th; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'width:100%;height:84px;object-fit:cover;border-radius:8px;margin-bottom:6px'; b.appendChild(im); } b.appendChild(vyro.el('b', '', m.name)); b.appendChild(vyro.el('small', '', vutil.fmt(m.priceCents || 0)));
+        var tg = stockTag(m); if (tg) b.appendChild(vyro.el('small', tg[0], tg[1]));
+        b.addEventListener('click', function () { addProduct(m); }); g.appendChild(b);
+      });
+    }
+    function addProduct(m) {
+      var l = cart.filter(function (x) { return x.productId === m.id; })[0];
+      if (!l && cart.length >= 60) { say('msg', 'A sale can have up to 60 different items. Finish this one first.', 'err'); return; }
+      if (l) l.qty++; else cart.push({ productId: m.id, thumb: m.img || m.imgUrl || '', name: m.name, sku: m.sku || '', qty: 1, priceCents: m.priceCents || 0, costCents: m.costCents || 0, taxable: m.taxable !== false });
+      var s = (m.stock || 0) - (l ? l.qty : 1); say('scanMsg', s < 0 ? m.name + ': stock shows ' + (m.stock || 0) + '. Selling anyway, fix the count in Inventory later.' : m.name + ' added.', s < 0 ? 'err' : 'ok'); say('msg', '');
+      drawCart();
+    }
+    function lookup(code) {
+      code = String(code || '').trim(); if (!code) return false; var lc = code.toLowerCase();
+      var hit = prods.filter(function (m) { return String(m.barcode || '').toLowerCase() === lc || String(m.sku || '').toLowerCase() === lc; })[0];
+      if (hit) { addProduct(hit); $('q').value = ''; drawItems(); return true; } return false;
+    }
+    $('q').addEventListener('input', drawItems);
+    $('q').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return; e.preventDefault(); var v = $('q').value.trim(); if (!v) return;
+      if (lookup(v)) return;
+      var q = v.toLowerCase(), list = prods.filter(function (m) { return String(m.name).toLowerCase().indexOf(q) >= 0; });
+      if (list.length === 1) { addProduct(list[0]); $('q').value = ''; drawItems(); } else say('scanMsg', list.length ? 'Tap the product below.' : 'No product has that barcode, SKU or name.', list.length ? '' : 'err');
+    });
+    if (window.vscan && vscan.supported()) { $('scanBtn').style.display = 'block'; $('scanBtn').addEventListener('click', function () { vscan.open(function (v) { if (!lookup(v)) { $('q').value = v; drawItems(); say('scanMsg', 'No product has the barcode ' + v + '.', 'err'); } }); }); }
+    $('miscBtn').addEventListener('click', function () {
+      sheet('Other item', function (b) {
+        var n = document.createElement('input'); n.placeholder = 'What is it (e.g. Gift wrap)'; n.maxLength = 60; n.style.cssText = 'width:100%'; b.appendChild(n);
+        var p = document.createElement('input'); p.type = 'number'; p.inputMode = 'decimal'; p.step = '0.01'; p.min = '0'; p.placeholder = 'Price ($)'; p.style.cssText = 'width:100%;margin-top:8px'; b.appendChild(p);
+        var t = document.createElement('label'); t.style.cssText = 'display:flex;gap:10px;align-items:center;margin:8px 0'; var tc = document.createElement('input'); tc.type = 'checkbox'; tc.checked = true; tc.style.width = 'auto'; t.appendChild(tc); t.appendChild(vyro.el('span', '', 'Charge sales tax')); b.appendChild(t);
+        var m = vyro.el('div', 'note', ''); b.appendChild(m);
+        var y = vyro.el('button', 'btn', 'Add'); y.type = 'button'; y.addEventListener('click', function () {
+          var c = vutil.toCents(p.value); if (!n.value.trim() || p.value === '' || c < 0 || c > 10000000) { m.textContent = 'Enter a name and a price.'; m.className = 'note err'; return; }
+          if (cart.length >= 60) { m.textContent = 'A sale can have up to 60 different items.'; m.className = 'note err'; return; }
+          cart.push({ productId: '', key: 'm' + (++miscN), name: n.value.trim(), sku: '', qty: 1, priceCents: c, costCents: 0, taxable: tc.checked }); closeSheet(); drawCart();
+        }); b.appendChild(y);
+        var x = vyro.el('button', 'btn ghost', 'Cancel'); x.type = 'button'; x.addEventListener('click', closeSheet); b.appendChild(x);
+      });
+    });
+    function subtotal() { var s = 0; cart.forEach(function (l) { s += l.priceCents * l.qty; }); return s; }
+    function ptsCents() { return redeemRate > 0 ? Math.floor(ptsUsed * 100 / redeemRate) : 0; }
+    function totals() {
+      var sub = subtotal(), taxSub = 0; cart.forEach(function (l) { if (l.taxable) taxSub += l.priceCents * l.qty; });
+      var d = vdisc.amount(disc, sub), p = Math.min(ptsCents(), Math.max(0, sub - d)), off = d + p;
+      var taxable = sub ? Math.max(0, taxSub - Math.round(off * taxSub / sub)) : 0, tax = Math.round(taxable * taxPct / 100);
+      return { sub: sub, disc: d, pts: p, tax: tax, total: sub - off + tax, net: sub - off };
+    }
+    function drawCart() {
+      var box = $('cart'); box.textContent = ''; $('cartEmpty').style.display = cart.length ? 'none' : 'block';
+      cart.forEach(function (l) {
+        var r = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); if (l.thumb) { var im = document.createElement('img'); im.src = l.thumb; im.alt = ''; im.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:8px;flex:none'; r.appendChild(im); } left.appendChild(vyro.el('b', '', l.name));
+        left.appendChild(vyro.el('small', '', vutil.fmt(l.priceCents) + ' each' + (l.taxable ? '' : ' · no tax') + (l.orig != null ? ' · price changed' : '')));
+        if (staff) { var pb = vyro.el('button', 'link', 'Change price'); pb.type = 'button'; pb.style.display = 'block'; pb.addEventListener('click', function () { var v = prompt('New price for ' + l.name + ' ($):', (l.priceCents / 100).toFixed(2)); if (v === null) return; var c = vutil.toCents(v); if (c < 0 || c > 10000000) return; if (l.orig == null) l.orig = l.priceCents; l.priceCents = c; drawCart(); }); left.appendChild(pb); }
+        r.appendChild(left);
+        var q = vyro.el('div', 'qty'); var m = vyro.el('button', '', '−'), n = vyro.el('b', '', String(l.qty)), p = vyro.el('button', '', '+'); m.type = p.type = 'button';
+        m.addEventListener('click', function () { l.qty--; if (l.qty <= 0) cart.splice(cart.indexOf(l), 1); drawCart(); }); p.addEventListener('click', function () { if (l.qty < 999) l.qty++; drawCart(); });
+        q.appendChild(m); q.appendChild(n); q.appendChild(p); r.appendChild(q); box.appendChild(r);
+      });
+      var t = totals();
+      $('tSub').textContent = vutil.fmt(t.sub); $('dRow').style.display = t.disc ? 'flex' : 'none'; $('tDisc').textContent = '-' + vutil.fmt(t.disc); $('dLbl').textContent = 'Discount' + (disc && disc.reason ? ' (' + disc.reason + ')' : '');
+      $('pRow').style.display = t.pts ? 'flex' : 'none'; $('tPts').textContent = '-' + vutil.fmt(t.pts); $('pLbl').textContent = 'Points used (' + ptsUsed + ')';
+      $('xRow').style.display = taxPct ? 'flex' : 'none'; $('tTax').textContent = vutil.fmt(t.tax); $('xLbl').textContent = 'Sales tax (' + taxPct + '%)'; $('tot').textContent = vutil.fmt(t.total);
+      $('custBtn').textContent = cust ? 'Customer: ' + cust.name + (earnRate || redeemRate ? ' · ' + (cust.points || 0) + ' points' : '') + ' (tap to change)' : 'Add a customer (optional)';
+      $('ptsBtn').style.display = cust && redeemRate > 0 && (cust.points || 0) > 0 ? 'block' : 'none';
+    }
+    // ---- customer ----
+    $('custBtn').addEventListener('click', function () {
+      sheet('Customer', async function (b) {
+        var inp = document.createElement('input'); inp.type = 'search'; inp.placeholder = 'Search name or phone'; inp.style.width = '100%'; b.appendChild(inp);
+        var holder = vyro.el('div', 'note', 'Loading...'); b.appendChild(holder), all = [];
+        function draw() { var q = inp.value.trim().toLowerCase(); holder.textContent = ''; var list = all.filter(function (c) { return !q || (String(c.name) + ' ' + (c.phone || '') + ' ' + (c.email || '')).toLowerCase().indexOf(q) >= 0; }).slice(0, 30);
+          list.forEach(function (c) { var a = vyro.el('button', 'btn ghost', c.name + (c.phone ? ' · ' + c.phone : '')); a.type = 'button'; a.style.textAlign = 'left'; a.addEventListener('click', function () { cust = c; ptsUsed = 0; closeSheet(); drawCart(); }); holder.appendChild(a); });
+          if (!list.length) holder.appendChild(vyro.el('div', 'note', all.length ? 'No match. Add them below.' : 'No customers yet. Add the first one below.')); }
+        var all = []; try { var s = await ccol.limit(500).get(); all = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); } catch (e) { holder.textContent = vyro.friendly(e); }
+        all.sort(function (a, b2) { return String(a.name).localeCompare(String(b2.name)); }); draw(); inp.addEventListener('input', draw);
+        b.appendChild(vyro.el('h2', '', 'New customer'));
+        var nn = document.createElement('input'); nn.placeholder = 'Name'; nn.maxLength = 100; nn.style.width = '100%'; b.appendChild(nn);
+        var np = document.createElement('input'); np.placeholder = 'Phone (optional)'; np.inputMode = 'tel'; np.maxLength = 30; np.style.cssText = 'width:100%;margin-top:8px'; b.appendChild(np);
+        var m = vyro.el('div', 'note', ''); b.appendChild(m);
+        var add = vyro.el('button', 'btn', 'Add and use'); add.type = 'button'; add.addEventListener('click', async function () {
+          if (!nn.value.trim()) { m.textContent = 'Enter a name.'; m.className = 'note err'; return; } add.disabled = true;
+          try { var d = { name: nn.value.trim(), phone: np.value.trim(), email: '', notes: '', points: 0, createdAt: vyro.stamp(), updatedAt: vyro.stamp() }; var ref = await ccol.add(d); d.id = ref.id; cust = d; ptsUsed = 0; closeSheet(); drawCart(); }
+          catch (e) { m.textContent = vyro.friendly(e); m.className = 'note err'; add.disabled = false; }
+        }); b.appendChild(add);
+        if (cust) { var no = vyro.el('button', 'btn ghost', 'No customer'); no.type = 'button'; no.addEventListener('click', function () { cust = null; ptsUsed = 0; closeSheet(); drawCart(); }); b.appendChild(no); }
+        var x = vyro.el('button', 'btn ghost', 'Close'); x.type = 'button'; x.addEventListener('click', closeSheet); b.appendChild(x);
+      });
+    });
+    $('ptsBtn').addEventListener('click', function () {
+      if (!cust) return; var t = totals(), cap = Math.min(cust.points || 0, Math.ceil((t.sub - t.disc) * redeemRate / 100));
+      var v = prompt(cust.name + ' has ' + (cust.points || 0) + ' points (' + redeemRate + ' points = $1 off). How many to use? (up to ' + cap + ')', String(cap)); if (v === null) return;
+      var n = Math.max(0, Math.min(cap, Math.round(parseFloat(v) || 0))); ptsUsed = n; drawCart();
+    });
+    function say2(t, c) { say('msg', t, c); }
+    // ---- paying ----
+    function build(method, tender, t, extra) {
+      var number = '#' + String(Date.now() % 100000).padStart(5, '0'), earned = cust && earnRate > 0 ? Math.floor(t.net / 100 * earnRate) : 0;
+      var d = { items: cart.map(function (l) { var x = { productId: l.productId, name: l.name, sku: l.sku, qty: l.qty, priceCents: l.priceCents, costCents: l.costCents, taxable: l.taxable }; if (l.orig != null) x.origPriceCents = l.orig; return x; }),
+        subtotalCents: t.sub, discountCents: t.disc, discountPct: disc ? disc.pct || 0 : 0, discountReason: disc ? disc.reason : '', discountBy: disc ? who : '', couponCode: disc && disc.coupon || '', pointsUsed: t.pts ? ptsUsed : 0, pointsCents: t.pts, pointsEarned: earned,
+        taxPct: taxPct, taxCents: t.tax, totalCents: t.total, customerId: cust ? cust.id : '', customerName: cust ? cust.name : '',
+        status: 'Paid', method: method, payments: [{ method: method, amountCents: t.total }], tipCents: 0, changeCents: method === 'Cash' ? Math.max(0, tender - t.total) : 0, paidAt: vyro.stamp(), paidBy: who,
+        number: number, label: 'Sale', dateKey: vutil.todayStr(), byUid: ctx.user.uid, byName: who, createdAt: vyro.stamp(), clientAt: Date.now(), updatedAt: vyro.stamp() };
+      if (extra) Object.keys(extra).forEach(function (k) { d[k] = extra[k]; });
+      return d;
+    }
+    function stockBatch(b, lines, cu, earned, used) {
+      lines.forEach(function (l) { if (l.productId) b.update(pcol.doc(l.productId), { stock: FV.increment(-l.qty), updatedAt: vyro.stamp() }); });
+      if (cu && (earned || used)) b.update(ccol.doc(cu.id), { points: FV.increment(earned - used), updatedAt: vyro.stamp() });
+    }
+    function localAfter(lines, earned, used) {
+      lines.forEach(function (l) { var m = prods.filter(function (p) { return p.id === l.productId; })[0]; if (m) m.stock = (m.stock || 0) - l.qty; });
+      if (cust) cust.points = Math.max(0, (cust.points || 0) + earned - used);
+    }
+    function reset() { $('q').value = ''; cart = []; disc = null; cust = null; ptsUsed = 0; drawCart(); drawItems(); }
+    async function finish(method, tender) {
+      if (busy) return; busy = true;
+      var t = totals(), d = build(method, tender, t), lines = cart.slice(), cu = cust, id = ocol.doc().id, queued = false, slow = false;
+      try {
+        if (navigator.onLine) {
+          try { var b = vyro.db.batch(); b.set(ocol.doc(id), d); stockBatch(b, lines, cu, d.pointsEarned, d.pointsUsed); await Promise.race([b.commit(), new Promise(function (_, rj) { setTimeout(function () { rj({ code: 'vyro/timeout' }); }, 9000); })]); }
+          catch (e) { if (e && e.code === 'vyro/timeout') slow = true; else throw e; }
+        } else queued = true;
+        if (queued) { var res = await vqueue.save(ctx, 'set', id, d); addPend(lines); }
+        localAfter(lines, queued ? 0 : d.pointsEarned, queued ? 0 : d.pointsUsed);
+        var number = d.number, change = d.changeCents; if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); reset(); closeSheet();
+        var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Sale ' + number + ' paid (' + method + '). ' + (change ? 'Change: ' + vutil.fmt(change) + '. ' : '') + (queued ? 'No internet: saved on this phone and sent when the connection returns (loyalty points are not added for offline sales). ' : '') + (slow ? 'The connection is slow, so saving may take a moment. Check Sales history before ringing it up again. ' : '')));
+        if (!queued && !slow) { var a = vyro.el('a', 'link', ' Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a); }
+        drawQ();
+      } catch (e) { say('msg', vyro.friendly(e), 'err'); }
+      busy = false;
+    }
+    function drawQ() { var n = vqueue.count(ctx), b = $('qBanner'); b.style.display = n ? 'block' : 'none'; b.textContent = n ? n + ' sale' + (n === 1 ? '' : 's') + ' saved on this phone, waiting for internet.' : ''; }
+    function needItems() { if (!cart.length) { say('msg', 'Add at least one item.', 'err'); return true; } say('msg', ''); return false; }
+    $('payCard').addEventListener('click', function () { if (needItems()) return; sheet('Card payment ' + vutil.fmt(totals().total), function (b) { b.appendChild(vyro.el('div', 'note', 'Take the payment on your own card reader first, then confirm.')); var y = vyro.el('button', 'btn', 'Payment taken'); y.type = 'button'; y.addEventListener('click', function () { finish('Card'); }); b.appendChild(y); var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', closeSheet); b.appendChild(n); }); });
+    $('payOther').addEventListener('click', function () { if (needItems()) return; sheet('Other payment ' + vutil.fmt(totals().total), function (b) { b.appendChild(vyro.el('div', 'note', 'Gift card, check or another way you took the money.')); var y = vyro.el('button', 'btn', 'Payment taken'); y.type = 'button'; y.addEventListener('click', function () { finish('Other'); }); b.appendChild(y); var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', closeSheet); b.appendChild(n); }); });
+    $('payCash').addEventListener('click', function () {
+      if (needItems()) return; var due = totals().total;
+      sheet('Cash ' + vutil.fmt(due), function (b) {
+        var inp = document.createElement('input'); inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '0.01'; inp.placeholder = 'Cash received ($), blank = exact'; inp.style.width = '100%'; b.appendChild(inp);
+        var note = vyro.el('div', 'note', ''); b.appendChild(note);
+        inp.addEventListener('input', function () { var c = inp.value ? vutil.toCents(inp.value) : due; note.textContent = c >= due ? 'Change: ' + vutil.fmt(c - due) : 'Not enough cash.'; note.className = 'note ' + (c >= due ? 'ok' : 'err'); });
+        var y = vyro.el('button', 'btn', 'Take cash'); y.type = 'button'; y.addEventListener('click', function () { var c = inp.value ? vutil.toCents(inp.value) : due; if (c < due) { note.textContent = 'Not enough cash.'; note.className = 'note err'; return; } finish('Cash', c); }); b.appendChild(y);
+        var n = vyro.el('button', 'btn ghost', 'Cancel'); n.type = 'button'; n.addEventListener('click', closeSheet); b.appendChild(n);
+      });
+    });
+    if (vrpay.enabled(ctx)) $('payVyro').style.display = 'block';
+    $('payVyro').addEventListener('click', function () {
+      if (needItems()) return; var t = totals(), btn = this;
+      vrpay.pickCoin(ctx, async function (coin) {
+        if (busy) return; busy = true; btn.disabled = true; say('msg', 'Making the code...');
+        try {
+          if (!navigator.onLine) throw { code: 'vyro/offline' };
+          var req = await vrpay.makeReq(ctx, coin, t.total), id = ocol.doc().id, lines = cart.slice(), cu = cust;
+          var d = build('Pay with Vyro', 0, t, { status: 'Open', payReq: req }); delete d.paidAt; delete d.paidBy; d.payments = []; d.method = '';
+          await ocol.doc(id).set(d); say('msg', '');
+          vrpay.qrModal(ctx, req, d.number, async function (found) {
+            try {
+              await vrpay.markPaid(ctx, id, d, found, who);
+              try { var b = vyro.db.batch(); stockBatch(b, lines, cu, d.pointsEarned, d.pointsUsed); await b.commit(); localAfter(lines, d.pointsEarned, d.pointsUsed); } catch (e2) { addPend(lines); }
+              if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); reset(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Sale ' + d.number + ' paid with Vyro. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a);
+            } catch (e) { say('msg', 'The payment arrived but saving failed. Open sale ' + d.number + ' in Sales history. Reference: ' + found.signature, 'err'); }
+          }, function () { say('msg', 'Cancelled. Sale ' + d.number + ' was saved unpaid. Find it in Sales history, or cancel it there.', 'err'); reset(); });
+        } catch (e) { say('msg', e && e.code === 'vyro/offline' ? 'Pay with Vyro needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
+        busy = false; btn.disabled = false;
+      });
+    });
+    $('clear').addEventListener('click', function () { if (cart.length && !confirm('Clear this sale?')) return; reset(); say('msg', ''); });
+    $('cpBtn').addEventListener('click', function () { if (!cart.length) { say('msg', 'Add an item first.', 'err'); return; } vcoupon.prompt(ctx, totals().sub, function (d) { disc = d; drawCart(); say('msg', 'Coupon ' + d.coupon + ' applied.'); }); });
+    $('discBtn').addEventListener('click', function () { if (!cart.length) { say('msg', 'Add an item first.', 'err'); return; } if (!staff && !empPct) { say('msg', 'Ask a manager to apply a discount.', 'err'); return; } vdisc.open({ staff: staff, maxPct: empPct, current: disc }, function (d) { disc = d; drawCart(); }); });
+    drawCats(); drawItems(); drawCart(); drawQ();
+    $('q').focus();
+  });
+
+</script>
+</body>
+</html>
