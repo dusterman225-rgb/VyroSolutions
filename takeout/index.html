@@ -49,6 +49,7 @@
   <div class="note" id="who"></div>
   <div class="note err" id="qBanner" style="display:none"></div>
   <div id="wpBox"></div>
+  <div class="card" id="dsum" style="display:none"></div>
   <div class="card" id="setup" style="display:none"><h2 style="margin:0 0 4px">Get set up</h2><div class="note" id="setupSub"></div><div class="chk" id="chk"></div></div>
   <div class="big" id="big"></div>
   <div class="qa" id="tiles" style="display:none"></div>
@@ -76,6 +77,7 @@
 <script src="js/nav.js"></script>
 <script src="js/notify.js"></script>
 <script src="../shared/install.js"></script>
+<script src="../shared/summary.js"></script>
 <script src="js/offline.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
@@ -86,6 +88,7 @@
   vyro.start(async function (ctx) {
     if (!onlyRestaurant(ctx)) return;
     var R = vroles, role = ctx.role, staff = R.isStaff(ctx);
+    if (window.vsummary && R.isOwnerLevel(ctx)) vsummary.mount(ctx, $('dsum'), { stock: false });
     document.querySelector('.tag').textContent = ctx.biz.name || 'Takeout';
     $('who').textContent = (vyro.who(ctx)) + ' \u00b7 ' + ((ctx.me && ctx.me.title) || R.label(role));
     if (role === 'kiosk') {
