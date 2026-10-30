@@ -1,0 +1,633 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function memberPath(b) { return /databases/$(database)/documents/businesses/$(b)/members/$(request.auth.uid); }
+    function isMember(b) { return exists(memberPath(b)); }
+    function roleOf(b) { return get(memberPath(b)).data.role; }
+    function isStaff(b) { return signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor']; }
+    function isOwner(b) { return signedIn() && isMember(b) && roleOf(b) == 'owner'; }
+    // The owner, or a general manager who has the owner's powers at this one location only.
+    // Guests who scan a table QR code sign in anonymously (no account). They may only read the menu and place a held order.
+    function isAnon() { return request.auth != null && request.auth.token.firebase.sign_in_provider == 'anonymous'; }
+    function isOwnerLevel(b) { return signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm']; }
+    // Owner always. A supervisor only if the owner has not switched that permission off for them.
+    function perm(b, p) {
+      return isOwnerLevel(b) || (signedIn() && isMember(b) && roleOf(b) == 'supervisor'
+        && get(memberPath(b)).data.get('perms', {}).get(p, true) == true);
+    }
+    function myTitle(b) { return get(memberPath(b)).data.get('title', '') != '' ? get(memberPath(b)).data.title : get(memberPath(b)).data.role; }
+    function isHost(b) { return signedIn() && isMember(b) && roleOf(b) == 'host'; }
+    function validCustomer() {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120;
+    }
+    function validLead() {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.status in ['New', 'Contacted', 'Estimate Sent', 'Won', 'Lost'];
+    }
+    function validEstimate() {
+      return request.resource.data.status in ['Draft', 'Sent', 'Approved', 'Rejected', 'Voided']
+        && request.resource.data.lineItems is list
+        && request.resource.data.lineItems.size() <= 100
+        && request.resource.data.totalCents is int
+        && request.resource.data.totalCents >= 0
+        && request.resource.data.totalCents <= 100000000000;
+    }
+    function validInvoice() {
+      return request.resource.data.status in ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Voided']
+        && request.resource.data.lineItems is list
+        && request.resource.data.lineItems.size() <= 100
+        && request.resource.data.totalCents is int
+        && request.resource.data.totalCents >= 0
+        && request.resource.data.totalCents <= 100000000000
+        && request.resource.data.paidCents is int
+        && request.resource.data.paidCents >= 0;
+    }
+    function validJob() {
+      return request.resource.data.status in ['Not Started', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
+        && request.resource.data.contractCents is int
+        && request.resource.data.contractCents >= 0
+        && request.resource.data.contractCents <= 100000000000;
+    }
+    function validExpense() {
+      return request.resource.data.status in ['Paid', 'Unpaid']
+        && request.resource.data.amountCents is int
+        && request.resource.data.amountCents > 0
+        && request.resource.data.amountCents <= 100000000000
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.description.size() <= 200;
+    }
+
+    function validOrder() {
+      return request.resource.data.status in ['Open', 'Paid', 'Voided']
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 60
+        && request.resource.data.totalCents is int
+        && request.resource.data.totalCents >= 0
+        && request.resource.data.totalCents <= 100000000;
+    }
+    function validMenuItem() {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.priceCents is int
+        && request.resource.data.priceCents >= 0
+        && request.resource.data.priceCents <= 10000000
+        && request.resource.data.ingredients is list
+        && request.resource.data.ingredients.size() <= 80;
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Invitations for people who already have a login (one email can work for several businesses).
+    match /invites/{i} {
+      allow read: if signedIn() && (resource.data.email == request.auth.token.email.lower() || isStaff(resource.data.bizId));
+      // create and update: sending the same person an invitation again just refreshes it.
+      allow create, update: if signedIn() && isStaff(request.resource.data.bizId)
+        && i == request.resource.data.email + '__' + request.resource.data.bizId
+        && (
+             (request.resource.data.role in ['employee', 'cook', 'server', 'host', 'kiosk'] && perm(request.resource.data.bizId, 'team'))
+          || (request.resource.data.role == 'supervisor' && isOwnerLevel(request.resource.data.bizId))
+          || (request.resource.data.role == 'gm' && isOwner(request.resource.data.bizId))
+        );
+      allow delete: if signedIn() && (resource.data.email == request.auth.token.email.lower() || isStaff(resource.data.bizId));
+    }
+
+    match /businesses/{b} {
+      allow read: if signedIn() && isMember(b);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      // Owner or general manager can edit the business. Only the true owner can close or reopen it.
+      allow update: if isOwnerLevel(b) && request.resource.data.ownerUid == resource.data.ownerUid
+        && (request.resource.data.get('status', 'active') == resource.data.get('status', 'active') || isOwner(b));
+
+      // Vyro Network records. Plan and storage are created once with safe starting values. Only a server can change them later.
+      match /network/{d} {
+        allow read: if isOwnerLevel(b);
+        allow create: if isOwnerLevel(b) && (
+             (d == 'subscription' && request.resource.data.plan == 'founding' && request.resource.data.status == 'active' && request.resource.data.price == 0)
+          || (d == 'storage' && request.resource.data.usedBytes == 0 && request.resource.data.additionalBytes == 0));
+        allow update, delete: if false;
+      }
+
+      match /members/{m} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && m == request.auth.uid
+          && request.resource.data.role == 'owner'
+          && getAfter(/databases/$(database)/documents/businesses/$(b)).data.ownerUid == request.auth.uid;
+        allow create: if signedIn() && isMember(b) && m != request.auth.uid
+          && get(/databases/$(database)/documents/users/$(m)).data.bizId == b
+          && (
+               (request.resource.data.role in ['employee', 'cook', 'server', 'host', 'kiosk']
+                 && roleOf(b) in ['owner', 'gm', 'supervisor'] && perm(b, 'team'))
+            || (request.resource.data.role == 'supervisor' && roleOf(b) in ['owner', 'gm'])
+            || (request.resource.data.role == 'gm' && roleOf(b) == 'owner')
+          );
+        // Someone who already has a Vyro login joins by accepting an invitation addressed to their email.
+        allow create: if signedIn() && m == request.auth.uid
+          && request.resource.data.inviteId is string
+          && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteId))
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteId)).data.bizId == b
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email.lower()
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteId)).data.role == request.resource.data.role
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteId)).data.get('expiresAt', request.time) >= request.time;
+        allow update: if isOwnerLevel(b) && m != request.auth.uid
+          && resource.data.role != 'owner' && (resource.data.role != 'gm' || isOwner(b))
+          && (request.resource.data.role in ['supervisor', 'employee', 'cook', 'server', 'host', 'kiosk']
+              || (request.resource.data.role == 'gm' && isOwner(b)));
+        // A manager allowed to manage the team can change name, job title and role of non-supervisor staff (promotions, new jobs).
+        allow update: if signedIn() && isMember(b) && m != request.auth.uid
+          && roleOf(b) == 'supervisor' && perm(b, 'team')
+          && resource.data.role in ['employee', 'cook', 'server', 'host', 'kiosk']
+          && request.resource.data.role in ['employee', 'cook', 'server', 'host', 'kiosk']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'role', 'title', 'empType', 'weeklyHours'])
+          && request.resource.data.get('title', '') is string && request.resource.data.get('title', '').size() <= 40;
+        // A person may set their own display name and phone (never their role).
+        allow update: if signedIn() && m == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 80;
+        allow delete: if signedIn() && isMember(b) && m != request.auth.uid
+          && (isOwner(b) || (roleOf(b) == 'gm' && !(resource.data.role in ['owner', 'gm'])) || (perm(b, 'team') && resource.data.role in ['employee', 'cook', 'server', 'host', 'kiosk']));
+      }
+
+      match /counters/{name} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b)
+          && name in ['estimate', 'invoice'] && request.resource.data.n == 1;
+        allow update: if signedIn() && isMember(b)
+          && name in ['estimate', 'invoice'] && request.resource.data.n == resource.data.n + 1;
+      }
+
+      match /customers/{c} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b) && validCustomer();
+        allow update: if signedIn() && isMember(b) && validCustomer();
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      // Personal calendar dates: only the person who made them can read, change or delete them.
+      match /events/{e} {
+        allow read: if signedIn() && isMember(b) && resource.data.ownerUid == request.auth.uid;
+        allow create: if signedIn() && isMember(b)
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+          && request.resource.data.date is string && request.resource.data.date.size() == 10
+          && request.resource.data.get('note', '') is string && request.resource.data.get('note', '').size() <= 300;
+        allow update: if signedIn() && isMember(b) && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.title is string && request.resource.data.title.size() <= 100;
+        allow delete: if signedIn() && isMember(b) && resource.data.ownerUid == request.auth.uid;
+      }
+
+      // Change log: any member can add an entry about themselves; only the owner can read it; nobody can edit or delete.
+      match /audit/{a} {
+        allow read: if isOwnerLevel(b);
+        allow create: if signedIn() && isMember(b)
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.at == request.time
+          && request.resource.data.action is string && request.resource.data.action.size() <= 60;
+        allow update, delete: if false;
+      }
+
+      // Photo Plus ($5/month, 50 photo reads a day). Only you can switch it on, in the Firebase console; the app can only read it.
+      match /aiPlans/{p} { allow read: if signedIn() && isMember(b); allow write: if false; }
+      match /usage/{d} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b) && request.resource.data.n == 1;
+        allow update: if signedIn() && isMember(b) && request.resource.data.n == resource.data.n + 1;
+      }
+
+      match /templates/{t} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+        allow create, update: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor']
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+          && request.resource.data.body is string && request.resource.data.body.size() <= 60000;
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /contracts/{k} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+        allow create, update: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor']
+          && request.resource.data.status in ['Draft', 'Shared', 'Signed']
+          && request.resource.data.body is string && request.resource.data.body.size() <= 60000;
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /leads/{l} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b) && validLead();
+        allow update: if signedIn() && isMember(b) && validLead();
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /estimates/{e} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b) && validEstimate();
+        // Approved or voided estimates can only be changed by an owner or supervisor. The estimate number never changes.
+        allow update: if signedIn() && isMember(b) && validEstimate()
+          && (resource.data.status in ['Draft', 'Sent', 'Rejected'] || roleOf(b) in ['owner', 'gm', 'supervisor'])
+          && resource.data.get('number', null) == request.resource.data.get('number', null);
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /jobs/{j} {
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && isMember(b) && validJob();
+        allow update: if signedIn() && isMember(b) && validJob();
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+
+        match /updates/{u} {
+          allow read: if signedIn() && isMember(b);
+          allow create: if signedIn() && isMember(b)
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 1000;
+          allow update: if false;
+          allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+        }
+
+        // Materials and punch list items on a job. Everyone on the team can tick them off.
+        match /tasks/{t} {
+          allow read: if signedIn() && isMember(b);
+          allow create, update: if signedIn() && isMember(b)
+            && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 200
+            && request.resource.data.kind in ['material', 'punch']
+            && request.resource.data.done is bool;
+          allow delete: if signedIn() && isMember(b);
+        }
+      }
+
+      // Hours and mileage. Each person sees their own; owners and supervisors see everyone's.
+      match /timelog/{x} {
+        allow read: if isStaff(b) || (signedIn() && isMember(b) && resource.data.uid == request.auth.uid);
+        allow create: if signedIn() && isMember(b)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.kind in ['hours', 'miles']
+          && request.resource.data.amount is number && request.resource.data.amount > 0 && request.resource.data.amount <= 5000
+          && request.resource.data.date is string && request.resource.data.date.size() == 10;
+        allow update, delete: if isStaff(b) || (signedIn() && isMember(b) && resource.data.uid == request.auth.uid);
+      }
+
+      // Recurring bills and subcontractors: owner and supervisor only.
+      match /recurring/{r} {
+        allow read, delete: if isStaff(b);
+        allow create, update: if isStaff(b)
+          && request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 200
+          && request.resource.data.amountCents is int && request.resource.data.amountCents > 0 && request.resource.data.amountCents <= 100000000000
+          && request.resource.data.every in ['month', 'quarter', 'year']
+          && request.resource.data.nextDue is string && request.resource.data.nextDue.size() == 10;
+      }
+      match /subs/{s} {
+        allow read, delete: if isStaff(b);
+        allow create, update: if isStaff(b)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120;
+      }
+
+      // ---- restaurant ----
+      match /menu/{m} {
+        allow read: if signedIn() && (isMember(b) || isAnon());
+        allow create, update: if perm(b, 'menu') && validMenuItem();
+        // anyone on the team except the kiosk can mark an item sold out (86) or back in stock
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['soldOut', 'updatedAt']);
+        allow delete: if perm(b, 'menu');
+      }
+      // Coupon codes. The code is the document name. Owners and general managers make and change them;
+      // the team can only count one use, and only while the coupon is on and has uses left.
+      match /coupons/{c} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create: if isOwnerLevel(b) && c.matches('[A-Z0-9]{3,20}') && request.resource.data.code == c
+          && request.resource.data.type in ['pct', 'flat'] && request.resource.data.active is bool
+          && request.resource.data.get('usedCount', 0) == 0
+          && (request.resource.data.type == 'flat' || (request.resource.data.value is number && request.resource.data.value > 0 && request.resource.data.value <= 100))
+          && (request.resource.data.type == 'pct' || (request.resource.data.valueCents is int && request.resource.data.valueCents > 0 && request.resource.data.valueCents <= 10000000));
+        allow update: if isOwnerLevel(b) && request.resource.data.code == resource.data.code;
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && resource.data.active == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount', 'updatedAt'])
+          && request.resource.data.usedCount == resource.data.get('usedCount', 0) + 1
+          && (resource.data.get('maxUses', 0) == 0 || request.resource.data.usedCount <= resource.data.maxUses);
+        allow delete: if isOwnerLevel(b);
+      }
+      match /orders/{o} {
+        // the customer kiosk cannot read orders; everyone else on the team can
+        allow read: if signedIn() && isMember(b);
+        allow create: if signedIn() && validOrder()
+          && request.resource.data.byUid == request.auth.uid
+          && (
+               (isMember(b) && (
+                    (roleOf(b) != 'kiosk' && request.resource.data.status in ['Open', 'Paid'])
+                 || (roleOf(b) == 'kiosk' && request.resource.data.status == 'Open'
+                     && request.resource.data.get('kitchenStatus', '') == 'Hold'
+                     && request.resource.data.get('source', '') == 'kiosk')))
+            || (isAnon() && request.resource.data.status == 'Open'
+                && request.resource.data.get('kitchenStatus', '') == 'Hold'
+                && request.resource.data.get('source', '') == 'qr'
+                && request.resource.data.items.size() <= 20
+                && request.resource.data.totalCents <= 200000)
+          );
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && validOrder()
+          && (
+               (isStaff(b) && (request.resource.data.status != 'Voided' || perm(b, 'void')))
+            || (resource.data.status == 'Open' && request.resource.data.status in ['Open', 'Paid'])
+          );
+        // the kiosk may attach a Pay with Vyro request to its own held order, and mark it paid when the blockchain payment is found
+        allow update: if signedIn() && isMember(b) && roleOf(b) == 'kiosk'
+          && resource.data.byUid == request.auth.uid && resource.data.get('source', '') == 'kiosk' && resource.data.status == 'Open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payReq', 'status', 'kitchenStatus', 'method', 'payments', 'paidAt', 'paidBy', 'txSignature', 'payCoin', 'payNet', 'tipCents', 'changeCents', 'updatedAt'])
+          && (request.resource.data.status == 'Open'
+              || (request.resource.data.status == 'Paid' && request.resource.data.method == 'Pay with Vyro' && request.resource.data.kitchenStatus == 'New'));
+        // the kitchen can move a PAID or saved order along (New, Preparing, Ready, Served) and nothing else
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk'
+          && resource.data.get('kitchenStatus', 'New') != 'Hold'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kitchenStatus', 'readyAtMs', 'updatedAt'])
+          && request.resource.data.kitchenStatus in ['New', 'Preparing', 'Ready', 'Served'];
+        allow delete: if isStaff(b);
+      }
+      // End-of-day close records (cash count). Managers only.
+      match /closes/{d} {
+        allow read, create, update: if isStaff(b);
+      }
+      // Staff schedule: the team reads it; managers with the time-clock permission write it; a person can flag their own shift for a swap.
+      match /schedule/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create, delete: if perm(b, 'timekeeping');
+        allow update: if perm(b, 'timekeeping')
+          // the person on the shift asks for a swap, or cancels the request
+          || (signedIn() && isMember(b) && roleOf(b) != 'kiosk' && resource.data.uid == request.auth.uid
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['swapReq', 'swapStatus', 'swapNote', 'swapTitle', 'swapDecision', 'offerUid', 'offerName', 'updatedAt']))
+          // someone with the SAME title offers to cover a requested swap
+          || (signedIn() && isMember(b) && roleOf(b) != 'kiosk' && resource.data.get('swapReq', false) == true
+              && resource.data.uid != request.auth.uid && resource.data.get('swapTitle', '') == myTitle(b)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offerUid', 'offerName', 'swapStatus', 'updatedAt'])
+              && (request.resource.data.offerUid == request.auth.uid
+                  || (resource.data.get('offerUid', '') == request.auth.uid && request.resource.data.offerUid == '')));
+      }
+      // Swap alerts. to is 'mgmt' (every manager) or one person's uid. Recipients can only mark them done.
+      match /notifications/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk'
+          && (resource.data.to == request.auth.uid || (resource.data.to == 'mgmt' && isStaff(b)));
+        allow create: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && !isAnon()
+          && request.resource.data.byUid == request.auth.uid && request.resource.data.to is string
+          && request.resource.data.text is string && request.resource.data.text.size() <= 200
+          && request.resource.data.done == false;
+        allow update: if signedIn() && isMember(b) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'updatedAt'])
+          && (resource.data.to == request.auth.uid || (resource.data.to == 'mgmt' && isStaff(b)));
+        allow delete: if signedIn() && isMember(b) && (resource.data.to == request.auth.uid || isStaff(b));
+      }
+      // Shift swaps: A asks B (same title and hours type); B approves; then a manager decides. Only managers actually move shifts.
+      match /swaps/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk'
+          && (resource.data.aUid == request.auth.uid || resource.data.bUid == request.auth.uid || isStaff(b));
+        allow create: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && !isAnon()
+          && request.resource.data.aUid is string && request.resource.data.bUid is string && request.resource.data.aUid != request.resource.data.bUid
+          && request.resource.data.status == 'pending_b'
+          && ((request.resource.data.get('kind', '') != 'offer' && request.resource.data.aUid == request.auth.uid)
+              || (request.resource.data.get('kind', '') == 'offer' && request.resource.data.bUid == request.auth.uid));
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && (
+             (((resource.data.get('kind', '') != 'offer' && resource.data.aUid == request.auth.uid) || (resource.data.get('kind', '') == 'offer' && resource.data.bUid == request.auth.uid)) && resource.data.status in ['pending_b', 'pending_mgr']
+                && request.resource.data.status == 'cancelled'
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          || (resource.data.get('askUid', resource.data.bUid) == request.auth.uid && resource.data.status == 'pending_b'
+                && request.resource.data.status in ['pending_mgr', 'declined']
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bReason', 'over', 'updatedAt']))
+          || perm(b, 'timekeeping'));
+        allow delete: if perm(b, 'timekeeping');
+      }
+      // Overtime caused by approved swaps (hours past a person's weekly limit). One record per person per week.
+      match /overtime/{x} {
+        allow read: if signedIn() && isMember(b) && (isStaff(b) || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if perm(b, 'timekeeping');
+      }
+      // Waste log: anyone on the team except the kiosk adds entries about themselves; managers can delete.
+      match /waste/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && request.resource.data.byUid == request.auth.uid;
+        allow delete: if isStaff(b);
+      }
+
+      // A tiny "what changed" note that lets devices keep the menu, supply and team lists instead of re-reading them.
+      match /settings/ver {
+        allow read: if signedIn() && (isMember(b) || isAnon());
+        allow write: if signedIn() && isMember(b) && !isAnon()
+          && request.resource.data.keys().hasOnly(['menu', 'supply', 'members', 'products']);
+      }
+      match /settings/{s} {
+        allow read: if signedIn() && (isMember(b) || isAnon());
+        allow write: if perm(b, 'colors');
+      }
+
+      // ---- retail ----
+      match /products/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create, update: if perm(b, 'menu')
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+          && request.resource.data.priceCents is int && request.resource.data.priceCents >= 0 && request.resource.data.priceCents <= 10000000
+          && request.resource.data.get('stock', 0) is number
+          && request.resource.data.get('img', '').size() <= 20000
+          && request.resource.data.get('imgUrl', '').size() <= 300
+          && (request.resource.data.get('imgUrl', '') == '' || request.resource.data.imgUrl.matches('https://.*'));
+        // everyone on the team changes the stock count when they sell or take back an item
+        allow update: if signedIn() && isMember(b) && roleOf(b) != 'kiosk'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt', 'updatedBy'])
+          && request.resource.data.stock is number;
+        // receiving a purchase order may also refresh the cost
+        allow update: if perm(b, 'supply')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'costCents', 'updatedAt', 'updatedBy'])
+          && request.resource.data.stock is number;
+        allow delete: if perm(b, 'menu');
+      }
+      match /stockLog/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create: if signedIn() && isMember(b) && roleOf(b) != 'kiosk' && request.resource.data.byUid == request.auth.uid;
+        allow delete: if isStaff(b);
+      }
+      match /vendors/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create, update, delete: if perm(b, 'supply')
+          && (request.method == 'delete' || (request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80));
+      }
+      match /purchases/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create, update: if perm(b, 'supply')
+          && request.resource.data.status in ['Ordered', 'Received', 'Cancelled']
+          && request.resource.data.lines is list && request.resource.data.lines.size() <= 100
+          && request.resource.data.totalCents is int && request.resource.data.totalCents >= 0;
+        allow delete: if isOwnerLevel(b);
+      }
+
+      match /supply/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) != 'kiosk';
+        allow create, delete: if perm(b, 'supply');
+        allow update: if perm(b, 'supply')
+          || (signedIn() && isMember(b) && roleOf(b) == 'cook'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['onHand', 'updatedAt', 'updatedBy'])
+              && request.resource.data.onHand is number && request.resource.data.onHand >= 0);
+      }
+      match /tables/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor', 'host', 'server', 'employee'];
+        allow create, delete: if perm(b, 'reservations');
+        allow update: if perm(b, 'reservations')
+          || (signedIn() && isMember(b) && roleOf(b) == 'host'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'party', 'seatedAt', 'updatedAt']))
+          || (signedIn() && isMember(b) && roleOf(b) == 'server'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+              && request.resource.data.status in ['Open', 'Seated', 'Needs cleaning']);
+      }
+      match /reservations/{x} {
+        allow read: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor', 'host', 'server', 'employee'];
+        allow create, update: if (isHost(b) || perm(b, 'reservations'))
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+          && request.resource.data.partySize is int && request.resource.data.partySize >= 1 && request.resource.data.partySize <= 100
+          && request.resource.data.date is string && request.resource.data.date.size() == 10
+          && request.resource.data.status in ['Booked', 'Seated', 'Completed', 'Cancelled', 'No-show'];
+        allow delete: if isHost(b) || perm(b, 'reservations');
+      }
+      match /shifts/{x} {
+        allow read: if signedIn() && isMember(b) && (resource.data.uid == request.auth.uid || perm(b, 'timekeeping'));
+        allow create: if signedIn() && isMember(b) && request.resource.data.uid == request.auth.uid
+          && request.resource.data.endMs == 0 && request.resource.data.startMs is number;
+        allow update: if signedIn() && isMember(b) && (
+             (resource.data.uid == request.auth.uid && resource.data.endMs == 0
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endMs', 'updatedAt']))
+          || perm(b, 'timekeeping'));
+        allow delete: if perm(b, 'timekeeping');
+      }
+
+      match /expenses/{x} {
+        allow read: if isStaff(b);
+        allow create: if isStaff(b) && validExpense();
+        allow update: if isStaff(b) && validExpense();
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /invoices/{i} {
+        allow read: if isStaff(b);
+        allow create: if isStaff(b) && validInvoice();
+        allow update: if isStaff(b) && validInvoice()
+          && resource.data.get('number', null) == request.resource.data.get('number', null);
+        allow delete: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor']
+          && resource.data.paidCents == 0;
+
+        match /payRequests/{r} {
+          allow read: if isStaff(b);
+          allow create: if isStaff(b)
+            && request.resource.data.status == 'Open'
+            && request.resource.data.coin in ['USDC', 'SOL']
+            && request.resource.data.net in ['devnet', 'mainnet'];
+          allow update: if isStaff(b)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'signature', 'paidAt']);
+          allow delete: if false;
+        }
+
+        match /payments/{p} {
+          allow read: if isStaff(b);
+          allow create: if isStaff(b)
+            && request.resource.data.amountCents is int
+            && request.resource.data.amountCents > 0
+            && request.resource.data.method is string;
+          allow update: if signedIn() && isMember(b) && roleOf(b) in ['owner', 'gm', 'supervisor']
+            && resource.data.reversed == false
+            && request.resource.data.reversed == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reversed', 'reversedAt', 'reversedBy']);
+          allow delete: if false;
+        }
+      }
+    }
+
+    // Public sign-in page details for one business (name, colours). The link is /login?r=<name>. Anyone can read; only the owner or general manager can change.
+    function brandOk(d) {
+      return d.keys().hasOnly(['name', 'bizId', 'product', 'accent', 'bg', 'text', 'tagline', 'logoUrl', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 80
+        && d.bizId is string
+        && d.get('tagline', '') is string && d.get('tagline', '').size() <= 120
+        && d.get('logoUrl', '') is string && d.get('logoUrl', '').size() <= 300
+        && (d.get('logoUrl', '') == '' || d.get('logoUrl', '').matches('https://.*'))
+        && d.get('accent', '#000000').matches('#[0-9a-fA-F]{6}')
+        && d.get('bg', '#000000').matches('#[0-9a-fA-F]{6}')
+        && d.get('text', '#000000').matches('#[0-9a-fA-F]{6}');
+    }
+    match /publicBrands/{slug} {
+      allow read: if true;
+      allow create: if signedIn() && !isAnon() && slug.matches('[a-z0-9]{3,30}')
+        && isOwnerLevel(request.resource.data.bizId) && brandOk(request.resource.data);
+      allow update: if signedIn() && isOwnerLevel(resource.data.bizId)
+        && request.resource.data.bizId == resource.data.bizId && brandOk(request.resource.data);
+      allow delete: if signedIn() && isOwnerLevel(resource.data.bizId);
+    }
+
+    match /publicEstimates/{token} {
+      allow get: if token.size() >= 24;
+      allow list: if signedIn() && isMember(resource.data.bizId);
+      allow create: if signedIn() && token.size() >= 24
+        && isMember(request.resource.data.bizId)
+        && request.resource.data.status == 'Sent';
+      allow update: if signedIn() && isMember(resource.data.bizId)
+        && request.resource.data.bizId == resource.data.bizId;
+      allow update: if resource.data.status == 'Sent'
+        && request.resource.data.status == 'Accepted'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'acceptedBy'])
+        && request.resource.data.acceptedBy is string
+        && request.resource.data.acceptedBy.size() >= 2
+        && request.resource.data.acceptedBy.size() <= 120
+        && request.resource.data.acceptedAt == request.time;
+      allow delete: if signedIn() && isMember(resource.data.bizId);
+    }
+
+    // ---- Customer portal (customer-safe mirror of a job; never holds costs or internal notes) ----
+    function portalDoc(p) { return get(/databases/$(database)/documents/portals/$(p)).data; }
+    function isPortalCustomer(email) {
+      return signedIn() && request.auth.token.email_verified == true
+        && email == request.auth.token.email.lower();
+    }
+
+    match /portals/{p} {
+      allow read: if signedIn() && (resource == null || isPortalCustomer(resource.data.customerEmail) || isMember(resource.data.bizId));
+      allow create: if signedIn() && isMember(request.resource.data.bizId);
+      allow update: if signedIn() && isMember(resource.data.bizId)
+        && request.resource.data.bizId == resource.data.bizId;
+      // A customer may only bump the unread counter and last-message preview when they send a message.
+      allow update: if isPortalCustomer(resource.data.customerEmail)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount', 'lastMessageAt', 'lastMessageText'])
+        && request.resource.data.unreadCount == resource.data.get('unreadCount', 0) + 1;
+      allow delete: if signedIn() && isMember(resource.data.bizId);
+
+      match /messages/{m} {
+        allow read: if signedIn() && (isPortalCustomer(portalDoc(p).customerEmail) || isMember(portalDoc(p).bizId));
+        allow create: if isPortalCustomer(portalDoc(p).customerEmail)
+          && request.resource.data.keys().hasOnly(['from', 'text', 'by', 'createdAt', 'read'])
+          && request.resource.data.from == 'customer'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+        allow create: if signedIn() && isMember(portalDoc(p).bizId)
+          && request.resource.data.from == 'contractor'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
+        allow update, delete: if signedIn() && isMember(portalDoc(p).bizId);
+      }
+
+      match /documents/{dd} {
+        allow read: if signedIn() && (isPortalCustomer(portalDoc(p).customerEmail) || isMember(portalDoc(p).bizId));
+        allow write: if signedIn() && isMember(portalDoc(p).bizId) && roleOf(portalDoc(p).bizId) in ['owner', 'gm', 'supervisor'];
+      }
+
+      match /updates/{u} {
+        allow read: if signedIn() && (isPortalCustomer(portalDoc(p).customerEmail) || isMember(portalDoc(p).bizId));
+        allow write: if signedIn() && isMember(portalDoc(p).bizId);
+      }
+      match /invoices/{i} {
+        allow read: if signedIn() && (isPortalCustomer(portalDoc(p).customerEmail) || isMember(portalDoc(p).bizId));
+        allow write: if signedIn() && isMember(portalDoc(p).bizId);
+      }
+    }
+  }
+}
