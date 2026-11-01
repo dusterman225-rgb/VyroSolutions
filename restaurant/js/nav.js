@@ -32,6 +32,7 @@
       I('coupons', 'Coupons', 'Coupons', 'coupons.html', 'money', 'Create and switch off coupon codes.', ol, 'Make a code, set the discount and limits, then switch it on or off.'),
       I('finances', 'Sales reports', 'Reports', 'finances.html', 'money', 'Sales over time.', ol, 'Pick a period to see the totals.'),
       I('paysettings', 'Pay with Vyro setup', 'Vyro pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol, 'Paste your wallet address, tick the coins, Save. Check the address twice.'),
+      I('data', 'Data and activity', 'Data', 'data.html', 'settings', 'Download your data, see who did what, hand over ownership.', ol, 'Save a copy of your records, search the activity log, see app problems.'),
       I('settings', 'Settings', 'Settings', 'settings.html', 'settings', 'All your business setup in one place.', ol, 'Everything you set up once: service type, menu, team, payments, colours.'),
       I('menu', 'Menu and recipes', 'Menu', 'menu.html', 'settings', 'Items, prices, categories, ingredients and extras. Tax and discount limits.', R.can(ctx, 'menu'), 'Add an item, set the price, add its ingredients. Set prices for extras.'),
       I('theme', 'Brand colours', 'Colours', 'theme.html', 'settings', 'Make the app match your restaurant\'s colours.', R.can(ctx, 'colors'), 'Pick a preset or choose your own colours, then Save.'),
