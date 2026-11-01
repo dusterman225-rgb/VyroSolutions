@@ -45,6 +45,7 @@
           <a class="mi" href="timelog.html">Time and mileage</a>
           <a class="mi" id="miSub" href="subs.html">Subcontractors</a>
           <a class="mi" href="assistant.html">Assistant</a>
+          <a class="mi" id="miData" href="data.html" style="display:none">Data and activity</a>
         </details>
         <details>
           <summary class="mg">Business</summary>
@@ -122,6 +123,7 @@
     $('mWho').textContent = ctx.role + ' \u00b7 ' + ctx.user.email;
     if (ctx.role === 'owner') { $('miFin').style.display = 'block'; $('miPay').style.display = 'block'; }
     if (canMoney) $('miDoc').style.display = 'block';
+    if (ctx.role === 'owner' || ctx.role === 'gm') $('miData').style.display = 'block';
     if (!canMoney) $('miSub').style.display = 'none';
     var recurDone = Promise.resolve();
     if (canMoney && window.vrecur) recurDone = vrecur.run(ctx).catch(function () { /* optional */ });
