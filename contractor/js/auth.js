@@ -319,6 +319,7 @@
           if (ee) ee.textContent = 'Only the owner or a supervisor can use this page.';
           return;
         }
+        try { var es = document.createElement('script'); es.src = '/shared/errlog.js'; es.onload = function () { try { window.vyroErr.install(ctx); } catch (x) {} }; document.head.appendChild(es); } catch (x) { /* problem log is optional */ }
         await cb(ctx);
       } catch (err) {
         if (err && err.code === 'vyro/no-business' && !/portal/.test(location.pathname)) { location.replace('portal.html'); return; }
