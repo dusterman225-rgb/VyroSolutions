@@ -43,23 +43,27 @@
       <label class="field"><span>Valid until</span><input id="validUntil" type="date"></label>
     </div>
 
-    <div class="card">
-      <h2>Line items</h2>
+    <details class="sec" open>
+      <summary>Line items</summary>
+      <div class="in">
       <div id="lines"></div>
       <button class="btn ghost" id="addLine" type="button">Add line</button>
       <label class="field"><span>Discount ($)</span><input id="discount" type="text" inputmode="decimal" placeholder="0.00"></label>
       <label class="field"><span>Sales tax (%)</span><input id="taxPct" type="text" inputmode="decimal" placeholder="0"></label>
       <label class="field"><span>Deposit requested (%)</span><input id="depositPct" type="text" inputmode="decimal" placeholder="0"></label>
-    </div>
+      </div>
+    </details>
 
-    <div class="card totals">
-      <h2>Totals</h2>
+    <details class="sec totals" open>
+      <summary>Totals <small id="sumTot"></small></summary>
+      <div class="in">
       <div class="row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
       <div class="row"><span>Discount</span><b id="tDisc">$0.00</b></div>
       <div class="row"><span>Tax</span><b id="tTax">$0.00</b></div>
       <div class="row big"><span>Total</span><b id="tTotal">$0.00</b></div>
       <div class="row"><span>Deposit due</span><b id="tDep">$0.00</b></div>
-    </div>
+      </div>
+    </details>
 
     <details class="sec" id="secTerms" open>
       <summary>Terms <small>shown to customer</small></summary>
@@ -98,6 +102,7 @@
           <div class="in">
             <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
             <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+            <button class="btn ghost" id="askShare" type="button">Share it (any app)</button>
             <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
           </div>
         </details>
@@ -115,6 +120,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/compose.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/public.js"></script>
 <script>
@@ -444,13 +450,11 @@
     }
     function openEmail() {
       var p = emailParts(); afterEmail(p);
-      window.location.href = 'mailto:' + encodeURIComponent(p.to).replace('%40', '@') + '?subject=' + encodeURIComponent(p.subject) +
-        '&body=' + encodeURIComponent(p.body.replace(/\n/g, '\r\n'));
+      vcompose.open(p);
     }
     function openGmail() {
       var p = emailParts(); afterEmail(p);
-      window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(p.to) + '&su=' + encodeURIComponent(p.subject) +
-        '&body=' + encodeURIComponent(p.body), '_blank');
+      vcompose.gmail(p);
     }
     async function copyEmail() {
       var p = emailParts();
@@ -472,6 +476,7 @@
     $('askAgain').addEventListener('click', openEmail);
     $('askGmail').addEventListener('click', openGmail);
     $('askCopy').addEventListener('click', copyEmail);
+    $('askShare').addEventListener('click', async function () { var ok = await vcompose.share(emailParts()); if (!ok) ask(vcompose.canShare ? 'Sharing was cancelled.' : 'Sharing is not available in this browser. Use Copy the email text.', 'err'); });
     $('bApprove').addEventListener('click', function () { save('Approved'); });
     $('bReject').addEventListener('click', function () { save('Rejected'); });
     $('bReopen').addEventListener('click', function () { save('Draft'); });
@@ -502,6 +507,13 @@
     if (tries > 16) clearInterval(t);
   }, 250);
 })();
+</script>
+<script>
+  // Keep the collapsed summaries up to date.
+  (function () {
+    function mirror(from, to) { var f = document.getElementById(from), t = document.getElementById(to); if (!f || !t) return; var go = function () { t.textContent = f.textContent; }; go(); new MutationObserver(go).observe(f, { childList: true, characterData: true, subtree: true }); }
+    mirror('tTotal', 'sumTot');
+  })();
 </script>
 </body>
 </html>

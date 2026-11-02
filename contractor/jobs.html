@@ -21,7 +21,7 @@
   <div class="strip">
     <div><small>Active</small><b id="sActive">-</b></div>
     <div><small>Collected</small><b id="sPaid">-</b></div>
-    <div><small>Owed</small><b id="sOwed">-</b></div>
+    <div><small>Owed (invoiced)</small><b id="sOwed">-</b></div>
   </div>
   <span id="sValue" style="display:none"></span>
 
@@ -41,6 +41,7 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/portal.js"></script>
 <script>
   var ACTIVE = ['Not Started', 'In Progress', 'On Hold'];
   var TABS = ['Active', 'Completed', 'Cancelled', 'All'];
@@ -105,20 +106,45 @@
 
       // convert already-approved estimates that have no job yet
       var es = await ctx.bizRef.collection('estimates').where('status', '==', 'Approved').get();
-      var batch = vyro.db.batch(), added = 0;
-      es.forEach(function (d) {
-                if (have[d.id] || d.data().jobDismissed) return;
+      var batch = vyro.db.batch(), added = 0, fresh = [];
+      var docs = []; es.forEach(function (d) { docs.push(d); });
+      for (var di = 0; di < docs.length; di++) {
+        var d = docs[di];
+        if (have[d.id] || d.data().jobDismissed) continue;
         var e = d.data();
+        // A new job always has a customer record: reuse the one with the same email, or make one now.
+        var custId = e.customerId || '';
+        if (!custId && (e.customerName || '').trim()) {
+          try {
+            var em = (e.customerEmail || '').trim();
+            if (em) { var f = await ctx.bizRef.collection('customers').where('email', '==', em).limit(1).get(); if (!f.empty) custId = f.docs[0].id; }
+            if (!custId) {
+              var cref = ctx.bizRef.collection('customers').doc();
+              await cref.set({ name: e.customerName.trim(), nameLower: e.customerName.trim().toLowerCase(), phone: e.customerPhone || '', email: em, address: e.address || '', language: 'en', notes: '', fromEstimateId: d.id, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp() });
+              custId = cref.id;
+            }
+            try { await d.ref.update({ customerId: custId }); } catch (x) { /* estimate stays as it was */ }
+          } catch (ce) { custId = ''; }
+        }
         var jd = {
-          estimateId: d.id, estimateNumber: e.number || '', customerId: e.customerId || '', customerName: e.customerName || '',
+          estimateId: d.id, estimateNumber: e.number || '', customerId: custId, customerName: e.customerName || '',
           customerEmail: e.customerEmail || '', customerPhone: e.customerPhone || '', address: e.address || '',
           title: e.title || '', contractCents: e.totalCents || 0, depositPct: e.depositPct || 0, status: 'Not Started',
           startDate: '', targetEndDate: '', internalNotes: '', createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
         };
         batch.set(ctx.bizRef.collection('jobs').doc(d.id), jd);
-        jd.id = d.id; jobs.push(jd); added++;
-      });
+        jd.id = d.id; jobs.push(jd); fresh.push(jd); added++;
+      }
       if (added) await batch.commit();
+      // Each new job's customer automatically gets their portal login and an email with a link to set a password.
+      if (fresh.length && window.vportal && ctx.role !== 'employee') {
+        var sent = [], failed = [];
+        for (var fi = 0; fi < fresh.length; fi++) {
+          try { var r = await vportal.ensure(ctx, fresh[fi].id, fresh[fi]); if (r.ok && r.emailed) sent.push(fresh[fi].customerName); else if (!r.ok && r.reason === 'no-email') failed.push(fresh[fi].customerName + ' (no email on file)'); else if (!r.ok) failed.push(fresh[fi].customerName + ' (' + (r.message || r.reason) + ')'); } catch (pe) { failed.push(fresh[fi].customerName); }
+        }
+        var note = (sent.length ? 'Portal invitation emailed to: ' + sent.join(', ') + '. ' : '') + (failed.length ? 'No portal invitation for: ' + failed.join(', ') + '. Open the job to send it.' : '');
+        if (note) { $('err').style.color = sent.length && !failed.length ? '#7bd88f' : ''; $('err').textContent = note; }
+      }
 
       var inv = (ctx.role === 'employee') ? { forEach: function () {} } : await ctx.bizRef.collection('invoices').get();
       inv.forEach(function (d) {

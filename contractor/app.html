@@ -23,7 +23,8 @@
           <small id="mProduct"></small>
           <small id="mWho"></small>
         </div>
-        <details>
+
+  <details>
           <summary class="mg">Work <span class="badge" id="bMsg" style="display:none"></span></summary>
           <a class="mi" href="leads.html">Leads</a>
           <a class="mi" href="estimates.html">Estimates</a>
@@ -59,6 +60,11 @@
       </div>
     </div>
   </div>
+
+  <a class="card" id="msgBanner" href="messages.html" style="display:none;text-decoration:none;border:2px solid #4ba3ff;color:inherit">
+    <h2 id="msgBannerT" style="margin:0 0 4px">New customer messages</h2>
+    <p id="msgBannerS" style="margin:0;opacity:.85"></p>
+  </a>
 
   <div class="tag" id="bizTag" style="margin:22px 0 0">Dashboard</div>
   <div id="wpBox"></div>
@@ -198,10 +204,14 @@
       })()
     ]);
 
+    if (n.unread) { $('msgBanner').style.display = 'block'; $('msgBannerT').textContent = n.unread + ' new customer message' + (n.unread === 1 ? '' : 's'); $('msgBannerS').textContent = 'Tap to read and reply.'; }
     if (n.unread) { ['bMsg', 'bMsg2'].forEach(function (id) { $(id).textContent = n.unread; $(id).style.display = 'inline-block'; }); }
 
     // only show what needs attention
     var groups = [
+      ['Messages', [
+        n.unread > 0 && ['Unread customer messages', n.unread, 'messages.html', true]
+      ]],
       ['Money', [
         n.owed > 0 && ['Money owed to you', vutil.fmt(n.owed), 'invoices.html', false],
         n.over > 0 && ['Overdue invoices', n.over, 'invoices.html', true],
@@ -214,9 +224,6 @@
       ['Leads', [
         n.newLeads > 0 && ['New leads', n.newLeads + (n.staleLeads ? ' (' + n.staleLeads + ' waiting 2+ days)' : ''), 'leads.html', n.staleLeads > 0],
         n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
-      ]],
-      ['Messages', [
-        n.unread > 0 && ['Unread customer messages', n.unread, 'messages.html', true]
       ]]
     ];
     var box = $('attBody'); box.textContent = ''; var any = false;

@@ -53,6 +53,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/compose.js"></script>
 <script>window.VYRO_STAFF_ONLY = true;</script>
 <script src="js/auth.js"></script>
 <script>
@@ -127,7 +128,10 @@
       '. The balance due is ' + vutil.fmt(e.totalCents - e.paidCents) + (e.dueDate ? ', due ' + e.dueDate : '') +
       '.\n\nPlease let me know if you have any questions.\n\nThank you,\n' + b.name;
     $('mail').href = 'mailto:' + encodeURIComponent(e.customerEmail || '').replace('%40', '@') +
-      '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body.replace(/\n/g, '\r\n'));
+    var sh = document.createElement('button'); sh.type = 'button'; sh.className = 'btn ghost'; sh.textContent = 'Share it (any app)';
+    sh.addEventListener('click', function () { vcompose.share({ to: e.customerEmail || '', subject: subject, body: body }); });
+    $('mail').insertAdjacentElement('afterend', sh);
   });
 </script>
 </body>

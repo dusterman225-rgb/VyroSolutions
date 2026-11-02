@@ -75,6 +75,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/compose.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/contracts.js"></script>
 <script src="js/portal.js"></script>
@@ -175,7 +176,7 @@
       var body = 'Hello ' + first + ',\r\n\r\nYour contract for ' + (job.title || 'your project') + ' is ready. Sign in to your project portal to read it and print it:\r\n' +
         location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html\r\n\r\nPlease print it, sign it, and return it to me. We can arrange a time to meet, or call with any questions' +
         (ctx.biz.phone ? ': ' + ctx.biz.phone : '.') + '\r\n\r\nThank you,\r\n' + ctx.biz.name;
-      location.href = 'mailto:' + encodeURIComponent(em).replace('%40', '@') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      vcompose.open({ to: em, subject: subject, body: body });
     });
 
     $('bPrint').addEventListener('click', function () {

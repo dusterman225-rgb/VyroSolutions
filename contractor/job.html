@@ -25,10 +25,15 @@
     <div class="nav" id="jLinks"></div>
   </div>
 
+  <details class="sec" id="nextCard" style="display:none">
+    <summary id="nextSum">Next steps</summary>
+    <div class="in" id="nextList"></div>
+  </details>
+
   <div class="strip">
     <div><small>Contract</small><b id="mContract">-</b></div>
     <div><small>Paid</small><b id="mPaid">-</b></div>
-    <div><small>Owed</small><b id="mOwed">-</b></div>
+    <div><small>Owed (invoiced)</small><b id="mOwed">-</b></div>
   </div>
 
   <details class="sec" open>
@@ -150,6 +155,30 @@
     if (job.address) lk('Map', 'https://maps.google.com/?q=' + encodeURIComponent(job.address));
     if (job.customerId) lk('Customer', 'customer.html?id=' + job.customerId);
     if (canManage) lk('Contract', 'documents.html?job=' + id);
+    // Next steps: what still needs doing for this job, in order. Shown to the owner and managers.
+    (async function nextSteps() {
+      if (!canManage) return;
+      var hasPortal = false, contractId = '';
+      try { hasPortal = await vportal.exists(id); } catch (e) { /* unknown */ }
+      try { var cs = await ctx.bizRef.collection('contracts').where('jobId', '==', id).limit(1).get(); if (!cs.empty) contractId = cs.docs[0].id; } catch (e) { /* unknown */ }
+      var list = $('nextList'); list.textContent = '';
+      function step(done, label, btnText, onTap) {
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow'); left.appendChild(vyro.el('b', '', (done ? '\u2713 ' : '') + label)); row.appendChild(left);
+        if (btnText) { var b = vyro.el('button', done ? 'mini' : 'btn', btnText); b.type = 'button'; b.style.width = 'auto'; b.style.marginTop = '0'; b.addEventListener('click', onTap); row.appendChild(b); }
+        list.appendChild(row); return row;
+      }
+      step(!!job.customerId, 'Customer on file', job.customerId ? 'Open' : '', function () { location.href = 'customer.html?id=' + job.customerId; });
+      var pr = step(hasPortal, 'Customer portal invitation' + (hasPortal ? ' sent' : ''), hasPortal ? 'Send again' : 'Send invitation', async function () {
+        if (!job.customerEmail) { alert('This customer has no email address. Add it on their customer page first.'); return; }
+        this.disabled = true;
+        try { var r = await vportal.ensure(ctx, id, job, true); alert(r.ok ? 'Invitation emailed to ' + r.email + '. They set a password from the email, then sign in on the portal page.' : (r.message || 'Could not send: ' + r.reason)); location.reload(); }
+        catch (e) { alert(vyro.friendly(e)); this.disabled = false; }
+      });
+      step(!!contractId, contractId ? 'Contract created' : 'Contract not created yet', contractId ? 'Open contract' : 'Create contract', function () { location.href = contractId ? 'contract.html?id=' + contractId : 'documents.html?job=' + id; });
+      var todo = (!job.customerId ? 1 : 0) + (hasPortal ? 0 : 1) + (contractId ? 0 : 1);
+      $('nextSum').textContent = todo ? 'Next steps (' + todo + ' to do)' : 'Next steps (all done)';
+      $('nextCard').open = todo > 0; $('nextCard').style.display = 'block';
+    })();
     $('viewEst').href = 'estimate.html?id=' + (job.estimateId || id);
     $('newInv').href = 'invoice.html?estimate=' + (job.estimateId || id);
     $('newCost').href = 'expense.html?job=' + id + '&back=job';
