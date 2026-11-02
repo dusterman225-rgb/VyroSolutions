@@ -28,7 +28,7 @@
   function friendly(e) {
     var c = e && e.code || '', m = e && e.message || String(e);
     var map = { 'auth/invalid-credential': 'That email and password do not match.', 'auth/wrong-password': 'That email and password do not match.', 'auth/user-not-found': 'That email and password do not match.',
-      'auth/email-already-in-use': 'That email already has a Vyro account. Sign in instead.', 'auth/weak-password': 'Use a password with at least 8 characters.', 'auth/invalid-email': 'That email does not look right.',
+      'auth/email-already-in-use': 'That email already has a Vyro account. Sign in instead.', 'auth/weak-password': 'Use a password with at least 10 characters.', 'auth/invalid-email': 'That email does not look right.',
       'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.', 'auth/network-request-failed': 'No connection. Check your internet and try again.',
       'permission-denied': 'You are not allowed to do that here.', 'auth/requires-recent-login': 'Please sign out and sign in again, then retry.' };
     return map[c] || (/permission/i.test(m) ? map['permission-denied'] : m);
@@ -45,7 +45,7 @@
   function signIn(email, pw) { return auth.signInWithEmailAndPassword(email.trim(), pw); }
   function resetPassword(email) { return auth.sendPasswordResetEmail(email.trim()); }
   function signOut() { return auth.signOut(); }
-  function requireAuth(cb) { auth.onAuthStateChanged(function (u) { if (!u) { location.replace('index.html'); } else { cb(u); } }); }
+  function requireAuth(cb) { auth.onAuthStateChanged(function (u) { if (!u) { location.replace('login.html'); } else { cb(u); } }); }
   async function me(uid) { var d = await db.collection('users').doc(uid).get(); return d.exists ? d.data() : {}; }
 
   // ---- businesses (workspaces) ----
