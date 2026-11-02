@@ -23,7 +23,7 @@
     var map = {
       'auth/email-already-in-use': 'That email already has an account. Sign in with it, then use the invitation on the home screen.',
       'auth/invalid-email': 'That email address does not look right.',
-      'auth/weak-password': 'Choose a stronger password (at least 8 characters).',
+      'auth/weak-password': 'Choose a stronger password (at least 10 characters).',
       'auth/invalid-credential': 'Email or password is incorrect.',
       'auth/wrong-password': 'Email or password is incorrect.',
       'auth/user-not-found': 'Email or password is incorrect.',
@@ -218,7 +218,7 @@
   var APP = 'takeout'; // the takeout build changes this one word
 
   // ---- staff sign-in link: /login?r=<name>. The name comes from the business name and the owner can change it. ----
-  var RESERVED = ['login', 'logout', 'signup', 'admin', 'api', 'app', 'www', 'help', 'support', 'restaurant', 'takeout', 'contractor', 'network', 'vyro', 'vyrosystems', 'index', 'portal', 'settings', 'home', 'static', 'css', 'js', 'images', 'shared', 'docs', 'workers', 'retail', 'crm', 'account', 'dashboard', 'business', 'legal', 'go', 'index'];
+  var RESERVED = ['login', 'logout', 'signup', 'admin', 'api', 'app', 'www', 'help', 'support', 'restaurant', 'takeout', 'contractor', 'network', 'vyro', 'vyrosystems', 'index', 'portal', 'settings', 'home', 'static', 'css', 'js', 'images', 'shared', 'docs', 'workers', 'retail', 'crm', 'account', 'dashboard', 'business', 'legal', 'go', 'index', 'pricing', 'about', 'packages', 'privacy', 'terms', 'security', 'contact', 'status', 'icons', 'tests', 'sw', 'manifest'];
   function slugify(n) { var s = String(n || '').toLowerCase().replace(/['\u2019]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '').slice(0, 26); if (s.length < 3) s = (s + 'biz').slice(0, 3) + Math.floor(100 + Math.random() * 900); return s; }
   async function brandFree(slug, bizId) {
     if (RESERVED.indexOf(slug) >= 0) return false;
@@ -280,8 +280,8 @@
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
   function resetPassword(email) { return auth.sendPasswordResetEmail(email); }
   // Owners go back to the owner sign-in. Employees go back to their business's own sign-in link.
-  function loginUrl() { try { return localStorage.getItem('vyro_login_url') || 'login.html'; } catch (e) { return 'login.html'; } }
-  function signOut() { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } return auth.signOut(); }
+  function loginUrl() { try { return localStorage.getItem('vyro_login_url') || '/login.html'; } catch (e) { return '/login.html'; } }
+  function signOut() { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('vyroByo_') === 0) localStorage.removeItem(k); }); } catch (e) { /* ignore */ } return auth.signOut(); }
 
   function requireAuth(cb) {
     auth.onAuthStateChanged(function (u) {
@@ -407,6 +407,7 @@
         }
         // work-location check switched off for testing
         try { var es = document.createElement('script'); es.src = '/shared/errlog.js'; es.onload = function () { try { window.vyroErr.install(ctx); } catch (x) {} }; document.head.appendChild(es); } catch (x) { /* problem log is optional */ }
+        try { var ei = document.createElement('script'); ei.src = '/shared/idle.js'; ei.onload = function () { try { window.vyroIdle.start(ctx, function () { return signOut().then(function () { location.href = loginUrl(); }); }); } catch (x) {} }; document.head.appendChild(ei); } catch (x) { /* idle sign-out is optional */ }
         await mountNav(ctx);
         await cb(ctx);
       } catch (err) {
