@@ -23,6 +23,8 @@
       I('coupons', 'Coupons', 'Coupons', 'coupons.html', 'money', 'Create and switch off coupon codes.', ol),
       I('finances', 'Sales reports', 'Reports', 'finances.html', 'money', 'Sales over time.', ol),
       I('paysettings', 'Pay with Vyro setup', 'Vyro pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol),
+      I('assistant', 'Assistant', 'Assistant', 'assistant.html', 'money', 'Ask questions about your sales and stock. Read-only.', ol),
+      I('data', 'Data and activity', 'Data', 'data.html', 'settings', 'Download your data, see who did what, hand over ownership.', ol),
       I('settings', 'Settings', 'Settings', 'settings.html', 'settings', 'All your store setup in one place.', ol),
       I('taxsettings', 'Tax and receipts', 'Tax', 'taxsettings.html', 'settings', 'Sales tax rate, discount limit, loyalty points and receipt footer.', R.can(ctx, 'colors')),
       I('theme', 'Brand colours', 'Colours', 'theme.html', 'settings', "Make the app match your store's colours.", R.can(ctx, 'colors')),
