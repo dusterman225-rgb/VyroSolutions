@@ -2,7 +2,7 @@
 import { COMMON, CONTRACTOR, CUSTOMER } from './kb.js';
 import { handleAssistant, helpersFor } from './assistant.js';
 import { handleVision } from './vision.js';
-import { runChain } from './ai.js';
+import { runChain, diagnose } from './ai.js';
 import { redact } from './redact.js';
 
 const RULES = `You are the Vyro help assistant. Help people who are lost on the Vyro website or app: be short, warm, step by step, plain words.
@@ -49,6 +49,11 @@ async function handle(req, env) {
   {
     const origin = req.headers.get('Origin') || '';
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
+    if (req.method === 'GET') {
+      const u = new URL(req.url);
+      const origins = String(env.ALLOWED_ORIGIN || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      return new Response(JSON.stringify(await diagnose(env, u.searchParams.get('check') || '', origins), null, 2), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+    }
     if (req.method !== 'POST') return json(env, origin, { error: 'POST only', detail: 'The helper is running. Open your site and use the chat.' }, 405);
     if (!okOrigin(env, origin)) return json(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN in wrangler.jsonc must equal your site address exactly; this request came from ' + origin + ')' }, 403);
 
