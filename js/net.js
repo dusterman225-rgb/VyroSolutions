@@ -44,7 +44,7 @@
   }
   function signIn(email, pw) { return auth.signInWithEmailAndPassword(email.trim(), pw); }
   function resetPassword(email) { return auth.sendPasswordResetEmail(email.trim()); }
-  function signOut() { return auth.signOut(); }
+  function signOut() { try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('vyroConsentS_') === 0) sessionStorage.removeItem(k); }); } catch (e) { /* ignore */ } return auth.signOut(); }
   function requireAuth(cb) { auth.onAuthStateChanged(function (u) { if (!u) { location.replace('login.html'); } else { cb(u); } }); }
   async function me(uid) { var d = await db.collection('users').doc(uid).get(); return d.exists ? d.data() : {}; }
 
