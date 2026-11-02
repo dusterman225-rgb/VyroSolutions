@@ -86,6 +86,16 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+      // Saved "I accept" records for the AI notices. The person can add and read their own; nobody can change or delete one.
+      match /consents/{c} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid && !isAnon()
+          && request.resource.data.kind in ['help', 'assistant', 'byo']
+          && request.resource.data.version is int
+          && request.resource.data.textHash is string && request.resource.data.textHash.size() <= 64
+          && request.resource.data.acceptedAt == request.time;
+        allow update, delete: if false;
+      }
     }
 
     // Invitations for people who already have a login (one email can work for several businesses).
@@ -104,8 +114,16 @@ service cloud.firestore {
 
     match /businesses/{b} {
       allow read: if signedIn() && isMember(b);
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      // Guests who scan a table QR code sign in anonymously and must never be able to create businesses.
+      allow create: if signedIn() && !isAnon() && request.resource.data.ownerUid == request.auth.uid;
       // Owner or general manager can edit the business. Only the true owner can close or reopen it.
+      // Handing the business to another team member: only the current owner, only the ownerUid changes,
+      // and in the same batch that person's member record must become 'owner'.
+      allow update: if isOwner(b)
+        && request.resource.data.ownerUid != resource.data.ownerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid'])
+        && exists(/databases/$(database)/documents/businesses/$(b)/members/$(request.resource.data.ownerUid))
+        && getAfter(/databases/$(database)/documents/businesses/$(b)/members/$(request.resource.data.ownerUid)).data.role == 'owner';
       allow update: if isOwnerLevel(b) && request.resource.data.ownerUid == resource.data.ownerUid
         && (request.resource.data.get('status', 'active') == resource.data.get('status', 'active') || isOwner(b));
 
@@ -120,7 +138,7 @@ service cloud.firestore {
 
       match /members/{m} {
         allow read: if signedIn() && isMember(b);
-        allow create: if signedIn() && m == request.auth.uid
+        allow create: if signedIn() && !isAnon() && m == request.auth.uid
           && request.resource.data.role == 'owner'
           && getAfter(/databases/$(database)/documents/businesses/$(b)).data.ownerUid == request.auth.uid;
         allow create: if signedIn() && isMember(b) && m != request.auth.uid
@@ -143,6 +161,16 @@ service cloud.firestore {
           && resource.data.role != 'owner' && (resource.data.role != 'gm' || isOwner(b))
           && (request.resource.data.role in ['supervisor', 'employee', 'cook', 'server', 'host', 'kiosk']
               || (request.resource.data.role == 'gm' && isOwner(b)));
+        // Handing over ownership: the owner makes the new owner's record 'owner' and their own 'gm', both in one batch,
+        // and the business's ownerUid must change in that same batch.
+        allow update: if signedIn() && isOwner(b)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && getAfter(/databases/$(database)/documents/businesses/$(b)).data.ownerUid != request.auth.uid
+          && (
+               (m != request.auth.uid && request.resource.data.role == 'owner'
+                 && getAfter(/databases/$(database)/documents/businesses/$(b)).data.ownerUid == m)
+            || (m == request.auth.uid && request.resource.data.role == 'gm')
+          );
         // A manager allowed to manage the team can change name, job title and role of non-supervisor staff (promotions, new jobs).
         allow update: if signedIn() && isMember(b) && m != request.auth.uid
           && roleOf(b) == 'supervisor' && perm(b, 'team')
@@ -188,12 +216,34 @@ service cloud.firestore {
       }
 
       // Change log: any member can add an entry about themselves; only the owner can read it; nobody can edit or delete.
+      // App problems (a short line saved when a page breaks). Anyone on the team can add one; only owners and GMs can read or clear them.
+      match /errors/{e} {
+        allow read, delete: if isOwnerLevel(b);
+        allow create: if signedIn() && isMember(b)
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.at == request.time
+          && request.resource.data.msg is string && request.resource.data.msg.size() <= 200
+          && request.resource.data.keys().hasOnly(['msg', 'page', 'extra', 'by', 'role', 'ua', 'at']);
+        allow update: if false;
+      }
+
       match /audit/{a} {
         allow read: if isOwnerLevel(b);
         allow create: if signedIn() && isMember(b)
           && request.resource.data.by == request.auth.uid
           && request.resource.data.at == request.time
           && request.resource.data.action is string && request.resource.data.action.size() <= 60;
+        allow update, delete: if false;
+      }
+
+      // Who accepted the assistant notice, for the owner to see. Added once by the person themselves; never changed or deleted.
+      match /consents/{c} {
+        allow read: if isOwnerLevel(b);
+        allow create: if signedIn() && isMember(b) && !isAnon()
+          && request.resource.data.uid == request.auth.uid
+          && c == request.auth.uid + '_' + request.resource.data.kind + '_v' + string(request.resource.data.version)
+          && request.resource.data.kind in ['assistant', 'byo']
+          && request.resource.data.acceptedAt == request.time;
         allow update, delete: if false;
       }
 

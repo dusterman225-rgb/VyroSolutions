@@ -1,8 +1,10 @@
-wrangler.jsonc
-.assetsignore
+# Files that live in the repository but must NOT be served on the website.
+workers
+tests
+docs
+.github
 firestore.rules
 README.md
-workers
-docs
-.git
+wrangler.jsonc
+.assetsignore
 node_modules
