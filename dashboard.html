@@ -23,7 +23,7 @@
   <label>Country</label><input id="bc" value="United States" maxlength="60">
   <label>Time zone</label><select id="btz"></select>
   <label>Currency</label><select id="bcur"></select>
-  <label>Which app does this business use? (you can change this later)</label><div id="bapps"></div>
+  <label>Your app</label><div id="bapps"></div>
   <button class="btn" id="mkgo" type="button">Create business</button><button class="btn ghost" id="mkx" type="button">Cancel</button>
 </div>
 <button class="btn" id="newBiz" type="button">+ Create a business</button>
@@ -70,7 +70,20 @@ vnet.requireAuth(async function(u){
   var me=await vnet.me(u.uid); $('hi').textContent=(me.name?me.name.split(' ')[0]+'\u2019s':'Your')+' businesses';
   vnet.BUSINESS_TYPES.forEach(function(t){$('bt').appendChild(vnet.el('option','',t))}); vnet.CURRENCIES.forEach(function(t){$('bcur').appendChild(vnet.el('option','',t))});
   vnet.TIMEZONES.forEach(function(t){var o=vnet.el('option','',t); $('btz').appendChild(o)});
-  vnet.APPS.filter(function(a){return a.live}).forEach(function(a){ var l=vnet.el('label'); l.style.cssText='display:flex;gap:8px;align-items:center;color:var(--text)'; var c=document.createElement('input'); c.type='checkbox'; c.value=a.id; c.style.width='auto'; l.appendChild(c); l.appendChild(vnet.el('span','',a.name)); $('bapps').appendChild(l); });
+  // The app follows the type of business. Only a restaurant gets a choice (full restaurant or takeout only).
+  var TYPE_APP={'Restaurant or cafe':'restaurant','Contractor or trades':'contractor','Retail shop':'retail','Services':'contractor','Other':'contractor'};
+  function appName(id){ var a=vnet.APPS.filter(function(x){return x.id===id})[0]; return a?a.name:id; }
+  function drawApps(){
+    var box=$('bapps'); box.textContent=''; var t=$('bt').value;
+    if(t==='Restaurant or cafe'){
+      [['restaurant','VyroRestaurant','Tables, kitchen screen, point of sale and team.'],['takeout','VyroTakeout','Takeout and fast food only. No tables. Costs less.']].forEach(function(o,k){
+        var l=vnet.el('label'); l.style.cssText='display:flex;gap:8px;align-items:flex-start;color:var(--text);margin:6px 0';
+        var c=document.createElement('input'); c.type='radio'; c.name='restApp'; c.value=o[0]; c.style.width='auto'; c.checked=(k===0);
+        var d=vnet.el('span'); d.appendChild(vnet.el('b','',o[1])); d.appendChild(document.createElement('br')); d.appendChild(vnet.el('small','',o[2]));
+        l.appendChild(c); l.appendChild(d); box.appendChild(l); });
+    } else { box.appendChild(vnet.el('div','note','This business will use '+appName(TYPE_APP[t]||'contractor')+'.')); }
+  }
+  $('bt').onchange=drawApps; drawApps();
   try{ await loadAll(); }catch(e){ $('err').textContent=vnet.friendly(e); }
   if(new URLSearchParams(location.search).get('go')==='1'){
     var open1=W.filter(function(w){return w.status!=='closed'});
@@ -81,7 +94,7 @@ vnet.requireAuth(async function(u){
   $('mkx').onclick=function(){ $('mk').classList.add('hide'); $('newBiz').classList.remove('hide'); };
   $('mkgo').onclick=async function(){
     $('err').textContent=''; var name=$('bn').value.trim(); if(!name){ $('err').textContent='Enter the business name.'; return; }
-    var apps=Array.prototype.filter.call($('bapps').querySelectorAll('input'),function(c){return c.checked}).map(function(c){return c.value});
+    var rb=$('bapps').querySelector('input:checked'), apps=[rb?rb.value:(TYPE_APP[$('bt').value]||'contractor')];
     $('mkgo').disabled=true;
     try{ await vnet.createWorkspace(U,{name:name,type:$('bt').value,country:$('bc').value.trim(),timezone:$('btz').value,currency:$('bcur').value,apps:apps}); $('bn').value=''; $('mk').classList.add('hide'); $('newBiz').classList.remove('hide'); await loadAll(); }
     catch(e){ $('err').textContent=vnet.friendly(e); } $('mkgo').disabled=false;

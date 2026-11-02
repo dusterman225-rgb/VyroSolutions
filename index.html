@@ -64,7 +64,7 @@
 
 <section id="apps">
   <h2>The apps</h2>
-  <p class="lead">Pick the app that fits your business. Every app includes teams and roles, scheduling, an activity log, data download and the VyroAssistant.</p>
+  <p class="lead">Pick the app that fits your business. Every app includes teams and roles, scheduling, an activity log and data download.</p>
   <div class="grid" id="appGrid"></div>
 </section>
 
@@ -77,8 +77,8 @@
     <h3>Upgrades</h3>
     <ul>
       <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>Bring your own AI</b> (included): already have your own AI account? Connect it to the VyroAssistant at no extra charge.</li>
-      <li><b>VyroAssistant</b> (included with every app): ask questions about your own business and get drafts of messages to customers.</li>
+      <li><b>Bring your own AI</b> (included with the VyroAssistant): already have your own AI account? Connect it to the VyroAssistant at no extra charge.</li>
+      <li><b>VyroAssistant</b> <span id="asPrice"></span>: an upgrade you add to a business. Ask questions about your own sales, stock, jobs and invoices, and get drafts of messages to customers. Read-only, and you accept a notice before first use.</li>
     </ul>
   </div>
 </section>
@@ -151,6 +151,8 @@
     ex.appendChild(t);
   } else { ex.style.display = 'none'; }
   $('ppPrice').textContent = '(+$5 per month)';
+  var ap = window.VYRO_PRICES && window.VYRO_PRICES.assistant;
+  $('asPrice').textContent = typeof ap === 'number' ? '(+$' + ap + ' per month per business)' : '(price announced at launch)';
   // Signed-in visitors get a shortcut instead of the sign-up buttons.
   try {
     if (window.firebase && window.VYRO_FIREBASE_CONFIG) {
