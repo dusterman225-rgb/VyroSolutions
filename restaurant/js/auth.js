@@ -297,7 +297,7 @@
   function resetPassword(email) { return auth.sendPasswordResetEmail(email); }
   // Owners go back to the owner sign-in. Employees go back to their business's own sign-in link.
   function loginUrl() { try { return localStorage.getItem('vyro_login_url') || '/login.html'; } catch (e) { return '/login.html'; } }
-  function signOut() { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('vyroByo_') === 0) localStorage.removeItem(k); }); } catch (e) { /* ignore */ } return auth.signOut(); }
+  function signOut() { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('vyroConsentS_') === 0) sessionStorage.removeItem(k); }); } catch (e) { /* ignore */ } try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('vyroByo_') === 0) localStorage.removeItem(k); }); } catch (e) { /* ignore */ } return auth.signOut(); }
 
   function requireAuth(cb) {
     auth.onAuthStateChanged(function (u) {
