@@ -40,6 +40,13 @@ function json(env, origin, obj, status) {
 
 export default {
   async fetch(req, env) {
+    try { return await handle(req, env); }
+    catch (e) { return json(env, req.headers.get('Origin') || '', { error: 'busy', detail: 'the helper had an unexpected problem (' + String(e && e.message || e).slice(0, 80) + ')' }, 500); }
+  }
+};
+
+async function handle(req, env) {
+  {
     const origin = req.headers.get('Origin') || '';
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
     if (req.method !== 'POST') return json(env, origin, { error: 'POST only', detail: 'The helper is running. Open your site and use the chat.' }, 405);
@@ -70,4 +77,4 @@ export default {
     if (!reply) return json(env, origin, { error: 'busy', detail: why }, 502);
     return json(env, origin, { reply: reply });
   }
-};
+}

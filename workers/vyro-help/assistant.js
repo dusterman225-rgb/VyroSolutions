@@ -230,6 +230,10 @@ async function countUse(env, token, bizId, day, lim) {
 }
 
 export async function handleAssistant(req, env, body) {
+  try { return await handleAssistantInner(req, env, body); }
+  catch (e) { return { status: 500, data: { error: 'busy', detail: 'the assistant had an unexpected problem (' + String(e && e.message || e).slice(0, 80) + ')' } }; }
+}
+async function handleAssistantInner(req, env, body) {
   const auth = req.headers.get('Authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '');
   const uid = token ? uidFromToken(token) : null;
@@ -253,6 +257,14 @@ export async function handleAssistant(req, env, body) {
   let ctx;
   try { ctx = await buildContext(env, token, uid, day); }
   catch (e) { return { status: 403, data: { error: 'access', detail: 'could not read your business records (' + String(e && e.message || e).slice(0, 80) + '). Check the Firestore rules were published and FIREBASE_PROJECT in wrangler.jsonc.' } }; }
+
+  // VyroAssistant is an upgrade. A business has it when businesses/{id}/aiPlans/plan holds assistant: true (set by you in the
+  // Firebase console, optionally with until: "YYYY-MM-DD"). Setting the variable ASSISTANT_FREE to "true" in Cloudflare lifts this for everyone.
+  if (String(env.ASSISTANT_FREE || '') !== 'true') {
+    let on = false;
+    try { const pl = await getDoc(env, token, 'businesses/' + ctx.bizId + '/aiPlans/plan'); on = !!(pl && pl.assistant === true && String(pl.until || '9999') >= day); } catch (e) { on = false; }
+    if (!on) return { status: 402, data: { error: 'plan', detail: 'VyroAssistant is not on this business\'s plan yet.' } };
+  }
 
   try {
     const deep = body.deep === true && !byo;
