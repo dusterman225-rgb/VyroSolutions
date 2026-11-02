@@ -17,7 +17,7 @@ async function callOne(env, step, messages, note) {
     const d = await r.json();
     const c = d && d.choices && d.choices[0];
     const text = c && c.message && c.message.content;
-    if (!text) { note.why = step.model + ' gave an empty answer'; return null; }
+    if (!text) { note.why = step.model + (c && c.finish_reason === 'length' ? ' ran out of room before answering (it spends words thinking)' : ' gave an empty answer'); return null; }
     const u = d.usage || {}, p = PRICES[step.model];
     const cost = p ? ((u.prompt_tokens || 0) * p[0] + (u.completion_tokens || 0) * p[1]) / 1e6 : 0;
     return { text: String(text).trim(), finish: c.finish_reason, model: step.model, usage: u, cost: cost };
@@ -99,7 +99,7 @@ export async function diagnose(env, check, origins) {
       out.models[name] = [];
       for (const step of chainFor(env, name)) {
         const note = { why: '' };
-        const res = await callOne(env, { model: step.model, maxTokens: 8, timeoutMs: 30000 }, [{ role: 'user', content: 'Reply with the word ok.' }], note);
+        const res = await callOne(env, { model: step.model, maxTokens: 300, timeoutMs: 45000 }, [{ role: 'user', content: 'Reply with the word ok.' }], note);
         out.models[name].push({ model: step.model, works: !!res, problem: res ? '' : note.why });
       }
     }

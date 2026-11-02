@@ -239,6 +239,21 @@ async function handleAssistantInner(req, env, body) {
   const uid = token ? uidFromToken(token) : null;
   if (!uid) return { status: 401, data: { error: 'signin' } };
 
+  // Plan check without asking the AI anything: tells the page whether this business has VyroAssistant, and why not.
+  if (body.status === true) {
+    try {
+      const u0 = await getDoc(env, token, 'users/' + uid);
+      if (!u0 || !u0.bizId) return { status: 200, data: { plan: false, reason: 'your sign-in has no current business (users/' + uid.slice(0, 6) + '... has no bizId)' } };
+      const day0 = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || '')) ? body.today : new Date().toISOString().slice(0, 10);
+      if (String(env.ASSISTANT_FREE || '') === 'true') return { status: 200, data: { plan: true, free: true } };
+      const pl0 = await getDoc(env, token, 'businesses/' + u0.bizId + '/aiPlans/plan');
+      if (!pl0) return { status: 200, data: { plan: false, reason: 'no document found at businesses/' + u0.bizId + '/aiPlans/plan. Your account is currently on the business with that ID. Check the plan document is inside that business.' } };
+      if (pl0.assistant !== true) return { status: 200, data: { plan: false, reason: 'the plan document exists but the field assistant is ' + JSON.stringify(pl0.assistant === undefined ? null : pl0.assistant) + ' (it must be the boolean true)' } };
+      if (String(pl0.until || '9999') < day0) return { status: 200, data: { plan: false, reason: 'the plan ended on ' + pl0.until } };
+      return { status: 200, data: { plan: true } };
+    } catch (e) { return { status: 200, data: { plan: false, reason: 'could not read the plan (' + String(e && e.message || e).slice(0, 60) + '). Publish the latest firestore.rules.' } }; }
+  }
+
   let msgs = Array.isArray(body.messages) ? body.messages.slice(-8) : [];
   msgs = msgs.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return { status: 400, data: { error: 'bad' } };
