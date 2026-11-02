@@ -44,7 +44,7 @@
     var biz = document.getElementById('biz').value.trim(), email = document.getElementById('email').value.trim(), pw = document.getElementById('pw').value;
     msg.className = 'note';
     if (!biz) { msg.textContent = 'Enter your restaurant name.'; msg.className = 'note err'; return; }
-    if (pw.length < 8) { msg.textContent = 'Password must be at least 8 characters.'; msg.className = 'note err'; return; }
+    if (pw.length < 10) { msg.textContent = 'Password must be at least 10 characters.'; msg.className = 'note err'; return; }
     var btn = document.getElementById('go'); btn.disabled = true; msg.textContent = 'Creating your account...';
     try { await vyro.signUp(email, pw, biz, 'takeout'); location.href = 'index.html'; }
     catch (err) { msg.textContent = vyro.friendly(err); msg.className = 'note err'; btn.disabled = false; }
