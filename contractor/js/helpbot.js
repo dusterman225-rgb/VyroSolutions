@@ -38,7 +38,7 @@
   var x = el('button', 'hbX', '', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
   var nc = el('button', 'hbNew', '', 'New chat'); nc.type = 'button';
   head.appendChild(av); head.appendChild(who); head.appendChild(nc); head.appendChild(x);
-  var log = el('div', 'hbLog'), chips = el('div', 'hbChips'), fine = el('div', 'hbFine', '', 'AI can make mistakes. Please don\'t share passwords or card numbers.');
+  var log = el('div', 'hbLog'), chips = el('div', 'hbChips'), fine = el('div', 'hbFine', '', 'AI can make mistakes. Third-party AI: please don\'t share personal details, passwords or card numbers.');
   var row = el('div', 'hbRow'), inp = el('textarea'); inp.rows = 1; inp.maxLength = 500; inp.placeholder = 'Type your question...';
   var send = el('button', '', '', '➤'); send.type = 'button'; send.setAttribute('aria-label', 'Send');
   row.appendChild(inp); row.appendChild(send);
@@ -70,6 +70,30 @@
       var c = el('button', '', '', t); c.type = 'button'; c.addEventListener('click', function () { inp.value = t; go(); }); chips.appendChild(c);
     });
   }
+  // The notice must be accepted before anything can be typed. The wording and the saved record live in shared/aiconsent.js.
+  var consented = false, gateBox = null;
+  function lock(on) { inp.disabled = on; send.disabled = on; inp.placeholder = on ? 'Accept the notice above to chat' : 'Type your question...'; }
+  function loadConsent() {
+    return new Promise(function (res) {
+      if (window.VyroConsent) return res(true);
+      var s = document.createElement('script'); s.src = '/shared/aiconsent.js';
+      s.onload = function () { res(!!window.VyroConsent); }; s.onerror = function () { res(false); };
+      document.head.appendChild(s);
+    });
+  }
+  async function gate() {
+    if (consented) return true;
+    lock(true);
+    var ok = await loadConsent();
+    if (!ok) { if (!gateBox) { gateBox = bubble('bot', 'The helper cannot open right now. Please try again in a minute.', null, true); } return false; }
+    if (await VyroConsent.has('help')) { consented = true; lock(false); return true; }
+    if (!gateBox || !gateBox.isConnected) {
+      chips.style.display = 'none';
+      gateBox = VyroConsent.show('help', log, {}, function () { consented = true; lock(false); gateBox = null; if (S.greeted && S.log.length > 1) { chips.style.display = 'none'; } else if (!S.greeted) greet(); else { showChips(); chips.style.display = 'flex'; } try { inp.focus(); } catch (e) { /* ignore */ } });
+      log.scrollTop = log.scrollHeight;
+    }
+    return false;
+  }
   function greet() {
     S.greeted = true; save(); var d = dots();
     setTimeout(function () {
@@ -81,13 +105,13 @@
   }
   function setOpen(open) {
     box.style.display = open ? 'flex' : 'none'; S.open = open; save();
-    if (open) { if (!S.greeted) greet(); setTimeout(function () { log.scrollTop = log.scrollHeight; try { inp.focus(); } catch (e) { /* ignore */ } }, 50); }
+    if (open) { gate().then(function (ok) { if (ok && !S.greeted) greet(); }); setTimeout(function () { log.scrollTop = log.scrollHeight; try { inp.focus(); } catch (e) { /* ignore */ } }, 50); }
   }
   btn.addEventListener('click', function () { setOpen(box.style.display !== 'flex'); });
   x.addEventListener('click', function () { setOpen(false); });
   nc.addEventListener('click', function () {
     if (!confirm('Start a new chat? This clears the current conversation.')) return;
-    S = { open: true, greeted: false, hist: [], log: [], pending: false }; save(); log.textContent = ''; chips.textContent = ''; chips.style.display = 'flex'; greet();
+    S = { open: true, greeted: false, hist: [], log: [], pending: false }; save(); log.textContent = ''; chips.textContent = ''; chips.style.display = 'flex'; gateBox = null; gate().then(function (ok) { if (ok) greet(); });
   });
 
   // restore the conversation from the previous page
@@ -97,12 +121,14 @@
     bubble('bot', 'Sorry, I lost your last question when the page changed. Please ask it again.');
   }
   if (S.greeted && S.log.length <= 1) showChips(); else chips.style.display = 'none';
-  if (S.open) { box.style.display = 'flex'; setTimeout(function () { log.scrollTop = log.scrollHeight; }, 50); }
+  if (S.open) { box.style.display = 'flex'; gate(); setTimeout(function () { log.scrollTop = log.scrollHeight; }, 50); }
 
   async function go() {
-    var t = inp.value.trim(); if (!t || busy) return;
+    var t = inp.value.trim(); if (!t || busy || !consented) return;
+    var red = window.VyroConsent ? VyroConsent.redact(t) : { text: t, changed: false };
+    t = red.text;
     busy = true; send.disabled = true; chips.style.display = 'none'; inp.value = ''; inp.style.height = 'auto';
-    bubble('me', t); S.hist.push({ role: 'user', content: t }); S.pending = true; save();
+    bubble('me', t); if (red.changed) bubble('bot', 'I removed what looked like personal details before sending your message. Please do not share them here.', null, true); S.hist.push({ role: 'user', content: t }); S.pending = true; save();
     var wait = dots();
     try {
       var r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: S.hist, page: location.pathname }) });
