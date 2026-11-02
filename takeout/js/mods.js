@@ -29,7 +29,8 @@
       var k = n.toLowerCase(), c = extraCents(m, n), row = el('div', 'item'), left = el('div', 'grow', n);
       var no = el('button', 'btn ghost', 'No'), ex = el('button', 'btn ghost', 'Extra ' + (c ? '+' + fmt(c) : 'free'));
       no.type = ex.type = 'button'; no.style.width = ex.style.width = 'auto'; no.style.marginTop = ex.style.marginTop = '0'; no.style.padding = ex.style.padding = '8px 12px';
-      function paint() { no.className = 'btn' + (state[k] === 'no' ? '' : ' ghost'); ex.className = 'btn' + (state[k] === 'extra' ? '' : ' ghost'); recalc(); }
+      function look(b, on) { b.className = 'btn ghost'; b.style.border = '2px solid #2b7bd8'; b.style.background = on ? '#2b7bd8' : 'transparent'; b.style.color = on ? '#fff' : '#9cc9ff'; b.style.fontWeight = on ? '700' : '400'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+      function paint() { look(no, state[k] === 'no'); look(ex, state[k] === 'extra'); recalc(); }
       no.addEventListener('click', function () { state[k] = state[k] === 'no' ? '' : 'no'; paint(); });
       ex.addEventListener('click', function () { state[k] = state[k] === 'extra' ? '' : 'extra'; paint(); });
       row.appendChild(left); row.appendChild(no); row.appendChild(ex); box.appendChild(row); paint();
