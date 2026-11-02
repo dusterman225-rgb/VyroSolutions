@@ -44,7 +44,7 @@
       if (!/^[\w.\-]{10,300}$/.test(key)) { $('byoMsg').textContent = 'Paste your key (letters, numbers, dashes only).'; return; }
       if (!(await VyroConsent.has('byo'))) {
         var host = $('byoNotice'); host.textContent = '';
-        VyroConsent.show('byo', host, { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function () { store(prov, model, key); });
+        VyroConsent.show('byo', host, { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function (res) { if (res && res.error) { $('byoMsg').textContent = 'Your acceptance could not be saved (' + (res.error || 'no account record') + '). Publish the latest firestore.rules and try again.'; return; } store(prov, model, key); });
         return;
       }
       store(prov, model, key);
@@ -89,7 +89,9 @@
         if (!(pl.exists && pl.data().assistant === true && until >= vutil.todayStr()) && !window.VYRO_ASSISTANT_FREE) { upgradeCard(); return; }
       } catch (pe) { /* could not check here; the server decides */ }
       if (await VyroConsent.has('assistant')) { ready = true; lock(false); greet(); return; }
-      VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function () { ready = true; lock(false); greet(); });
+      VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function (res) {
+        if (res && res.error) { $('err').textContent = 'Your acceptance could not be saved (' + (res.error || 'no account record') + '). Publish the latest firestore.rules in Firebase, reload this page and accept again.'; return; }
+        ready = true; lock(false); greet(); });
     })();
 
     async function go(deepArg) {

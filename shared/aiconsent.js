@@ -35,26 +35,26 @@
     } catch (e) { return ''; }
   }
 
-  // Has this person accepted the CURRENT wording? Checks this phone first, then the database if signed in.
+  // Has this person accepted the CURRENT wording?
+  // Signed in: the saved record in the database is what counts (the server checks the same record), not the note on the phone.
+  // Not signed in: only the note on the phone exists.
   async function has(kind) {
-    var k = key(kind);
-    if (lsGet(k) === '1') return true;
-    var u = me();
-    if (!u) return false;
+    var k = key(kind), u = me();
+    if (!u) return lsGet(k) === '1';
     try {
       var d = await fb().firestore().collection('users').doc(u.uid).collection('consents').doc(k).get();
       if (d.exists) { lsSet(k, '1'); return true; }
-    } catch (e) { /* offline or rules not published yet: ask again */ }
+    } catch (e) { /* offline, or the rules are not published yet: ask again so the problem shows */ }
     return false;
   }
 
   // Saves the acceptance. opts.bizId (assistants) also writes the business copy. Never throws.
+  // Returns { saved: 'account' } when the permanent record was written, or { saved: 'phone', error } when it was not.
   async function accept(kind, opts) {
     opts = opts || {};
     var k = key(kind), n = NOTICES[kind];
-    lsSet(k, '1');
     var u = me();
-    if (!u) return { saved: 'phone' };
+    if (!u) { lsSet(k, '1'); return { saved: 'phone' }; }
     try {
       var fs = fb().firestore(), ts = fb().firestore.FieldValue.serverTimestamp();
       var hash = await sha256(n.text);
@@ -68,8 +68,9 @@
         var bex = await bref.get();
         if (!bex.exists) await bref.set({ uid: u.uid, name: String(opts.name || u.email || '').slice(0, 80), kind: kind, version: n.version, textHash: hash, acceptedAt: ts });
       }
+      lsSet(k, '1');
       return { saved: 'account' };
-    } catch (e) { return { saved: 'phone' }; }
+    } catch (e) { return { saved: 'phone', error: String(e && (e.code || e.message) || e).slice(0, 80) }; }
   }
 
   // Privacy filter: removes things that look like personal or secret details BEFORE text leaves the phone.
