@@ -73,9 +73,21 @@
     if (!base || /PUT-YOUR/.test(base)) { $('err').textContent = 'The assistant is not connected yet (shared/helpbot-config.js).'; lock(true); return; }
     if (o.blocked) { bubble('bot', o.blocked); lock(true); return; }
 
+    // VyroAssistant is an upgrade. The server checks too; this just shows the message before the notice.
+    function upgradeCard() {
+      var c = vyro.el('div', 'vyroConsent'); c.style.cssText = 'background:#101a26;border:1px solid #2f4a68;border-radius:14px;padding:14px;margin:10px;color:#e8eef6;font-size:.9rem;line-height:1.45';
+      c.appendChild(vyro.el('b', '', 'VyroAssistant is an upgrade'));
+      c.appendChild(vyro.el('div', '', 'Add it to ' + biz + ' to ask questions about your own records and get drafts of messages. Bring-your-own-AI is included. Ask the Vyro team to turn it on for this business.'));
+      $('log').appendChild(c);
+    }
     // The notice must be accepted first. Without it the server also refuses to answer.
     lock(true);
     (async function () {
+      try {
+        var pl = await ctx.bizRef.collection('aiPlans').doc('plan').get();
+        var until = pl.exists && pl.data().until ? String(pl.data().until) : '9999';
+        if (!(pl.exists && pl.data().assistant === true && until >= vutil.todayStr()) && !window.VYRO_ASSISTANT_FREE) { upgradeCard(); return; }
+      } catch (pe) { /* could not check here; the server decides */ }
       if (await VyroConsent.has('assistant')) { ready = true; lock(false); greet(); return; }
       VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function () { ready = true; lock(false); greet(); });
     })();
@@ -92,7 +104,8 @@
         var payload = { messages: hist, today: vutil.todayStr(), deep: again && !byo };
         if (byo) payload.byo = byo;
         var r = await fetch(base + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
-        var d = await r.json();
+        var d; try { d = await r.json(); } catch (je) { throw { friendly: 'The assistant helper sent back something unexpected (status ' + r.status + '). It may need to be redeployed in Cloudflare.', reason: 'status ' + r.status }; }
+        if (r.status === 402 || d.error === 'plan') { ready = false; lock(true); throw { friendly: 'VyroAssistant is an upgrade, and it is not on this business\'s plan yet.', reason: '' }; }
         if (r.status === 429) throw { friendly: byo ? 'You have reached the daily limit for your own AI on this business. It resets tomorrow.' : again ? 'You have used today\'s Think harder answers for your business. They reset tomorrow.' : 'You have reached today\'s assistant limit for your business. It resets tomorrow.' };
         if (d.error === 'consent') { ready = false; lock(true); throw { friendly: 'Please accept the notice first. Reload this page to see it again.', reason: d.detail }; }
         if (r.status === 401 || r.status === 403) throw { friendly: 'I could not open your records. Please sign out and back in, then try again.', reason: d.detail || d.error || ('status ' + r.status) };
@@ -111,7 +124,7 @@
         }
       } catch (e) {
         wait.remove(); if (again) { if (saved) hist.push(saved); } else hist.pop();
-        var why = (e && e.reason) || (e && e.detail) || (e && e.friendly ? '' : 'could not reach the helper. Check the address in shared/helpbot-config.js.');
+        var why = (e && e.reason) || (e && e.detail) || (e && e.friendly ? '' : 'could not reach the helper. Most likely this website address is missing from ALLOWED_ORIGIN in the helper settings, or the helper address in shared/helpbot-config.js is wrong.');
         bubble('bot', ((e && e.friendly) || 'Sorry, I\'m unavailable right now. Please try again in a minute.') + (why && !(e && e.friendly === why) ? '\n\n[Reason: ' + why + ']' : ''));
       }
       busy = false; $('send').disabled = !ready; if (ready) $('q').focus();
