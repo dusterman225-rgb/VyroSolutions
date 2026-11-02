@@ -4,7 +4,7 @@
   "main": "worker.js",
   "compatibility_date": "2025-01-01",
   "vars": {
-    "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev,https://vyrosolutions.dusterman225.workers.dev",
+    "ALLOWED_ORIGIN": "https://vyrosolutions.dusterman225.workers.dev",
     "MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "ASSISTANT_MODEL": "google/gemma-4-31b-it:free",
     "FALLBACK_MODEL": "",
