@@ -30,7 +30,7 @@ export const CHAINS = {
 
 // Per business, per day. Photos cost more than chat, so they get their own small allowance.
 // vision = everyone; visionPlus = businesses with the $5/month Photo Plus (set in aiPlans, see firestore.rules).
-export const LIMITS = { chat: 40, vision: 15, visionPlus: 50, deep: 10 };
+export const LIMITS = { chat: 40, vision: 15, visionPlus: 50, deep: 10, byo: 300 };
 
 // Dollars per million tokens [in, out]. Used only to log a rough cost line; not billing.
 export const PRICES = {

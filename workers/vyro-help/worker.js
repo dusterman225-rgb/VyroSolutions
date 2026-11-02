@@ -3,6 +3,7 @@ import { COMMON, CONTRACTOR, CUSTOMER } from './kb.js';
 import { handleAssistant, helpersFor } from './assistant.js';
 import { handleVision } from './vision.js';
 import { runChain } from './ai.js';
+import { redact } from './redact.js';
 
 const RULES = `You are the Vyro help assistant. Help people who are lost on the Vyro website or app: be short, warm, step by step, plain words.
 Use ONLY the knowledge below. If the answer is not there, say you are not sure and point them to the right person; never invent features, steps, prices or promises.
@@ -58,7 +59,8 @@ export default {
     }
     let msgs = Array.isArray(body.messages) ? body.messages.slice(-8) : [];
     msgs = msgs.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-               .map(m => ({ role: m.role, content: m.content.slice(0, 600) }));
+               .map(m => ({ role: m.role, content: redact(m.content.slice(0, 600)).text }));
+    // The public help bot never looks at who is asking: it ignores any sign-in token and never reads the database.
     if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return json(env, origin, { error: 'Bad request' }, 400);
 
     const messages = [{ role: 'system', content: systemFor(String(body.page || '').slice(0, 80)) }].concat(msgs);

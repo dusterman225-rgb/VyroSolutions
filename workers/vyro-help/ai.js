@@ -38,3 +38,40 @@ export async function runChain(env, name, messages, accept) {
   }
   return { ok: false, why: note.why || 'no models are set for ' + name, tried: tried };
 }
+
+// ---- Bring your own AI ----
+// Only these addresses can ever be called, so nobody can use the helper to reach other servers.
+// All speak the common "OpenAI style" chat format. Anything else (Claude, Llama, etc.) works through OpenRouter.
+export const BYO_PROVIDERS = {
+  openai: 'https://api.openai.com/v1/chat/completions',
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+  groq: 'https://api.groq.com/openai/v1/chat/completions',
+  mistral: 'https://api.mistral.ai/v1/chat/completions',
+  together: 'https://api.together.xyz/v1/chat/completions'
+};
+export function checkByo(b) {
+  if (!b || typeof b !== 'object') return null;
+  const url = Object.prototype.hasOwnProperty.call(BYO_PROVIDERS, b.provider) ? BYO_PROVIDERS[b.provider] : null;
+  const model = String(b.model || ''), key = String(b.key || '');
+  if (!url || !/^[\w.:\/-]{1,100}$/.test(model) || !/^[\w.\-]{10,300}$/.test(key)) return null;
+  return { url, model, key };
+}
+// The key is used for this one request and then forgotten. It is never saved or written to any log.
+export async function callByo(byo, messages) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 60000);
+  try {
+    const r = await fetch(byo.url, { method: 'POST', signal: ctl.signal, redirect: 'error',
+      headers: { 'Authorization': 'Bearer ' + byo.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: byo.model, max_tokens: 1200, temperature: 0.2, messages: messages }) });
+    if (r.status === 401 || r.status === 403) return { ok: false, why: 'Your AI service did not accept the key (status ' + r.status + '). Check the key and that it has credit.' };
+    if (r.status === 404) return { ok: false, why: 'Your AI service does not know that model name. Check the model name.' };
+    if (r.status === 429) return { ok: false, why: 'Your AI service says you are going too fast or are out of credit.' };
+    if (!r.ok) return { ok: false, why: 'Your AI service returned an error (status ' + r.status + ').' };
+    const d = await r.json(); const c = d && d.choices && d.choices[0]; const text = c && c.message && c.message.content;
+    if (!text) return { ok: false, why: 'Your AI service gave an empty answer.' };
+    return { ok: true, res: { text: String(text).trim(), finish: c.finish_reason } };
+  } catch (e) {
+    return { ok: false, why: e && e.name === 'AbortError' ? 'Your AI service took too long.' : 'Could not reach your AI service.' };
+  } finally { clearTimeout(timer); }
+}
