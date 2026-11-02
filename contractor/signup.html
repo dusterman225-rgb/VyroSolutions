@@ -48,7 +48,7 @@
     var pw = document.getElementById('pw').value;
     msg.className = 'note';
     if (!biz) { msg.textContent = 'Enter your business name.'; msg.className = 'note err'; return; }
-    if (pw.length < 8) { msg.textContent = 'Password must be at least 8 characters.'; msg.className = 'note err'; return; }
+    if (pw.length < 10) { msg.textContent = 'Password must be at least 10 characters.'; msg.className = 'note err'; return; }
     var btn = document.getElementById('go');
     btn.disabled = true; msg.textContent = 'Creating your account...';
     try {
