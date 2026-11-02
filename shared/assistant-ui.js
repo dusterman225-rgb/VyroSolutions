@@ -86,13 +86,12 @@
     lock(true);
     (async function () {
       try {
-        var pl = await ctx.bizRef.collection('aiPlans').doc('plan').get();
-        var until = pl.exists && pl.data().until ? String(pl.data().until) : '9999';
-        if (!(pl.exists && pl.data().assistant === true && until >= vutil.todayStr()) && !window.VYRO_ASSISTANT_FREE) {
-          upgradeCard(!pl.exists ? 'no plan document found for this business (collection aiPlans, document plan)' : pl.data().assistant !== true ? 'the field assistant is ' + JSON.stringify(pl.data().assistant) + ' (it must be the boolean true)' : 'the plan ended on ' + until);
-          return;
-        }
-      } catch (pe) { /* could not check here; the server decides */ }
+        // The server is the one that decides, and it says exactly what it looked at.
+        var tk = await vyro.auth.currentUser.getIdToken();
+        var sr = await fetch(base + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify({ status: true, today: vutil.todayStr() }) });
+        var sd = await sr.json();
+        if (sd && sd.plan === false && !window.VYRO_ASSISTANT_FREE) { upgradeCard(sd.reason || 'not on this business\'s plan'); return; }
+      } catch (pe) { /* could not check here; the first question will tell */ }
       if (await VyroConsent.has('assistant')) { ready = true; lock(false); greet(); return; }
       VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function (res) {
         if (res && res.error) { $('err').textContent = 'Your acceptance could not be saved (' + (res.error || 'no account record') + '). Publish the latest firestore.rules in Firebase, reload this page and accept again.'; return; }
