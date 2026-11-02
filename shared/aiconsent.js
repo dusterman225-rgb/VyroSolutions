@@ -35,40 +35,36 @@
     } catch (e) { return ''; }
   }
 
-  // Has this person accepted the CURRENT wording?
-  // Signed in: the saved record in the database is what counts (the server checks the same record), not the note on the phone.
-  // Not signed in: only the note on the phone exists.
-  async function has(kind) {
-    var k = key(kind), u = me();
-    if (!u) return lsGet(k) === '1';
-    try {
-      var d = await fb().firestore().collection('users').doc(u.uid).collection('consents').doc(k).get();
-      if (d.exists) { lsSet(k, '1'); return true; }
-    } catch (e) { /* offline, or the rules are not published yet: ask again so the problem shows */ }
-    return false;
-  }
+  // The notice is shown again at every new login (and every new visit): the "accepted" mark lives in this tab's
+  // session memory and is wiped on sign-out. Every acceptance is also written to the database as its own permanent record.
+  function sessKey(kind) { var u = me(); return 'vyroConsentS_' + key(kind) + '_' + (u ? u.uid : 'visitor'); }
+  function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* storage blocked: the notice just shows again */ } }
+  function clearSession() { try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('vyroConsentS_') === 0) sessionStorage.removeItem(k); }); } catch (e) { /* ignore */ } }
+
+  async function has(kind) { return ssGet(sessKey(kind)) === '1'; }
 
   // Saves the acceptance. opts.bizId (assistants) also writes the business copy. Never throws.
-  // Returns { saved: 'account' } when the permanent record was written, or { saved: 'phone', error } when it was not.
+  // Returns { saved: 'account' } when the permanent records were written, or { saved: 'phone', error } when they were not.
   async function accept(kind, opts) {
     opts = opts || {};
     var k = key(kind), n = NOTICES[kind];
     var u = me();
-    if (!u) { lsSet(k, '1'); return { saved: 'phone' }; }
+    if (!u) { ssSet(sessKey(kind), '1'); return { saved: 'phone' }; }
     try {
       var fs = fb().firestore(), ts = fb().firestore.FieldValue.serverTimestamp();
-      var hash = await sha256(n.text);
-      var ref = fs.collection('users').doc(u.uid).collection('consents').doc(k);
-      var ex = await ref.get();
-      if (!ex.exists) {
-        await ref.set({ kind: kind, version: n.version, textHash: hash, acceptedAt: ts, page: String(location.pathname).slice(0, 80), bizId: opts.bizId || '' });
-      }
+      var hash = await sha256(n.text), stamp = Date.now() + '_' + Math.floor(Math.random() * 1000);
+      var base = { kind: kind, version: n.version, textHash: hash, acceptedAt: ts, page: String(location.pathname).slice(0, 80), bizId: opts.bizId || '' };
+      var col = fs.collection('users').doc(u.uid).collection('consents');
+      // The first-ever acceptance of this wording (the server looks for this one) ...
+      var first = col.doc(k), ex = await first.get();
+      if (!ex.exists) await first.set(base);
+      // ... plus one record for THIS login, kept forever.
+      await col.doc(k + '_' + stamp).set(base);
       if (opts.bizId) {
-        var bref = fs.collection('businesses').doc(opts.bizId).collection('consents').doc(u.uid + '_' + k);
-        var bex = await bref.get();
-        if (!bex.exists) await bref.set({ uid: u.uid, name: String(opts.name || u.email || '').slice(0, 80), kind: kind, version: n.version, textHash: hash, acceptedAt: ts });
+        await fs.collection('businesses').doc(opts.bizId).collection('consents').doc(u.uid + '_' + k + '_' + stamp).set({ uid: u.uid, name: String(opts.name || u.email || '').slice(0, 80), kind: kind, version: n.version, textHash: hash, acceptedAt: ts });
       }
-      lsSet(k, '1');
+      ssSet(sessKey(kind), '1');
       return { saved: 'account' };
     } catch (e) { return { saved: 'phone', error: String(e && (e.code || e.message) || e).slice(0, 80) }; }
   }
@@ -115,5 +111,5 @@
   }
   show.opts = {};
 
-  window.VyroConsent = { NOTICES: NOTICES, has: has, accept: accept, show: function (kind, host, opts, cb) { show.opts = opts || {}; return show(kind, host, cb); }, redact: redact, sha256: sha256, key: key };
+  window.VyroConsent = { NOTICES: NOTICES, has: has, accept: accept, clearSession: clearSession, show: function (kind, host, opts, cb) { show.opts = opts || {}; return show(kind, host, cb); }, redact: redact, sha256: sha256, key: key };
 })();

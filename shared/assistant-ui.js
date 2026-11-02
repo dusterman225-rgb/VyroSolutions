@@ -74,11 +74,13 @@
     if (o.blocked) { bubble('bot', o.blocked); lock(true); return; }
 
     // VyroAssistant is an upgrade. The server checks too; this just shows the message before the notice.
-    function upgradeCard() {
+    function upgradeCard(why) {
       var c = vyro.el('div', 'vyroConsent'); c.style.cssText = 'background:#101a26;border:1px solid #2f4a68;border-radius:14px;padding:14px;margin:10px;color:#e8eef6;font-size:.9rem;line-height:1.45';
       c.appendChild(vyro.el('b', '', 'VyroAssistant is an upgrade'));
       c.appendChild(vyro.el('div', '', 'Add it to ' + biz + ' to ask questions about your own records and get drafts of messages. Bring-your-own-AI is included. Ask the Vyro team to turn it on for this business.'));
+      if (why) { var w = vyro.el('div', '', 'Reason: ' + why); w.style.cssText = 'margin-top:8px;opacity:.7;font-size:.8rem'; c.appendChild(w); }
       $('log').appendChild(c);
+      $('q').placeholder = 'Not turned on for this business';
     }
     // The notice must be accepted first. Without it the server also refuses to answer.
     lock(true);
@@ -86,7 +88,10 @@
       try {
         var pl = await ctx.bizRef.collection('aiPlans').doc('plan').get();
         var until = pl.exists && pl.data().until ? String(pl.data().until) : '9999';
-        if (!(pl.exists && pl.data().assistant === true && until >= vutil.todayStr()) && !window.VYRO_ASSISTANT_FREE) { upgradeCard(); return; }
+        if (!(pl.exists && pl.data().assistant === true && until >= vutil.todayStr()) && !window.VYRO_ASSISTANT_FREE) {
+          upgradeCard(!pl.exists ? 'no plan document found for this business (collection aiPlans, document plan)' : pl.data().assistant !== true ? 'the field assistant is ' + JSON.stringify(pl.data().assistant) + ' (it must be the boolean true)' : 'the plan ended on ' + until);
+          return;
+        }
       } catch (pe) { /* could not check here; the server decides */ }
       if (await VyroConsent.has('assistant')) { ready = true; lock(false); greet(); return; }
       VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function (res) {
