@@ -87,6 +87,7 @@
         var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(j.status), j.status)); top.appendChild(document.createTextNode(j.customerName));
         left.appendChild(top);
         left.appendChild(vyro.el('small', '', (j.title || j.estimateNumber || '') + ' \u00b7 paid ' + vutil.fmt(m.paid) + ' of ' + vutil.fmt(j.contractCents)));
+        if (j.crew && j.crew.length) left.appendChild(vyro.el('small', '', 'Crew: ' + j.crew.map(function (c) { return c.name; }).join(', ')));
         left.addEventListener('click', function () { location.href = 'job.html?id=' + j.id; });
         row.appendChild(left);
         row.appendChild(vyro.el('b', m.owed ? 'late' : '', m.owed ? vutil.fmt(m.owed) + ' due' : vutil.fmt(j.contractCents)));

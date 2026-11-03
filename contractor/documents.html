@@ -134,6 +134,7 @@
         var r = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
         var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(c.status), c.status)); top.appendChild(document.createTextNode(c.title || 'Contract'));
         left.appendChild(top);
+        if (c.approvedBy) left.appendChild(vyro.el('small', '', 'Approved online by ' + c.approvedBy));
         left.addEventListener('click', function () { location.href = 'contract.html?id=' + c.id; });
         r.appendChild(left); parent.appendChild(r);
       }

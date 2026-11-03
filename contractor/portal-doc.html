@@ -33,6 +33,13 @@
     <button class="btn" id="bPrint" type="button" style="display:none">Print this contract</button>
     <div class="note">Read it carefully before signing. If anything is unclear, ask your contractor, or ask a lawyer of your choice.</div>
   </div>
+  <div class="card" id="apCard" style="display:none">
+    <h2>Approve online</h2>
+    <p id="apText">Read the document below. If you agree to this change and its price, type your full name and tap Approve. Your contractor is told right away. You can still print it to sign on paper.</p>
+    <label class="field" id="apField"><span>Your full name</span><input id="apName" type="text" maxlength="80" autocomplete="name"></label>
+    <button class="btn" id="apBtn" type="button">Approve this change</button>
+    <div class="note" id="apMsg"></div>
+  </div>
   <div id="paper" style="display:none"></div>
   <a class="back" href="portal.html">Back to your project</a>
   <div class="note err" id="err"></div>
@@ -58,6 +65,21 @@
       $('dTitle').textContent = x.title || 'Contract'; $('tag').textContent = x.businessName || 'Your contract';
       $('paper').textContent = x.body; $('paper').style.display = 'block'; $('bPrint').style.display = 'block';
       $('bPrint').addEventListener('click', function () { window.print(); });
+      function showApproved(x2) { $('apField').style.display = 'none'; $('apBtn').style.display = 'none'; $('apText').textContent = 'Approved by ' + x2.approvedBy + (x2.approvedAt && x2.approvedAt.toDate ? ' on ' + x2.approvedAt.toDate().toLocaleDateString() : '') + '. Your contractor has been told.'; }
+      if (x.needsApproval) {
+        $('apCard').style.display = 'block';
+        if (x.approvedAt) showApproved(x);
+        $('apBtn').addEventListener('click', async function () {
+          var nm = $('apName').value.trim();
+          if (nm.length < 2) { $('apMsg').textContent = 'Type your full name first.'; $('apMsg').className = 'note err'; return; }
+          this.disabled = true; $('apMsg').textContent = 'Saving...'; $('apMsg').className = 'note';
+          try {
+            var ref = db.collection('portals').doc(p).collection('documents').doc(d);
+            await ref.update({ approvedBy: nm, approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            var again = await ref.get(); showApproved(again.data()); $('apMsg').textContent = '';
+          } catch (e) { $('apMsg').textContent = 'Could not save your approval. Please try again, or tell your contractor.'; $('apMsg').className = 'note err'; this.disabled = false; }
+        });
+      }
     } catch (e) { $('err').textContent = 'Could not open this document. Make sure you are signed in with the email your contractor used.'; }
   });
 </script>

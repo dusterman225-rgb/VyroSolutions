@@ -107,6 +107,17 @@
       $('cWarn').className = n ? 'note late' : 'note';
     }
     paint();
+    // Has the customer approved this online from their portal?
+    try {
+      if (c.status !== 'Draft') {
+        var ps = await vyro.db.collection('portals').doc(c.jobId).collection('documents').doc(id).get();
+        if (ps.exists && ps.data().approvedAt) {
+          var ap = ps.data(), when = ap.approvedAt.toDate ? ap.approvedAt.toDate().toLocaleString() : '';
+          $('cWarn').textContent = 'Approved online by ' + ap.approvedBy + (when ? ' on ' + when : '') + '.'; $('cWarn').className = 'note ok';
+          if (!c.approvedBy) { try { await cref.update({ approvedBy: ap.approvedBy, approvedAt: ap.approvedAt }); c.approvedBy = ap.approvedBy; } catch (e) { /* optional */ } }
+        }
+      }
+    } catch (e) { /* approval check is optional */ }
     $('jobLink').href = 'job.html?id=' + c.jobId;
     $('pageTag').textContent = 'Contract';
     if (job.depositPct && job.contractCents) {

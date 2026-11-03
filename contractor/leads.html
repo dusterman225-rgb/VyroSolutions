@@ -173,6 +173,13 @@
       render();
     }
 
+    window.VYRO_FILL = { kind: 'lead', anchor: '#form', hint: 'For example: Bob Smith, 555 123 4567, wants a bathroom remodel at 12 Oak Street, found us on Google, call back Friday',
+      apply: function (f) {
+        if (f.name) $('name').value = f.name; if (f.phone) $('phone').value = f.phone; if (f.email) $('email').value = f.email;
+        if (f.address) $('address').value = f.address; if (f.jobDetails) $('jobDetails').value = f.jobDetails;
+        if (f.source) $('source').value = f.source; if (f.followUpOn) $('followUp').value = f.followUpOn;
+      } };
+    if (window.vvoice) vvoice.attachFill();
     $('q').addEventListener('input', render);
     $('add').addEventListener('click', function () { showForm(null); });
     $('cancel').addEventListener('click', showList);

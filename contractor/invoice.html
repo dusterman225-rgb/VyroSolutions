@@ -370,6 +370,21 @@
     }
     recalc();
 
+    // ---------- VyroAssistant: fill by voice ----------
+    function applyInvoice(f) {
+      if (f.customerName) {
+        var nm = f.customerName.toLowerCase(), hit = Object.keys(customers).filter(function (k) { return (customers[k].name || '').toLowerCase() === nm; })[0];
+        if (hit) { $('cust').value = hit; pickCustomer(); } else { $('cust').value = ''; $('cname').value = f.customerName; syncCustomerUi(); }
+      }
+      if (f.title) $('title').value = f.title;
+      if (f.items && f.items.length) setLines(f.items.map(function (it) { return { type: it.type, description: it.description, qty: it.qty, unitCents: Math.round((it.unitDollars || 0) * 100) }; }));
+      if (f.taxPct) $('taxPct').value = f.taxPct;
+      if (f.dueInDays) { $('dueDate').value = addDays(f.dueInDays); }
+      recalc();
+    }
+    if (!id) window.VYRO_FILL = { kind: 'invoice', apply: applyInvoice, anchor: '#form', hint: 'For example: invoice for Ann Lee, 40 hours of framing at 50 dollars, 800 of lumber, due in 14 days' };
+    if (window.vvoice && !id) vvoice.attachFill();
+
     // ---------- state / buttons ----------
     var status = inv ? inv.status : 'Draft';
     var paidSoFar = inv ? inv.paidCents : 0;

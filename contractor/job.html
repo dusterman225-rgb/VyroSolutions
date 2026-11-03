@@ -53,6 +53,17 @@
     </div>
   </details>
 
+  <details class="sec" id="crewSec">
+    <summary>Crew <small id="crewSum"></small></summary>
+    <div class="in">
+      <div class="note" style="text-align:left">Tick who is working this job. Vyro warns you if someone is already on another job on the same dates.</div>
+      <div id="crewList"></div>
+      <div class="note" id="crewWarn"></div>
+      <button class="btn" id="crewSave" type="button">Save crew</button>
+      <div class="note" id="crewMsg"></div>
+    </div>
+  </details>
+
   <details class="sec" id="invSec">
     <summary>Invoices <small id="invSum"></small></summary>
     <div class="in">
@@ -198,9 +209,62 @@
 
     function umsg(t, c) { $('uMsg').textContent = t; $('uMsg').className = 'note ' + (c || ''); }
 
+    // ---------- crew and double-booking ----------
+    (async function () {
+      if (!canManage) { $('crewSec').style.display = 'none'; return; }
+      var people = [], others = [], ACTIVE = ['Not Started', 'In Progress', 'On Hold'];
+      try { (await ctx.bizRef.collection('members').get()).forEach(function (d) { var m = d.data(); if (m.role !== 'customer') people.push({ id: d.id, kind: 'member', name: vyro.nameOf(m) }); }); } catch (e) { /* optional */ }
+      try { (await ctx.bizRef.collection('subs').get()).forEach(function (d) { var m = d.data(); people.push({ id: d.id, kind: 'sub', name: (m.name || 'Subcontractor') + (m.trade ? ' (' + m.trade + ')' : '') }); }); } catch (e) { /* optional */ }
+      try { (await ctx.bizRef.collection('jobs').get()).forEach(function (d) { if (d.id !== id && ACTIVE.indexOf(d.data().status) > -1) { var j = d.data(); j.id = d.id; others.push(j); } }); } catch (e) { /* optional */ }
+      var chosen = {}; (job.crew || []).forEach(function (c) { chosen[c.kind + ':' + c.id] = true; });
+      function range(j) { var a = j.startDate || '', b = j.targetEndDate || j.startDate || ''; return a ? [a, b < a ? a : b] : null; }
+      function clashes(list) {
+        var mine = range({ startDate: $('startDate').value, targetEndDate: $('targetEndDate').value }), out = [];
+        if (!mine) return out;
+        list.forEach(function (p) {
+          others.forEach(function (j) {
+            var r = range(j); if (!r || !(j.crew || []).some(function (c) { return c.id === p.id && c.kind === p.kind; })) return;
+            if (r[0] <= mine[1] && mine[0] <= r[1]) out.push(p.name + ' is also on ' + (j.customerName || '') + (j.title ? ' - ' + j.title : '') + ' (' + r[0] + (r[1] !== r[0] ? ' to ' + r[1] : '') + ')');
+          });
+        });
+        return out;
+      }
+      function picked() { return people.filter(function (p) { return chosen[p.kind + ':' + p.id]; }); }
+      function warn() {
+        var c = clashes(picked());
+        $('crewWarn').textContent = c.length ? 'Double-booked: ' + c.join('; ') + '.' : (picked().length && !($('startDate').value) ? 'Set a start date above so Vyro can check for double-booking.' : '');
+        $('crewWarn').className = c.length ? 'note late' : 'note';
+        $('crewSum').textContent = picked().length ? picked().map(function (p) { return p.name.split(' (')[0]; }).join(', ') : 'no one assigned';
+        return c;
+      }
+      var box = $('crewList'); box.textContent = '';
+      if (!people.length) box.appendChild(vyro.el('div', 'note', 'Add team members under Team, or subcontractors under Subcontractors, then assign them here.'));
+      people.forEach(function (p) {
+        var lab = vyro.el('label', 'item'); lab.style.cssText = 'display:flex;gap:10px;align-items:center;cursor:pointer';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!chosen[p.kind + ':' + p.id]; cb.style.cssText = 'width:22px;height:22px;flex:0 0 auto';
+        cb.addEventListener('change', function () { if (cb.checked) chosen[p.kind + ':' + p.id] = true; else delete chosen[p.kind + ':' + p.id]; warn(); });
+        lab.appendChild(cb); lab.appendChild(vyro.el('span', '', p.name + (p.kind === 'sub' ? ' - subcontractor' : ''))); box.appendChild(lab);
+      });
+      $('startDate').addEventListener('change', warn); $('targetEndDate').addEventListener('change', warn);
+      warn();
+      window.__crewCheck = function () { return clashes(picked()); };
+      $('crewSave').addEventListener('click', async function () {
+        var c = warn();
+        if (c.length && !confirm('Double-booked:\n' + c.join('\n') + '\n\nAssign anyway?')) return;
+        this.disabled = true;
+        try {
+          var crew = picked().map(function (p) { return { id: p.id, kind: p.kind, name: p.name.split(' (')[0] }; });
+          await jref.update({ crew: crew, updatedAt: vyro.stamp() }); job.crew = crew;
+          $('crewMsg').textContent = 'Saved.'; $('crewMsg').className = 'note ok';
+        } catch (e) { $('crewMsg').textContent = vyro.friendly(e); $('crewMsg').className = 'note err'; }
+        this.disabled = false;
+      });
+    })();
+
     // ---------- save progress ----------
     $('saveJob').addEventListener('click', async function () {
       var btn = this, st = $('status').value, jobWas = job.status;
+      try { var cc = window.__crewCheck ? window.__crewCheck() : []; if (cc.length && !confirm('These dates double-book your crew:\n' + cc.join('\n') + '\n\nSave anyway?')) return; } catch (e) { /* optional */ }
       btn.disabled = true; jmsg('Saving...');
       try {
         var data = {
@@ -329,6 +393,10 @@
       $('cAll').textContent = vutil.fmt(costAll); $('costSum').textContent = vutil.fmt(costAll) + ' spent';
       $('cExp').textContent = vutil.fmt(expected); if (expected < 0) $('cExp').className = 'late';
       $('cMargin').textContent = job.contractCents ? Math.round(expected / job.contractCents * 100) + '%' : '-';
+      if (job.contractCents && costAll >= job.contractCents * 0.8) {
+        var pw = vyro.el('div', 'note late', costAll >= job.contractCents ? 'Over budget: costs logged are ' + Math.round(costAll / job.contractCents * 100) + '% of the job price. You are losing money on this job unless more is billed.' : 'Watch this job: costs logged are already ' + Math.round(costAll / job.contractCents * 100) + '% of the job price.');
+        $('cMargin').parentNode.parentNode.appendChild(pw);
+      }
       var cash = paidIn - costPaid;
       $('cCash').textContent = vutil.fmt(cash); if (cash < 0) $('cCash').className = 'late';
     } catch (e) { $('err').textContent = vyro.friendly(e); }

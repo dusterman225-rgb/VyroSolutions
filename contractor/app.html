@@ -102,6 +102,9 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/compose.js"></script>
+<script src="js/reminders.js"></script>
+<script src="js/daily.js"></script>
 <script src="js/calendar.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/public.js"></script>
@@ -155,7 +158,7 @@
     } catch (e) { /* best effort; needs the latest Firestore rules */ }
 
     var n = { newLeads: 0, staleLeads: 0, due: 0, sent: 0, jobs: 0, owed: 0, over: 0, bills: 0, billsOver: 0, unread: 0 }, failed = false;
-    var today = vutil.todayStr(), now = Date.now();
+    var today = vutil.todayStr(), now = Date.now(), jobCost = {}, activeJobs = [];
 
     await Promise.all([
       (async function () {
@@ -176,7 +179,7 @@
       (async function () {
         try {
           (await ctx.bizRef.collection('jobs').get()).forEach(function (d) {
-            var s = d.data().status; if (s === 'Not Started' || s === 'In Progress' || s === 'On Hold') n.jobs++;
+            var s = d.data().status; if (s === 'Not Started' || s === 'In Progress' || s === 'On Hold') { n.jobs++; var jj = d.data(); jj.id = d.id; activeJobs.push(jj); }
           });
         } catch (e) { failed = true; }
       })(),
@@ -194,8 +197,10 @@
       (async function () {
         if (!canMoney) return;
         try {
-          (await ctx.bizRef.collection('expenses').where('status', '==', 'Unpaid').get()).forEach(function (d) {
-            var x = d.data(); n.bills += x.amountCents || 0; if (x.dueDate && x.dueDate < today) n.billsOver++;
+          (await ctx.bizRef.collection('expenses').get()).forEach(function (d) {
+            var x = d.data();
+            if (x.status === 'Unpaid') { n.bills += x.amountCents || 0; if (x.dueDate && x.dueDate < today) n.billsOver++; }
+            if (x.jobId) jobCost[x.jobId] = (jobCost[x.jobId] || 0) + (x.amountCents || 0);
           });
         } catch (e) { failed = true; }
       })(),
@@ -207,6 +212,14 @@
     if (n.unread) { $('msgBanner').style.display = 'block'; $('msgBannerT').textContent = n.unread + ' new customer message' + (n.unread === 1 ? '' : 's'); $('msgBannerS').textContent = 'Tap to read and reply.'; }
     if (n.unread) { ['bMsg', 'bMsg2'].forEach(function (id) { $(id).textContent = n.unread; $(id).style.display = 'inline-block'; }); }
 
+    // jobs where the costs logged are close to or past the job price
+    var watch = [];
+    if (canMoney) activeJobs.forEach(function (j) {
+      var c = jobCost[j.id] || 0; if (!j.contractCents || c < j.contractCents * 0.8) return;
+      watch.push([(j.customerName || 'Job') + (j.title ? ' - ' + j.title : ''), Math.round(c / j.contractCents * 100) + '% spent', 'job.html?id=' + j.id, c >= j.contractCents]);
+    });
+    watch.sort(function (a, b) { return (b[3] ? 1 : 0) - (a[3] ? 1 : 0); });
+
     // only show what needs attention
     var groups = [
       ['Messages', [
@@ -217,6 +230,7 @@
         n.over > 0 && ['Overdue invoices', n.over, 'invoices.html', true],
         n.bills > 0 && ['Bills to pay', vutil.fmt(n.bills) + (n.billsOver ? ' (' + n.billsOver + ' overdue)' : ''), 'expenses.html', n.billsOver > 0]
       ]],
+      ['Profit watch (costs logged vs job price)', watch],
       ['Work', [
         n.jobs > 0 && ['Active jobs', n.jobs, 'jobs.html', false],
         n.sent > 0 && canMoney && ['Estimates waiting for a reply', n.sent, 'estimates.html', false]
@@ -226,6 +240,7 @@
         n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
       ]]
     ];
+    try { if (window.vdaily) vdaily.run(ctx); } catch (e) { /* daily list is optional */ }
     var box = $('attBody'); box.textContent = ''; var any = false;
     groups.forEach(function (g) {
       var rows = g[1].filter(Boolean); if (!rows.length) return; any = true;

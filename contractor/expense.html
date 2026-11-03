@@ -21,6 +21,9 @@
   <form id="form" autocomplete="off">
     <div class="card">
       <h2>What was it?</h2>
+      <button class="btn ghost" id="scanBtn" type="button">Scan a receipt (photo)</button>
+      <input id="scanFile" type="file" accept="image/*" capture="environment" style="display:none">
+      <div class="note" id="scanMsg"></div>
       <label class="field"><span>Description</span><input id="desc" type="text" maxlength="200" placeholder="Lumber, 2x4s"></label>
       <label class="field"><span>Vendor (who you paid)</span><input id="vendor" type="text" maxlength="120" placeholder="Home Depot"></label>
       <label class="field"><span>Category</span>
@@ -124,6 +127,41 @@
       if (jobParam && jobs[jobParam]) $('job').value = jobParam;
     }
     syncStatus();
+
+    // ---- VyroAssistant: fill by voice, and scan a receipt photo ----
+    function pickJob(hint) {
+      hint = String(hint || '').toLowerCase().trim(); if (!hint) return;
+      var hit = Object.keys(jobs).filter(function (k) { var j = jobs[k]; var t = ((j.customerName || '') + ' ' + (j.title || '')).toLowerCase(); return t.indexOf(hint) > -1 || hint.indexOf((j.customerName || '').toLowerCase()) > -1 && (j.customerName || ''); });
+      if (hit.length === 1) $('job').value = hit[0];
+    }
+    function applyExpense(f) {
+      if (f.description) $('desc').value = f.description; if (f.vendor) $('vendor').value = f.vendor;
+      if (f.category) $('category').value = f.category; if (f.amountDollars) $('amount').value = Number(f.amountDollars).toFixed(2);
+      if (f.date) { $('date').value = f.date; $('paidOn').value = f.date; }
+      if (f.status) { $('status').value = f.status; syncStatus(); }
+      if (f.dueDate) $('dueDate').value = f.dueDate; if (f.notes) $('notes').value = f.notes; pickJob(f.jobHint);
+    }
+    window.VYRO_FILL = { kind: 'expense', apply: applyExpense, anchor: '#form', hint: 'For example: 86 dollars at Home Depot for lumber for the Smith job, still unpaid' };
+    if (window.vvoice) vvoice.attachFill();
+    $('scanBtn').addEventListener('click', function () {
+      if (!window.vvoice) { $('scanMsg').textContent = 'Voice and scanning are still loading. Try again in a moment.'; return; }
+      vvoice.gate(function () { $('scanFile').click(); });
+    });
+    $('scanFile').addEventListener('change', async function () {
+      var file = this.files && this.files[0]; this.value = ''; if (!file) return;
+      var m = $('scanMsg'); m.textContent = 'Reading your receipt...'; m.className = 'note';
+      try {
+        var r = await vvoice.readReceipt(file);
+        if (!r) { m.textContent = ''; return; }
+        var total = r.totalCents || ((r.subtotalCents || 0) + (r.taxCents || 0));
+        var names = (r.lines || []).slice(0, 3).map(function (l) { return l.name; }).join(', ');
+        if (r.vendor) $('vendor').value = r.vendor;
+        if (total) $('amount').value = (total / 100).toFixed(2);
+        if (r.date) { $('date').value = r.date; $('paidOn').value = r.date; }
+        if (!$('desc').value.trim()) $('desc').value = (names || 'Receipt').slice(0, 200);
+        m.textContent = 'Read from your photo. Check the amount, date and category before saving.' + (r.unclear && r.unclear.length ? ' Hard to read: ' + r.unclear.join(', ') + '.' : ''); m.className = 'note ok';
+      } catch (e) { m.textContent = e.message || 'Could not read that receipt.'; m.className = 'note err'; }
+    });
 
     function goBack(jobId) { location.href = (backJob && jobId) ? 'job.html?id=' + jobId : 'expenses.html'; }
     if (backJob && (jobParam || (ex && ex.jobId))) {

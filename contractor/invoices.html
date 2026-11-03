@@ -25,6 +25,11 @@
   </div>
   <span id="sInv" style="display:none"></span>
 
+  <details class="sec" id="chase" style="display:none" open>
+    <summary>Chase today <small id="chaseSum"></small></summary>
+    <div class="in"><div class="note" style="text-align:left">Overdue invoices that have not been chased in the last 3 days. The wording gets firmer the longer it is late. Read it, then send it yourself.</div><div id="chaseList"></div></div>
+  </details>
+
   <div class="tabs" id="tabs"></div>
   <div class="card" style="margin-top:0">
     <input class="search" id="q" type="search" placeholder="Search customer, project or number" autocomplete="off">
@@ -41,6 +46,8 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/compose.js"></script>
+<script src="js/reminders.js"></script>
 <script>window.VYRO_STAFF_ONLY = true;</script>
 <script src="js/auth.js"></script>
 <script>
@@ -111,10 +118,38 @@
       });
     }
 
+
+    // ---------- who to chase today ----------
+    function renderChase() {
+      var box = $('chaseList'); box.textContent = '';
+      var due = all.filter(function (i) {
+        if (!(i.status === 'Sent' || i.status === 'Partially Paid') || !i.dueDate || i.dueDate >= today) return false;
+        var lr = i.lastReminderAt && i.lastReminderAt.toMillis ? i.lastReminderAt.toMillis() : 0;
+        return Date.now() - lr > 3 * 86400000;
+      }).sort(function (a, b) { return a.dueDate < b.dueDate ? -1 : 1; });
+      $('chase').style.display = due.length ? 'block' : 'none';
+      $('chaseSum').textContent = due.length ? due.length + ' to chase' : '';
+      due.forEach(function (i) {
+        var p = vremind.invoice(ctx, i, today), late = p.late, t = p;
+        var row = vyro.el('div', 'item'); row.style.display = 'block';
+        var top = vyro.el('b', '', (i.customerName || '') + ' \u00b7 ' + vutil.fmt((i.totalCents || 0) - (i.paidCents || 0)));
+        row.appendChild(top);
+        row.appendChild(vyro.el('small', late > 30 ? 'late' : '', (i.number || '') + ' \u00b7 ' + late + ' day' + (late === 1 ? '' : 's') + ' late \u00b7 ' + p.tone + (i.reminders ? ' \u00b7 reminded ' + i.reminders + ' time' + (i.reminders === 1 ? '' : 's') : '')));
+        var marked = false;
+        function mark() {
+          if (marked) return; marked = true;
+          try { ctx.bizRef.collection('invoices').doc(i.id).update({ lastReminderAt: vyro.stamp(), reminders: (i.reminders || 0) + 1 }).then(function () { i.lastReminderAt = { toMillis: function () { return Date.now(); } }; i.reminders = (i.reminders || 0) + 1; setTimeout(renderChase, 1500); }).catch(function () { /* optional */ }); } catch (e) { /* optional */ }
+        }
+        var acts = vremind.buttons(p, mark);
+        var op = vyro.el('a', 'btn ghost', 'Open invoice'); op.href = 'invoice.html?id=' + i.id; acts.appendChild(op);
+        row.appendChild(acts); box.appendChild(row);
+      });
+    }
+
     try {
       var snap = await ctx.bizRef.collection('invoices').orderBy('createdAt', 'desc').get();
       all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
-      render();
+      render(); renderChase();
     } catch (e) { $('err').textContent = vyro.friendly(e); }
     $('q').addEventListener('input', render);
   });
