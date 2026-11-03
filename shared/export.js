@@ -40,5 +40,6 @@
     var lines = [cols.map(q).join(',')]; rows.forEach(function (r) { lines.push(cols.map(function (c) { return q(r[c]); }).join(',')); });
     save('vyro-' + name + '-' + stamp() + '.csv', lines.join('\n'), 'text/csv');
   }
-  window.vexport = { collect: collect, downloadJson: downloadJson, downloadCsv: downloadCsv, NAMES: NAMES };
+  async function one(ctx, name) { var s = await ctx.bizRef.collection(name).get(); return s.docs.map(function (d) { var x = plain(d.data()); x._id = d.id; return x; }); }
+  window.vexport = { one: one, collect: collect, downloadJson: downloadJson, downloadCsv: downloadCsv, NAMES: NAMES };
 })();

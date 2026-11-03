@@ -91,6 +91,7 @@
         var sr = await fetch(base + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify({ status: true, today: vutil.todayStr() }) });
         var sd = await sr.json();
         if (sd && sd.plan === false && !window.VYRO_ASSISTANT_FREE) { upgradeCard(sd.reason || 'not on this business\'s plan'); return; }
+        if (sd && sd.plan === true) { try { document.dispatchEvent(new Event('vyro-assistant-on')); } catch (ev) { /* optional */ } }
       } catch (pe) { /* could not check here; the first question will tell */ }
       if (await VyroConsent.has('assistant')) { ready = true; lock(false); greet(); return; }
       VyroConsent.show('assistant', $('log'), { bizId: bizId, name: vyro.who ? vyro.who(ctx) : '' }, function (res) {
