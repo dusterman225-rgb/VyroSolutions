@@ -56,6 +56,7 @@
             createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
           });
         }
+        try { var ar = await afterApproval(ctx, p.estimateId, Object.assign({}, e, { id: p.estimateId })); if (ar.customerId) e.customerId = ar.customerId; } catch (x) { /* optional */ }
         try { await jref.collection('updates').add({ text: 'Estimate ' + (e.number || '') + ' accepted online by ' + (p.acceptedBy || 'the customer'), by: 'Customer link', kind: 'status', createdAt: vyro.stamp() }); } catch (x) { /* optional */ }
         if (e.customerId) { try { await ctx.bizRef.collection('customers').doc(e.customerId).update({ archived: false, archivedAt: null }); } catch (x) { /* optional */ } }
         if (e.leadId) {
@@ -73,5 +74,43 @@
     return done;
   }
 
-  window.vpublic = { makeToken: makeToken, publishEstimate: publishEstimate, closeEstimate: closeEstimate, syncAccepted: syncAccepted };
+
+  // Runs the moment an estimate becomes Approved (by hand or accepted online): makes sure the customer record exists,
+  // links it to the estimate and job, then creates the customer's portal login and emails the invitation.
+  function loadPortalJs() {
+    if (window.vportal) return Promise.resolve(true);
+    return new Promise(function (res) {
+      var sc = document.createElement('script'); sc.src = '/contractor/js/portal.js';
+      sc.onload = function () { res(!!window.vportal); }; sc.onerror = function () { res(false); }; document.head.appendChild(sc);
+    });
+  }
+  async function afterApproval(ctx, estId, e) {
+    var out = { customerId: e.customerId || '', invited: false, reason: '' };
+    var name = (e.customerName || '').trim(), em = (e.customerEmail || '').trim();
+    try {
+      if (!out.customerId && name) {
+        if (em) { var f = await ctx.bizRef.collection('customers').where('email', '==', em).limit(1).get(); if (!f.empty) out.customerId = f.docs[0].id; }
+        if (!out.customerId) {
+          var cref = ctx.bizRef.collection('customers').doc();
+          await cref.set({ name: name, nameLower: name.toLowerCase(), phone: e.customerPhone || '', email: em, address: e.address || '', language: 'en', notes: '', fromEstimateId: estId, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp() });
+          out.customerId = cref.id;
+        }
+        try { await ctx.bizRef.collection('estimates').doc(estId).update({ customerId: out.customerId }); } catch (x) { /* optional */ }
+        try { await ctx.bizRef.collection('jobs').doc(estId).update({ customerId: out.customerId }); } catch (x) { /* optional */ }
+      }
+    } catch (x) { /* the Jobs page repairs a missing customer later */ }
+    try {
+      if (ctx.role !== 'employee' && await loadPortalJs()) {
+        var js = await ctx.bizRef.collection('jobs').doc(estId).get();
+        if (js.exists) {
+          var j = js.data(); j.id = estId; j.customerId = out.customerId || j.customerId || '';
+          var r = await vportal.ensure(ctx, estId, j);
+          out.invited = !!(r && r.ok && r.emailed); out.reason = r && !r.ok ? (r.reason || '') : '';
+        }
+      }
+    } catch (x) { out.reason = 'error'; }
+    return out;
+  }
+
+  window.vpublic = { afterApproval: afterApproval, makeToken: makeToken, publishEstimate: publishEstimate, closeEstimate: closeEstimate, syncAccepted: syncAccepted };
 })();

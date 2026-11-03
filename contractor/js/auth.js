@@ -321,6 +321,7 @@
         }
         try { var es = document.createElement('script'); es.src = '/shared/errlog.js'; es.onload = function () { try { window.vyroErr.install(ctx); } catch (x) {} }; document.head.appendChild(es); } catch (x) { /* problem log is optional */ }
         try { var ei = document.createElement('script'); ei.src = '/shared/idle.js'; ei.onload = function () { try { window.vyroIdle.start(ctx, function () { return signOut().then(function () { location.href = loginUrl(); }); }); } catch (x) {} }; document.head.appendChild(ei); } catch (x) { /* idle sign-out is optional */ }
+        try { var em = document.createElement('script'); em.src = '/contractor/js/menu.js'; em.onload = function () { try { window.vmenu.mount(ctx); } catch (x) { /* menu is optional */ } }; document.head.appendChild(em); } catch (x) { /* menu is optional */ }
         await cb(ctx);
       } catch (err) {
         if (err && err.code === 'vyro/no-business' && !/portal/.test(location.pathname)) { location.replace('portal.html'); return; }
