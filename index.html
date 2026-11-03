@@ -77,8 +77,8 @@
     <h3>Upgrades</h3>
     <ul>
       <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>Bring your own AI</b> (included with the VyroAssistant): already have your own AI account? Connect it to the VyroAssistant at no extra charge.</li>
-      <li><b>VyroAssistant</b> <span id="asPrice"></span>: an upgrade you add to a business. Ask questions about your own sales, stock, jobs and invoices, and get drafts of messages to customers. Read-only, and you accept a notice before first use.</li>
+      <li><b>VyroAssistant</b> is included with VyroContractor at no extra charge: ask questions about your own jobs, invoices and expenses, talk instead of typing, scan receipts, and get efficiency, savings and tax-prep reports. For VyroRestaurant, VyroTakeout and VyroRetail it is an upgrade (<span id="asPrice"></span>). It only reads your records, and you accept a notice before first use.</li>
+      <li><b>Bring your own AI</b> is included with the VyroAssistant: already have your own AI account? Connect it at no extra charge.</li>
     </ul>
   </div>
 </section>
@@ -152,7 +152,7 @@
   } else { ex.style.display = 'none'; }
   $('ppPrice').textContent = '(+$5 per month)';
   var ap = window.VYRO_PRICES && window.VYRO_PRICES.assistant;
-  $('asPrice').textContent = typeof ap === 'number' ? '(+$' + ap + ' per month per business)' : '(price announced at launch)';
+  $('asPrice').textContent = typeof ap === 'number' ? '+$' + ap + ' per month per business' : 'price announced at launch';
   // Signed-in visitors get a shortcut instead of the sign-up buttons.
   try {
     if (window.firebase && window.VYRO_FIREBASE_CONFIG) {
