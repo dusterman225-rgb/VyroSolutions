@@ -25,12 +25,10 @@
       <summary>Customer <small id="custSum"></small></summary>
       <div class="in">
       <label class="field"><span>Customer</span><select id="cust"><option value="">Choose a customer...</option></select></label>
-      <label class="field" id="nameRow"><span>Name (no customer record yet)</span><input id="cname" type="text" maxlength="120"></label>
+      <label class="field" id="nameRow"><span>Customer name</span><input id="cname" type="text" maxlength="120"></label>
       <div id="newCustBox">
         <label class="field"><span>Customer email</span><input id="cemail" type="email" maxlength="120" autocomplete="off"></label>
         <label class="field"><span>Customer phone</span><input id="cphone" type="tel" maxlength="40" autocomplete="off"></label>
-        <button class="btn ghost" id="mkCust" type="button">Save as a customer</button>
-        <div class="note" id="mkMsg"></div>
       </div>
       <a class="link" id="viewCust" href="#" style="display:none">View customer page</a>
       <label class="field"><span>Job address</span><textarea id="caddr" rows="2" maxlength="300"></textarea></label>
@@ -92,21 +90,16 @@
     </div>
     <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
       <div class="card" style="max-width:420px;width:100%;margin:auto">
-        <h2>Was the email sent?</h2>
-        <p>Press Send in your mail app, then check it shows in <b>Sent</b>, not Outbox.</p>
+        <h2>Send by email</h2>
+        <p>Tap <b>Open my email app</b>. It opens with the customer, subject and message already filled in. Press Send there, then come back and answer below.</p>
+        <a class="btn" id="askAgain" href="#">Open my email app</a>
+        <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+        <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
+        <div class="note" id="askMsg"></div>
+        <h2 style="margin-top:18px">Was it sent?</h2>
         <button class="btn" id="askYes" type="button">Yes, it was sent</button>
         <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
         <button class="btn ghost" id="askNo" type="button">No, not yet</button>
-        <details class="more">
-          <summary>Having trouble?</summary>
-          <div class="in">
-            <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
-            <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
-            <button class="btn ghost" id="askShare" type="button">Share it (any app)</button>
-            <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
-          </div>
-        </details>
-        <div class="note" id="askMsg"></div>
       </div>
     </div>
   </form>
@@ -151,13 +144,21 @@
       var desc = vyro.el('input'); desc.type = 'text'; desc.maxLength = 200; desc.placeholder = 'Description'; desc.value = it.description || '';
       r1.appendChild(type); r1.appendChild(desc); row.appendChild(r1);
 
+      // Labor can be priced by the hour (hours x rate) or as one flat total.
+      var mrow = vyro.el('div', 'field'); mrow.style.margin = '8px 0 0';
+      mrow.appendChild(vyro.el('small', '', 'How is this labor priced?'));
+      var mode = vyro.el('select');
+      [['hourly', 'By the hour (rate x hours)'], ['flat', 'One flat total']].forEach(function (m) { var o = vyro.el('option', '', m[1]); o.value = m[0]; mode.appendChild(o); });
+      mode.value = it.laborMode === 'flat' ? 'flat' : 'hourly';
+      mrow.appendChild(mode); row.appendChild(mrow);
+
       var r = vyro.el('div', 'r');
-      var w1 = vyro.el('div'); w1.appendChild(vyro.el('small', '', 'Qty'));
+      var w1 = vyro.el('div'); var l1 = vyro.el('small', '', 'Qty'); w1.appendChild(l1);
       var qty = vyro.el('input'); qty.type = 'text'; qty.inputMode = 'decimal'; qty.value = it.qty == null ? 1 : it.qty; w1.appendChild(qty);
-      var w2 = vyro.el('div'); w2.appendChild(vyro.el('small', '', 'Unit price $'));
+      var w2 = vyro.el('div'); var l2 = vyro.el('small', '', 'Unit price $'); w2.appendChild(l2);
       var price = vyro.el('input'); price.type = 'text'; price.inputMode = 'decimal'; price.placeholder = '0.00';
       price.value = it.unitCents ? (it.unitCents / 100).toFixed(2) : ''; w2.appendChild(price);
-      var w3 = vyro.el('div'); w3.appendChild(vyro.el('small', '', 'Amount'));
+      var w3 = vyro.el('div'); var l3 = vyro.el('small', '', 'Amount'); w3.appendChild(l3);
       var amt = vyro.el('div', 'amt', '$0.00'); w3.appendChild(amt);
       r.appendChild(w1); r.appendChild(w2); r.appendChild(w3); row.appendChild(r);
 
@@ -165,9 +166,24 @@
       rm.addEventListener('click', function () { row.remove(); recalc(); });
       row.appendChild(rm);
 
+      function labels() {
+        var labor = type.value === 'Labor';
+        mrow.style.display = labor ? 'block' : 'none';
+        if (labor && mode.value === 'flat') { w1.style.display = 'none'; l2.textContent = 'Flat labor total $'; }
+        else if (labor) { w1.style.display = ''; l1.textContent = 'Approx. hours'; l2.textContent = 'Rate $ per hour'; l3.textContent = 'Total labor'; }
+        else { w1.style.display = ''; l1.textContent = 'Qty'; l2.textContent = 'Unit price $'; l3.textContent = 'Amount'; }
+        if (labor && mode.value === 'flat') l3.textContent = 'Total labor';
+      }
+      labels();
+      mode.addEventListener('change', function () { labels(); recalc(); });
+      type.addEventListener('change', labels);
+
       [type, desc, qty, price].forEach(function (x) { x.addEventListener('input', recalc); });
       row._read = function () {
-        return { type: type.value, description: desc.value.trim(), qty: parseFloat(qty.value) || 0, unitCents: vutil.toCents(price.value) };
+        var flat = type.value === 'Labor' && mode.value === 'flat';
+        var o = { type: type.value, description: desc.value.trim(), qty: flat ? 1 : (parseFloat(qty.value) || 0), unitCents: vutil.toCents(price.value) };
+        if (type.value === 'Labor') o.laborMode = mode.value;
+        return o;
       };
       row._amt = amt;
       $('lines').appendChild(row);
@@ -229,22 +245,7 @@
       syncCustomerUi();
     }
     $('cust').addEventListener('change', pickCustomer);
-    // Make a customer record from what is typed on this estimate, then pick it.
-    $('mkCust').addEventListener('click', async function () {
-      var name = $('cname').value.trim(), btn = this, mm = $('mkMsg');
-      if (!name) { mm.textContent = 'Type the customer name first.'; mm.className = 'note err'; return; }
-      btn.disabled = true; mm.textContent = 'Saving...'; mm.className = 'note';
-      try {
-        var ref = ctx.bizRef.collection('customers').doc();
-        var c = { name: name, nameLower: name.toLowerCase(), phone: $('cphone').value.trim(), email: $('cemail').value.trim().toLowerCase(),
-          address: $('caddr').value.trim(), language: 'en', notes: '', fromEstimate: true, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp() };
-        await ref.set(c);
-        customers[ref.id] = c; var o = vyro.el('option', '', c.name); o.value = ref.id; $('cust').appendChild(o); $('cust').value = ref.id;
-        syncCustomerUi(); mm.textContent = ''; vyro.audit(ctx, 'customer created from estimate', c.name);
-        say('Customer saved. Their details will fill in on future estimates.', '');
-      } catch (e) { mm.textContent = vyro.friendly(e); mm.className = 'note err'; }
-      btn.disabled = false;
-    });
+    // Customers are created automatically when an estimate is approved.
 
     // ---------- load ----------
     function fill(e) {
@@ -407,6 +408,7 @@
               }
             }
           } catch (e) { /* estimate is saved; the Jobs page will create a missing job */ }
+          try { await vpublic.afterApproval(ctx, savedId, Object.assign({}, data, { id: savedId })); } catch (e) { /* the Jobs page repairs this later */ }
           location.replace('job.html?id=' + savedId); return;
         }
         if (st === 'Voided' && status === 'Approved') {
@@ -467,16 +469,15 @@
     function askSent() {
       $('askModal').style.display = 'flex';
       $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
-      openEmail();
+      var p0 = emailParts(); afterEmail(p0); $('askAgain').href = vcompose.href(p0);
     }
     function markDone() { if (status === 'Draft') save('Sent'); else location.replace('estimate.html?id=' + est.id); }
     $('askYes').addEventListener('click', markDone);
     $('askHand').addEventListener('click', markDone);
     $('askNo').addEventListener('click', function () { location.replace('estimate.html?id=' + est.id); });
-    $('askAgain').addEventListener('click', openEmail);
+    $('askAgain').addEventListener('click', function () { var p1 = emailParts(); afterEmail(p1); this.href = vcompose.href(p1); });
     $('askGmail').addEventListener('click', openGmail);
     $('askCopy').addEventListener('click', copyEmail);
-    $('askShare').addEventListener('click', async function () { var ok = await vcompose.share(emailParts()); if (!ok) ask(vcompose.canShare ? 'Sharing was cancelled.' : 'Sharing is not available in this browser. Use Copy the email text.', 'err'); });
     $('bApprove').addEventListener('click', function () { save('Approved'); });
     $('bReject').addEventListener('click', function () { save('Rejected'); });
     $('bReopen').addEventListener('click', function () { save('Draft'); });

@@ -22,7 +22,19 @@
     <div id="list"></div>
     <div class="note" id="empty"></div>
   </div>
-  <details class="sec" id="formSec" open>
+  <details class="sec" id="useSec">
+    <summary id="useTitle">Use a subcontractor on a job</summary>
+    <div class="in">
+      <div class="note" style="text-align:left">Creates the bill for this job (so it counts in the job's costs) and a draft change order describing the subcontractor's work and price. You read the change order, then share it to the customer's portal.</div>
+      <label class="field"><span>Subcontractor</span><select id="useSub"></select></label>
+      <label class="field"><span>Job</span><select id="useJob"></select></label>
+      <label class="field"><span>What they will do</span><textarea id="useScope" rows="3" maxlength="600" placeholder="Rewire the kitchen: new panel, 6 circuits"></textarea></label>
+      <label class="field"><span>Their price ($)</span><input id="usePrice" type="text" inputmode="decimal" placeholder="0.00"></label>
+      <button class="btn" id="useGo" type="button">Create bill and change order</button>
+      <div class="note" id="useMsg"></div>
+    </div>
+  </details>
+  <details class="sec" id="formSec">
     <summary id="formTitle">Add a subcontractor</summary>
     <div class="in">
       <label class="field"><span>Name or company</span><input id="name" maxlength="120"></label>
@@ -48,6 +60,8 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/contract-default.js"></script>
+<script src="js/contracts.js"></script>
 <script>window.VYRO_STAFF_ONLY = true;</script>
 <script src="js/auth.js"></script>
 <script>
@@ -71,6 +85,9 @@
         left.appendChild(vyro.el('small', '', 'Insurance: ' + (status(r.insuranceExpires) || 'no date')));
         if (r.phone) { var a = vyro.el('a', '', r.phone); a.href = 'tel:' + r.phone; left.appendChild(a); }
         row.appendChild(left);
+        var ae = vyro.el('a', 'btn ghost', 'Add expense'); ae.href = 'expense.html?sub=' + encodeURIComponent(r.name || '');
+        var uj = vyro.el('button', 'btn ghost', 'Use on a job'); uj.type = 'button'; uj.addEventListener('click', function () { openUse(r.id); });
+        row.appendChild(ae); row.appendChild(uj);
         var e = vyro.el('button', 'btn ghost', 'Edit'); e.type = 'button'; e.addEventListener('click', function () { edit(r); });
         var x = vyro.el('button', 'btn ghost', 'Delete'); x.type = 'button';
         x.addEventListener('click', async function () { if (!confirm('Delete ' + r.name + '?')) return; try { await col.doc(r.id).delete(); load(); } catch (er) { $('err').textContent = vyro.friendly(er); } });
@@ -85,6 +102,48 @@
       $('formSec').open = true; window.scrollTo(0, document.body.scrollHeight);
     }
     $('cancel').addEventListener('click', function () { edit(null); });
+
+    // ---- use a subcontractor on a job: bill + change order ----
+    var jobsList = [];
+    async function openUse(subId) {
+      var us = $('useSub'); us.textContent = '';
+      rows.forEach(function (r) { var o = vyro.el('option', '', r.name + (r.trade ? ' (' + r.trade + ')' : '')); o.value = r.id; us.appendChild(o); });
+      if (subId) us.value = subId;
+      var uj = $('useJob'); uj.textContent = '';
+      try {
+        var act = ['Not Started', 'In Progress', 'On Hold'];
+        jobsList = (await ctx.bizRef.collection('jobs').get()).docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (j) { return act.indexOf(j.status) > -1; });
+      } catch (e) { jobsList = []; }
+      jobsList.forEach(function (j) { var o = vyro.el('option', '', (j.customerName || '') + ' - ' + (j.title || j.estimateNumber || 'Job')); o.value = j.id; uj.appendChild(o); });
+      $('useMsg').textContent = jobsList.length ? '' : 'You need an active job first (a job is created when an estimate is approved).'; $('useMsg').className = 'note';
+      $('useSec').open = true; $('useSec').scrollIntoView({ behavior: 'smooth' });
+    }
+    $('useSec').addEventListener('toggle', function () { if (this.open && !$('useSub').options.length) openUse(null); });
+    $('useGo').addEventListener('click', async function () {
+      var sid = $('useSub').value, jid = $('useJob').value, scope = $('useScope').value.trim(), cents = vutil.toCents($('usePrice').value);
+      var sub = rows.filter(function (r) { return r.id === sid; })[0], job = jobsList.filter(function (j) { return j.id === jid; })[0];
+      if (!sub || !job) { $('useMsg').textContent = 'Pick a subcontractor and a job.'; $('useMsg').className = 'note err'; return; }
+      if (!scope || cents <= 0) { $('useMsg').textContent = 'Describe the work and enter their price.'; $('useMsg').className = 'note err'; return; }
+      this.disabled = true; $('useMsg').textContent = 'Creating...'; $('useMsg').className = 'note';
+      try {
+        await ctx.bizRef.collection('expenses').add({
+          description: ('Subcontractor: ' + sub.name + ' - ' + scope).slice(0, 200), vendor: sub.name, category: 'Subcontractor',
+          amountCents: cents, date: today, reference: '', jobId: jid, jobLabel: (job.customerName || '') + (job.title ? ' \u00b7 ' + job.title : ''),
+          status: 'Unpaid', dueDate: '', paidOn: '', method: '', notes: scope, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
+        });
+        var body = (window.VYRO_CHANGE_ORDER_DEFAULT || {}).body || '';
+        try { var ts = await ctx.bizRef.collection('templates').doc('change-order').get(); if (ts.exists && ts.data().body) body = ts.data().body; } catch (e) { /* use the starter */ }
+        var f = await vcontract.fill(ctx, jid, body);
+        var text = f.text.replace(/\[Describe exactly what is being added[^\]]*\]/, scope + '\nThis work will be done by a subcontractor, ' + sub.name + (sub.trade ? ' (' + sub.trade + ')' : '') + ', under the Contractor\'s supervision.')
+          .replace('This change order: [add / deduct] [amount]', 'This change order: add ' + vutil.fmt(cents));
+        var ref = await ctx.bizRef.collection('contracts').add({
+          jobId: jid, customerName: job.customerName || '', title: 'Change order (subcontractor) - ' + (job.title || job.estimateNumber || 'Job'),
+          templateName: 'Change order (subcontractor)', body: text, status: 'Draft', createdAt: vyro.stamp(), updatedAt: vyro.stamp(), createdBy: ctx.user.uid
+        });
+        vyro.audit(ctx, 'subcontractor added to job', sub.name + ' / ' + (job.title || jid));
+        location.href = 'contract.html?id=' + ref.id;
+      } catch (e) { $('useMsg').textContent = vyro.friendly(e); $('useMsg').className = 'note err'; this.disabled = false; }
+    });
     $('save').addEventListener('click', async function () {
       var n = $('name').value.trim();
       if (!n) { $('msg').textContent = 'Enter a name.'; $('msg').className = 'note err'; return; }

@@ -15,7 +15,7 @@
 <div class="wrap">
   <div class="brand">
     <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
-    <div class="tag">Documents</div>
+    <div class="tag">Contracts</div>
   </div>
 
   <div id="mainView">
@@ -23,7 +23,7 @@
       <h2>Contracts</h2>
       <div id="cList"></div>
       <div class="note" id="cNone"></div>
-      <button class="btn" id="newC" type="button">New contract, change order or waiver</button>
+      <div class="note">Contracts are made from each job. Open a job and tap Create contract.</div>
     </div>
 
     <details class="sec">
@@ -74,7 +74,7 @@
   function cls(s) { return (s || '').replace(/ /g, ''); }
 
   vyro.start(async function (ctx) {
-    if (ctx.role === 'employee') { $('mainView').style.display = 'none'; $('err').textContent = 'Only the owner or a supervisor can use Documents.'; return; }
+    if (ctx.role === 'employee') { $('mainView').style.display = 'none'; $('err').textContent = 'Only the owner or a supervisor can use Contracts.'; return; }
     var isOwner = ctx.role === 'owner';
     var tplCol = ctx.bizRef.collection('templates'), conCol = ctx.bizRef.collection('contracts');
     var templates = [], editingId = null;
@@ -115,16 +115,41 @@
     async function loadContracts() {
       var s = await conCol.get();
       var list = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      var jobCust = {}, custs = {};
+      try { (await ctx.bizRef.collection('jobs').get()).forEach(function (d) { jobCust[d.id] = d.data().customerId || ''; }); } catch (e) { /* optional */ }
+      try { (await ctx.bizRef.collection('customers').get()).forEach(function (d) { custs[d.id] = d.data(); }); } catch (e) { /* optional */ }
       list.sort(function (a, b) { return (b.createdAt ? b.createdAt.toMillis() : 0) - (a.createdAt ? a.createdAt.toMillis() : 0); });
       $('cNone').textContent = list.length ? '' : 'No contracts yet.';
-      $('cList').textContent = '';
+      var box = $('cList'); box.textContent = '';
+      // group by customer; contracts of archived (removed) customers go to the Archived customers section
+      var groups = {}, arch = {};
       list.forEach(function (c) {
-        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
-        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(c.status), c.status)); top.appendChild(document.createTextNode(c.title || 'Contract'));
-        left.appendChild(top); left.appendChild(vyro.el('small', '', c.customerName || ''));
-        left.addEventListener('click', function () { location.href = 'contract.html?id=' + c.id; });
-        row.appendChild(left); $('cList').appendChild(row);
+        var cid = jobCust[c.jobId] || '', cu = custs[cid];
+        var name = (cu && cu.name) || c.customerName || 'No customer';
+        var key = (cid || name).toLowerCase();
+        var target = cu && cu.archived ? arch : groups;
+        (target[key] = target[key] || { name: name, items: [] }).items.push(c);
       });
+      function row(c, parent) {
+        var r = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(c.status), c.status)); top.appendChild(document.createTextNode(c.title || 'Contract'));
+        left.appendChild(top);
+        left.addEventListener('click', function () { location.href = 'contract.html?id=' + c.id; });
+        r.appendChild(left); parent.appendChild(r);
+      }
+      function paint(g, parent) {
+        Object.keys(g).sort(function (a, b) { return g[a].name.toLowerCase() < g[b].name.toLowerCase() ? -1 : 1; }).forEach(function (k) {
+          var d = vyro.el('details', 'sec'); d.style.marginTop = '8px';
+          d.appendChild(vyro.el('summary', '', g[k].name + ' (' + g[k].items.length + ')'));
+          var inn = vyro.el('div', 'in'); g[k].items.forEach(function (c) { row(c, inn); }); d.appendChild(inn); parent.appendChild(d);
+        });
+      }
+      paint(groups, box);
+      if (Object.keys(arch).length) {
+        var ad = vyro.el('details', 'sec'); ad.style.marginTop = '14px';
+        ad.appendChild(vyro.el('summary', '', 'Archived customers'));
+        var ai = vyro.el('div', 'in'); paint(arch, ai); ad.appendChild(ai); box.appendChild(ad);
+      }
     }
 
     function openTemplate(t) {
@@ -164,7 +189,6 @@
       $('nMsg').textContent = jobs.length ? '' : 'You need a job first (a job is created when an estimate is approved).';
       show('newView');
     }
-    $('newC').addEventListener('click', openNew);
     $('nCancel').addEventListener('click', function () { show('mainView'); });
     $('nGo').addEventListener('click', async function () {
       var jid = $('nJob').value, tid = $('nTpl').value;

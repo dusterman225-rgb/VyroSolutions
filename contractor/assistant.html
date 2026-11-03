@@ -58,6 +58,18 @@
   <div id="log"></div>
   <div class="chips" id="chips"></div>
   <div class="note err" id="err"></div>
+  <details class="byo" id="toolsBox" style="display:none"><summary>Reports and exports</summary><div class="in">
+    <div class="note" style="text-align:left">Ask the assistant to write a report from your records, or save a spreadsheet of them on this phone. Nothing is sent anywhere.</div>
+    <button class="btn ghost" id="rEff" type="button">Efficiency report</button>
+    <button class="btn ghost" id="rSave" type="button">Savings ideas</button>
+    <button class="btn ghost" id="rTax" type="button">Tax prep summary</button>
+    <a class="btn ghost" id="rTaxPage" href="finances-report.html?period=thisYear">Prepare tax report (printable)</a>
+    <button class="btn ghost" id="xCon" type="button">Export all contracts</button>
+    <button class="btn ghost" id="xExp" type="button">Export all expenses and bills</button>
+    <button class="btn ghost" id="xInv" type="button">Export all invoices</button>
+    <button class="btn ghost" id="xAll" type="button">Save everything (one file)</button>
+    <div class="note" id="xMsg" style="text-align:left"></div>
+  </div></details>
   <details class="byo"><summary id="byoSum">Use your own AI (optional)</summary><div class="in">
     <div class="note" style="text-align:left">Already pay for an AI service? Use it here at no extra Vyro charge. Your key is kept on this phone only and is never saved by Vyro. Each person on your team adds their own on their own phone.</div>
     <select id="byoProv" aria-label="AI service"></select>
@@ -83,9 +95,32 @@
 <script src="js/auth.js"></script>
 <script src="../shared/aiconsent.js"></script>
 <script src="../shared/assistant-ui.js"></script>
+<script src="../shared/export.js"></script>
 <script>
   vyro.start(async function (ctx) {
     var ok = true;
+    var $ = function (id) { return document.getElementById(id); };
+    if (ctx.role === 'owner' || ctx.role === 'supervisor') {
+      document.addEventListener('vyro-assistant-on', function () { $('toolsBox').style.display = 'block'; });
+      function ask(t) { $('q').value = t; $('send').click(); $('toolsBox').open = false; }
+      $('rEff').addEventListener('click', function () { ask('Write an efficiency report for my business: where I am losing time or money, which jobs have the weakest margins, and what to change first.'); });
+      $('rSave').addEventListener('click', function () { ask('Look at my expenses and suggest specific ways to save money. Name the categories, vendors or jobs involved.'); });
+      $('rTax').addEventListener('click', function () { ask('Prepare a tax prep summary for this year: income, expenses by category with the matching Schedule C line, sales tax collected, anything missing, and questions to ask my accountant.'); });
+      function say(t, c) { $('xMsg').textContent = t; $('xMsg').className = 'note ' + (c || ''); }
+      async function csv(name, label) {
+        say('Reading ' + label + '...');
+        try { var rows = await vexport.one(ctx, name); if (!rows.length) { say('There are no ' + label + ' yet.'); return; } vexport.downloadCsv(ctx, name, rows); vyro.audit(ctx, 'data downloaded', label); say('Saved ' + rows.length + ' ' + label + ' as a spreadsheet file on this phone.', 'ok'); }
+        catch (e) { say(vyro.friendly(e), 'err'); }
+      }
+      $('xCon').addEventListener('click', function () { csv('contracts', 'contracts'); });
+      $('xExp').addEventListener('click', function () { csv('expenses', 'expenses and bills'); });
+      $('xInv').addEventListener('click', function () { csv('invoices', 'invoices'); });
+      $('xAll').addEventListener('click', async function () {
+        say('Reading everything...');
+        try { var all = await vexport.collect(ctx, function (n, i, t) { say('Reading ' + n + ' (' + (i + 1) + ' of ' + t + ')...'); }); vexport.downloadJson(ctx, all); vyro.audit(ctx, 'data downloaded', 'everything'); say('Saved on this phone.', 'ok'); }
+        catch (e) { say(vyro.friendly(e), 'err'); }
+      });
+    }
     VyroAssistantUI.mount(ctx, { name: 'Vyro Assistant', tips: [{"label": "What is overdue?", "text": "What is overdue?"}, {"label": "Who owes me the most?", "text": "Who owes me the most?"}, {"label": "What jobs are active?", "text": "What jobs are active?"}, {"label": "What needs my attention this week?", "text": "What needs my attention this week?"}, {"label": "Draft a payment reminder", "text": "Draft a polite payment reminder for my most overdue invoice."}], blocked: ok ? '' : 'The assistant shows sales and stock, so it is only for the owner and the general manager.' });
   });
 </script>

@@ -25,7 +25,7 @@
       <div id="list"></div>
       <div class="note" id="empty"></div>
     </div>
-    <button class="btn" id="add" type="button">Add customer</button>
+    <div class="note">Customers are added automatically when an estimate is approved.</div>
     <a class="back" href="app.html">Back to dashboard</a>
   </div>
 
@@ -101,7 +101,7 @@
                cleanPhone(c.phone).indexOf(cleanPhone(q) || '\u0000') > -1;
       });
       $('empty').textContent = shown.length ? '' :
-        (active.length ? 'No customers match your search.' : 'No customers yet. Tap Add customer to start.');
+        (active.length ? 'No customers match your search.' : 'No customers yet. They appear here automatically when an estimate is approved.');
       shown.forEach(function (c) {
         var row = vyro.el('div', 'item');
         var left = vyro.el('div', 'grow');
@@ -151,7 +151,6 @@
     }
 
     $('q').addEventListener('input', render);
-    $('add').addEventListener('click', function () { showForm(null); });
     $('cancel').addEventListener('click', showList);
 
     $('form').addEventListener('submit', async function (e) {

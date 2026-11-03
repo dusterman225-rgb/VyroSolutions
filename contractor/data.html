@@ -19,14 +19,6 @@
   </div>
 
   <div class="card" style="margin-top:0">
-    <h2 style="margin:0 0 4px">Download your data</h2>
-    <div class="note" style="text-align:left">Saves a copy of your business records on this phone: customers, orders, products, invoices, team and more. Keep the file somewhere safe. Nothing is sent anywhere. Large businesses use a lot of reads from your free daily limit, so do this once in a while, not all day.</div>
-    <button class="btn" id="exPrep" type="button">Get my data ready</button>
-    <div class="note" id="exMsg"></div>
-    <div id="exBox"></div>
-  </div>
-
-  <div class="card">
     <h2 style="margin:0 0 4px">Activity</h2>
     <div class="note" style="text-align:left">Who did what: voids, discounts, coupons, team changes and more. Newest first.</div>
     <input id="aq" type="search" placeholder="Search by name, email or action" style="width:100%;margin-bottom:8px">
@@ -61,7 +53,6 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
-<script src="../shared/export.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
   function say(id, t, c) { $(id).textContent = t; $(id).className = 'note ' + (c || ''); }
@@ -71,20 +62,6 @@
     if (window.vtheme && vtheme.load) { try { vtheme.load(ctx); } catch (e) {} }
     var ownerLevel = ctx.role === 'owner' || ctx.role === 'gm';
     if (!ownerLevel) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = 'Only the owner or a general manager can use this page.'; return; }
-
-    // ---- download ----
-    var all = null;
-    $('exPrep').addEventListener('click', async function () {
-      this.disabled = true; $('exBox').textContent = ''; say('exMsg', 'Reading your records...');
-      try {
-        all = await vexport.collect(ctx, function (n, i, t) { say('exMsg', 'Reading ' + n + ' (' + (i + 1) + ' of ' + t + ')...'); });
-      } catch (e) { say('exMsg', vyro.friendly(e), 'err'); this.disabled = false; return; }
-      var names = Object.keys(all.data), total = 0; names.forEach(function (n) { total += all.data[n].length; });
-      say('exMsg', 'Ready: ' + total + ' records in ' + names.length + ' lists.' + (all.skipped.length ? ' Some lists are private to the owner and were left out.' : ''), 'ok');
-      var one = vyro.el('button', 'btn', 'Save everything (one file)'); one.type = 'button'; one.addEventListener('click', function () { vexport.downloadJson(ctx, all); vyro.audit(ctx, 'data downloaded', 'all'); }); $('exBox').appendChild(one);
-      names.forEach(function (n) { var b = vyro.el('button', 'btn ghost', 'Spreadsheet: ' + n + ' (' + all.data[n].length + ')'); b.type = 'button'; b.addEventListener('click', function () { vexport.downloadCsv(ctx, n, all.data[n]); }); $('exBox').appendChild(b); });
-      this.disabled = false; this.textContent = 'Read again';
-    });
 
     // ---- activity ----
     var acts = [];

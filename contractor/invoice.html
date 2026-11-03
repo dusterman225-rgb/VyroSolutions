@@ -41,6 +41,7 @@
       <summary>Customer <small id="custSum"></small></summary>
       <div class="in">
       <label class="field"><span>Customer</span><select id="cust"><option value="">Choose a customer...</option></select></label>
+      <label class="field" id="jobRow" style="display:none"><span>Job</span><select id="jobSel"><option value="">Choose a job...</option></select></label>
       <label class="field" id="nameRow"><span>Name (no customer record yet)</span><input id="cname" type="text" maxlength="120"></label>
       <input id="cemail" type="hidden">
       <input id="cphone" type="hidden">
@@ -105,21 +106,16 @@
     </div>
     <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
       <div class="card" style="max-width:420px;width:100%;margin:auto">
-        <h2>Was the email sent?</h2>
-        <p>Press Send in your mail app, then check it shows in <b>Sent</b>, not Outbox.</p>
+        <h2>Send by email</h2>
+        <p>Tap <b>Open my email app</b>. It opens with the customer, subject and message already filled in. Press Send there, then come back and answer below.</p>
+        <a class="btn" id="askAgain" href="#">Open my email app</a>
+        <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+        <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
+        <div class="note" id="askMsg"></div>
+        <h2 style="margin-top:18px">Was it sent?</h2>
         <button class="btn" id="askYes" type="button">Yes, it was sent</button>
         <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
         <button class="btn ghost" id="askNo" type="button">No, not yet</button>
-        <details class="more">
-          <summary>Having trouble?</summary>
-          <div class="in">
-            <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
-            <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
-            <button class="btn ghost" id="askShare" type="button">Share it (any app)</button>
-            <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
-          </div>
-        </details>
-        <div class="note" id="askMsg"></div>
       </div>
     </div>
   </form>
@@ -253,8 +249,30 @@
       });
     } catch (e) { /* optional */ }
 
+    var jobsAll = [];
+    try { (await ctx.bizRef.collection('jobs').get()).forEach(function (d) { var j = d.data(); j.id = d.id; jobsAll.push(j); }); } catch (e) { /* optional */ }
+    // The Job list shows only this customer's jobs that are still in progress.
+    function fillJobs() {
+      var cid = $('cust').value, sel = $('jobSel'), c = customers[cid];
+      sel.textContent = '';
+      var o0 = vyro.el('option', '', 'Choose a job...'); o0.value = ''; sel.appendChild(o0);
+      var act = ['Not Started', 'In Progress', 'On Hold'];
+      var mine = !cid ? [] : jobsAll.filter(function (j) {
+        var same = j.customerId === cid || (!j.customerId && c && j.customerName === c.name);
+        return same && (act.indexOf(j.status) > -1 || j.id === estId);
+      });
+      mine.forEach(function (j) { var o = vyro.el('option', '', (j.title || j.estimateNumber || 'Job') + (j.estimateNumber ? ' (' + j.estimateNumber + ')' : '')); o.value = j.id; sel.appendChild(o); });
+      $('jobRow').style.display = cid && mine.length ? 'block' : 'none';
+      sel.value = estId && mine.some(function (j) { return j.id === estId; }) ? estId : '';
+    }
+    $('jobSel').addEventListener('change', function () {
+      if (id || !this.value) return;     // an invoice that is already saved keeps its job
+      var cid = $('cust').value;
+      location.href = 'invoice.html?estimate=' + encodeURIComponent(this.value) + (cid ? '&customer=' + encodeURIComponent(cid) : '');
+    });
     function syncCustomerUi() {
       var cid = $('cust').value;
+      fillJobs();
       $('nameRow').style.display = cid ? 'none' : 'block';
       $('viewCust').style.display = cid ? 'block' : 'none';
       if (cid) $('viewCust').href = 'customer.html?id=' + cid;
@@ -479,16 +497,15 @@
     function askSent() {
       $('askModal').style.display = 'flex';
       $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
-      openEmail();
+      var p0 = emailParts(); afterEmail(p0); $('askAgain').href = vcompose.href(p0);
     }
     function markDone() { if (status === 'Draft') save('Sent'); else location.replace('invoice.html?id=' + inv.id); }
     $('askYes').addEventListener('click', markDone);
     $('askHand').addEventListener('click', markDone);
     $('askNo').addEventListener('click', function () { location.replace('invoice.html?id=' + inv.id); });
-    $('askAgain').addEventListener('click', openEmail);
+    $('askAgain').addEventListener('click', function () { var p1 = emailParts(); afterEmail(p1); this.href = vcompose.href(p1); });
     $('askGmail').addEventListener('click', openGmail);
     $('askCopy').addEventListener('click', copyEmail);
-    $('askShare').addEventListener('click', async function () { var ok = await vcompose.share(emailParts()); if (!ok) ask(vcompose.canShare ? 'Sharing was cancelled.' : 'Sharing is not available in this browser. Use Copy the email text.', 'err'); });
     $('bDraft').addEventListener('click', function () { save('Draft'); });
     $('bReopen').addEventListener('click', function () { save('Draft'); });
     $('bVoid').addEventListener('click', function () { if (confirm('Void this invoice?')) save('Voided'); });

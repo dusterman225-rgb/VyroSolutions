@@ -120,6 +120,7 @@
       if (canDelete) $('bDel').style.display = 'block';
     } else {
       $('date').value = today; $('paidOn').value = today;
+      if (params.get('sub')) { $('vendor').value = params.get('sub').slice(0, 120); $('category').value = 'Subcontractor'; }
       if (jobParam && jobs[jobParam]) $('job').value = jobParam;
     }
     syncStatus();

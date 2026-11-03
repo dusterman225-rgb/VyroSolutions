@@ -70,16 +70,6 @@
       </div>
     </details>
 
-    <details class="sec">
-      <summary>Tax documents</summary>
-      <div class="in">
-        <a class="btn" id="bReport" href="#">Prepare tax report</a>
-        <button class="btn ghost" id="bCsv" type="button">Download spreadsheet (CSV)</button>
-        <button class="btn ghost" id="bCopy" type="button">Copy summary as text</button>
-        <div class="note" id="dMsg"></div>
-        <div class="note">Cash basis. Not tax advice.</div>
-      </div>
-    </details>
   </div>
 
   <a class="back" href="app.html">Back to dashboard</a>
@@ -140,17 +130,9 @@
       $('vNote').textContent = vfin.VYRO_MONTHLY_FEE_CENTS ? '' : 'The Vyro subscription is free during launch.';
 
       $('nOwed').textContent = vfin.money(m.owed); $('nBills').textContent = vfin.money(m.billsOwed);
-      $('bReport').href = 'finances-report.html?period=' + key;
     }
 
     $('period').addEventListener('change', render);
-    $('bCsv').addEventListener('click', function () {
-      vfin.download('vyro-ledger-' + cur.range.key + '.csv', vfin.csv(cur));
-    });
-    $('bCopy').addEventListener('click', async function () {
-      try { await vfin.copy(vfin.textSummary(ctx.biz, cur)); $('dMsg').textContent = 'Copied. Paste it into an email or document.'; $('dMsg').className = 'note ok'; }
-      catch (e) { $('dMsg').textContent = 'Could not copy. Use the tax report page instead.'; $('dMsg').className = 'note err'; }
-    });
     render();
   });
 </script>

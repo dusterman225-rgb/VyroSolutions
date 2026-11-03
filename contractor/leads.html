@@ -40,7 +40,6 @@
     <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40" autocomplete="off"></label>
     <label class="field"><span>Email</span><input id="email" type="email" maxlength="120" autocomplete="off"></label>
     <label class="field"><span>Job details</span><textarea id="jobDetails" rows="3" maxlength="1000" placeholder="What do they need done?"></textarea></label>
-    <label class="field"><span>Status</span><select id="status"></select></label>
     <label class="field"><span>Follow up on</span><input id="followUp" type="date"></label>
     <details class="more">
       <summary>More details</summary>
@@ -51,7 +50,6 @@
       </div>
     </details>
     <button class="btn" id="save" type="submit">Save lead</button>
-    <button class="btn ghost" id="toCustomer" type="button" style="display:none">Create customer from this lead</button>
     <a class="btn ghost" id="toEstimate" href="#" style="display:none">Create estimate for this lead</a>
     <button class="btn ghost" id="cancel" type="button">Cancel</button>
     <button class="link" id="del" type="button" style="display:none;color:#ff8a8a">Delete lead</button>
@@ -71,7 +69,6 @@
   var SOURCES = ['Referral', 'Phone call', 'Website', 'Google', 'Facebook', 'Yard sign', 'Repeat customer', 'Other'];
   var $ = function (id) { return document.getElementById(id); };
 
-  STATUSES.forEach(function (s) { var o = vyro.el('option', '', s); o.value = s; $('status').appendChild(o); });
   SOURCES.forEach(function (s) { var o = vyro.el('option', '', s); o.value = s; $('source').appendChild(o); });
 
   function todayStr() {
@@ -95,15 +92,13 @@
       $('email').value = l ? (l.email || '') : '';
       $('address').value = l ? (l.address || '') : '';
       $('source').value = l && l.source ? l.source : 'Referral';
-      $('status').value = l ? l.status : 'New';
       $('followUp').value = l ? (l.followUpOn || '') : '';
       $('jobDetails').value = l ? (l.jobDetails || '') : '';
       $('notes').value = l ? (l.notes || '') : '';
       $('del').style.display = (l && canDelete) ? 'block' : 'none';
-      $('toCustomer').style.display = (l && !l.customerId) ? 'block' : 'none';
             $('toEstimate').style.display = l ? 'block' : 'none';
       if (l) { $('toEstimate').href = 'estimate.html?lead=' + l.id; }
-      $('msg').textContent = l && l.customerId ? 'This lead already has a customer record.' : '';
+      $('msg').textContent = '';
       $('msg').className = 'note';
       $('listView').style.display = 'none'; $('form').style.display = 'block';
       window.scrollTo(0, 0);
@@ -155,33 +150,20 @@
         (all.length ? 'No leads match.' : 'No leads yet. Tap Add lead to start.');
 
       shown.forEach(function (l) {
-        var row = vyro.el('div', 'item');
-        var left = vyro.el('div', 'grow');
-        var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + l.status.replace(' ', ''), l.status)); top.appendChild(document.createTextNode(l.name));
-        left.appendChild(top);
-        var bits = [];
-        if (l.source) bits.push(l.source);
-        if (l.phone) bits.push(l.phone);
-        left.appendChild(vyro.el('small', '', bits.join(' \u00b7 ') || 'No contact details'));
-        if (l.followUpOn && l.status !== 'Won' && l.status !== 'Lost') {
-          var f = vyro.el('small', l.followUpOn <= today ? 'late' : '', 'Follow up ' + l.followUpOn + (l.followUpOn < today ? ' (overdue)' : l.followUpOn === today ? ' (today)' : ''));
-          f.style.display = 'block'; left.appendChild(f);
-        }
-        left.addEventListener('click', function () { showForm(l); });
-        row.appendChild(left);
-
-        if (l.status === 'New') {
-          var mc = vyro.el('button', 'mini', 'Contacted'); mc.type = 'button';
-          mc.addEventListener('click', async function () {
-            try {
-              await col.doc(l.id).update({ status: 'Contacted', lastContactedAt: vyro.stamp(), statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
-              await load();
-            } catch (e) { $('err').textContent = vyro.friendly(e); }
-          });
-          row.appendChild(mc);
-        }
-        if (cleanPhone(l.phone)) { var call = vyro.el('a', 'mini', 'Call'); call.href = 'tel:' + cleanPhone(l.phone); row.appendChild(call); }
-        box.appendChild(row);
+        var d = vyro.el('details', 'sec'); d.style.marginTop = '8px';
+        var sm = vyro.el('summary', '', l.name || 'Lead');
+        if (l.followUpOn && l.status !== 'Won' && l.status !== 'Lost' && l.followUpOn <= today) { var fl = vyro.el('small', 'late', ' follow up due'); sm.appendChild(fl); }
+        d.appendChild(sm);
+        var inn = vyro.el('div', 'in');
+        function info(label, val) { if (!val) return; var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', label)); r.appendChild(vyro.el('b', '', val)); inn.appendChild(r); }
+        info('Phone', l.phone); info('Email', l.email); info('Job details', l.jobDetails); info('Address', l.address);
+        info('Source', l.source); info('Follow up', l.followUpOn); info('Notes', l.notes);
+        if (!inn.children.length) inn.appendChild(vyro.el('div', 'note', 'No details saved yet.'));
+        if (l.status !== 'Won') { var ce = vyro.el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + l.id; inn.appendChild(ce); }
+        else inn.appendChild(vyro.el('div', 'note', 'Estimate approved. This person is now a customer.'));
+        if (cleanPhone(l.phone)) { var call = vyro.el('a', 'btn ghost', 'Call'); call.href = 'tel:' + cleanPhone(l.phone); inn.appendChild(call); }
+        var ed = vyro.el('button', 'btn ghost', 'Edit lead'); ed.type = 'button'; ed.addEventListener('click', function () { showForm(l); }); inn.appendChild(ed);
+        d.appendChild(inn); box.appendChild(d);
       });
     }
 
@@ -199,7 +181,7 @@
       e.preventDefault();
       var name = $('name').value.trim();
       if (!name) { $('msg').textContent = 'Name is required.'; $('msg').className = 'note err'; return; }
-      var status = $('status').value;
+      var status = editing ? editing.status : 'New';
       var data = {
         name: name, phone: $('phone').value.trim(), email: $('email').value.trim(),
         address: $('address').value.trim(), source: $('source').value, status: status,
@@ -218,26 +200,6 @@
           data.createdAt = vyro.stamp(); data.createdBy = ctx.user.uid; data.statusChangedAt = vyro.stamp();
           await col.add(data);
         }
-        await load(); showList();
-      } catch (err) { $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
-      btn.disabled = false;
-    });
-
-    $('toCustomer').addEventListener('click', async function () {
-      if (!editing || editing.customerId) return;
-      if (!confirm('Create a customer record for ' + editing.name + '?')) return;
-      var btn = this; btn.disabled = true;
-      try {
-        var cust = ctx.bizRef.collection('customers').doc();
-        var batch = vyro.db.batch();
-        batch.set(cust, {
-          name: editing.name, nameLower: editing.name.toLowerCase(), phone: editing.phone || '',
-          email: editing.email || '', address: editing.address || '', language: 'en',
-          notes: editing.notes || '', fromLeadId: editing.id,
-          createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
-        });
-        batch.update(col.doc(editing.id), { customerId: cust.id, updatedAt: vyro.stamp() });
-        await batch.commit();
         await load(); showList();
       } catch (err) { $('msg').textContent = vyro.friendly(err); $('msg').className = 'note err'; }
       btn.disabled = false;

@@ -24,12 +24,16 @@
           <small id="mWho"></small>
         </div>
 
-  <details>
-          <summary class="mg">Work <span class="badge" id="bMsg" style="display:none"></span></summary>
+        <details>
+          <summary class="mg">Work</summary>
           <a class="mi" href="leads.html">Leads</a>
           <a class="mi" href="estimates.html">Estimates</a>
           <a class="mi" href="jobs.html">Active jobs</a>
+        </details>
+        <details>
+          <summary class="mg">Customers <span class="badge" id="bMsg" style="display:none"></span></summary>
           <a class="mi" href="customers.html">Customers</a>
+          <a class="mi" id="miDoc" href="documents.html" style="display:none">Contracts</a>
           <a class="mi" href="messages.html">Messages <span class="badge" id="bMsg2" style="display:none"></span></a>
         </details>
         <details>
@@ -42,7 +46,6 @@
         </details>
         <details>
           <summary class="mg">Tools</summary>
-          <a class="mi" id="miDoc" href="documents.html" style="display:none">Documents</a>
           <a class="mi" href="timelog.html">Time and mileage</a>
           <a class="mi" id="miSub" href="subs.html">Subcontractors</a>
           <a class="mi" href="assistant.html">Assistant</a>
@@ -55,7 +58,6 @@
           <a class="mi" id="miLink" href="signinlink.html" style="display:none">Sign-in link</a>
         </details>
         <a class="mi" href="/dashboard.html">Switch business</a>
-        <a class="mi" id="vInstall2" href="#" style="display:none">Install on home screen</a>
         <button class="mi out" id="out" type="button">Sign out</button>
       </div>
     </div>
@@ -100,8 +102,6 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
-<script src="../shared/install.js"></script>
-<script>document.addEventListener("DOMContentLoaded",function(){var b=document.getElementById("vInstall2");if(b&&window.vinstall){b.style.display="";b.onclick=function(e){e.preventDefault();vinstall.open();};}});</script>
 <script src="js/calendar.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/public.js"></script>
