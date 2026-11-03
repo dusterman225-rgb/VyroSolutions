@@ -85,7 +85,8 @@
   async function share(ctx, contractId, c) {
     var pref = vyro.db.collection('portals').doc(c.jobId);
     await pref.collection('documents').doc(contractId).set({
-      title: c.title || 'Contract', body: c.body, businessName: ctx.biz.name || '', sharedAt: vyro.stamp()
+      title: c.title || 'Contract', body: c.body, businessName: ctx.biz.name || '', sharedAt: vyro.stamp(),
+      needsApproval: /change order|subcontractor/i.test((c.title || '') + ' ' + (c.templateName || ''))
     });
   }
   async function unshare(contractId, jobId) {
