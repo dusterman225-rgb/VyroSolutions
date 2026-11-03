@@ -1,4 +1,4 @@
-// The Settings menu (top right) on every signed-in page. The dashboard has its own copy of the same menu.
+// The Menu (top right) on every signed-in page. The dashboard has its own copy of the same menu.
 (function () {
   if (window.__vyroMenu || document.getElementById('menuBtn')) return;
   window.__vyroMenu = true;
@@ -8,7 +8,7 @@
     var host = document.querySelector('.brand') || document.querySelector('.wrap');
     if (!host) return;
     var wrap = el('div', 'vmenu-wrap');
-    var btn = el('button', 'menu-btn', 'Settings ▾'); btn.type = 'button'; btn.setAttribute('aria-expanded', 'false');
+    var btn = el('button', 'menu-btn', 'Menu ▾'); btn.type = 'button'; btn.setAttribute('aria-expanded', 'false');
     var menu = el('div', 'menu'); menu.style.right = '0';
     var head = el('div', 'mh'); head.appendChild(el('b', '', ctx.biz.name || 'Menu'));
     head.appendChild(el('small', '', role + ' · ' + (ctx.user.email || ''))); menu.appendChild(head);
