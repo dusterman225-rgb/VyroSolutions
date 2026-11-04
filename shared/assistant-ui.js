@@ -8,6 +8,45 @@
   window.VyroAssistantUI = { mount: function (ctx, o) {
     var NAME = o.name || 'Vyro Assistant', biz = ctx.biz.name || 'your business', bizId = ctx.bizId || (ctx.bizRef && ctx.bizRef.id) || '';
     $('hName').textContent = NAME; $('hSub').textContent = 'AI assistant for ' + biz + ' · Online'; $('hAv').firstChild.nodeValue = NAME.charAt(0);
+
+    // ---- Arial for everything the assistant shows ----
+    (function () {
+      var st = document.createElement('style');
+      st.textContent = '.chat-head,.chat-head *,#log,#log *,.chips button,.composer textarea,.fine,.byo,.byo *,.vyroConsent,.vyroConsent *{font-family:Arial,Helvetica,sans-serif!important}' +
+        '#spkBtn{margin-left:auto;flex:0 0 auto;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border:1px solid #2f4a68;background:transparent;color:#cfe6ff;border-radius:999px;padding:7px 11px;font-size:.78rem;cursor:pointer;font-family:Arial,Helvetica,sans-serif}' +
+        '#spkBtn.on{background:#2b7bd8;border-color:#2b7bd8;color:#fff}.ts a.spk{cursor:pointer}';
+      document.head.appendChild(st);
+    })();
+
+    // ---- speaker: read answers out loud (uses the phone/computer's own voice; nothing is sent anywhere) ----
+    var TTS = ('speechSynthesis' in window) && typeof SpeechSynthesisUtterance !== 'undefined';
+    var speakOn = false; try { speakOn = localStorage.getItem('vyroSpeak') === '1'; } catch (e) { speakOn = false; }
+    function say(text) {
+      if (!TTS) return;
+      try {
+        window.speechSynthesis.cancel();
+        var parts = String(text).replace(/[*#_`]/g, '').replace(/\n+/g, '. ').match(/[^.!?]+[.!?]*/g) || [];
+        parts.forEach(function (p) { p = p.trim(); if (!p) return; var u = new SpeechSynthesisUtterance(p); u.lang = navigator.language || 'en-US'; u.rate = 1; window.speechSynthesis.speak(u); });
+      } catch (e) { /* speaker is optional */ }
+    }
+    function hush() { try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+    if (TTS && document.querySelector('.chat-head')) {
+      var sp = document.createElement('button'); sp.type = 'button'; sp.id = 'spkBtn';
+      function paintSp() { sp.className = speakOn ? 'on' : ''; sp.textContent = speakOn ? '\u{1F50A} Speaker' : '\u{1F507} Speaker'; sp.setAttribute('aria-pressed', speakOn ? 'true' : 'false'); }
+      sp.addEventListener('click', function () { speakOn = !speakOn; try { localStorage.setItem('vyroSpeak', speakOn ? '1' : '0'); } catch (e) { /* ignore */ } if (!speakOn) hush(); paintSp(); });
+      paintSp(); document.querySelector('.chat-head').appendChild(sp);
+    }
+
+    // ---- microphone beside the chat box (works in every browser: built-in speech to text, or a short recording for Firefox) ----
+    (function () {
+      var tries = 0;
+      (function add() {
+        var send = $('send'), q = $('q');
+        if (!send || !q || $('chatMic')) return;
+        if (window.vvoice && window.vvoice.micButton) { var m = window.vvoice.micButton(q); m.id = 'chatMic'; send.parentNode.insertBefore(m, send); }
+        else if (tries++ < 25) setTimeout(add, 300);
+      })();
+    })();
     var base = (window.VYRO_HELP_URL || '').replace(/\/+$/, '');
     var hist = [], busy = false, ready = false;
     var BYO_KEY = 'vyroByo_' + bizId;
@@ -76,8 +115,8 @@
     // VyroAssistant is an upgrade. The server checks too; this just shows the message before the notice.
     function upgradeCard(why) {
       var c = vyro.el('div', 'vyroConsent'); c.style.cssText = 'background:#101a26;border:1px solid #2f4a68;border-radius:14px;padding:14px;margin:10px;color:#e8eef6;font-size:.9rem;line-height:1.45';
-      c.appendChild(vyro.el('b', '', 'VyroAssistant is an upgrade'));
-      c.appendChild(vyro.el('div', '', 'Add it to ' + biz + ' to ask questions about your own records and get drafts of messages. Bring-your-own-AI is included. Ask the Vyro team to turn it on for this business.'));
+      c.appendChild(vyro.el('b', '', 'VyroAssistant is not turned on for this business'));
+      c.appendChild(vyro.el('div', '', 'It is included with your Vyro subscription. If you see this, sign out and back in, then reload this page. If it stays, contact Vyro support.'));
       if (why) { var w = vyro.el('div', '', 'Reason: ' + why); w.style.cssText = 'margin-top:8px;opacity:.7;font-size:.8rem'; c.appendChild(w); }
       $('log').appendChild(c);
       $('q').placeholder = 'Not turned on for this business';
@@ -112,7 +151,7 @@
         if (byo) payload.byo = byo;
         var r = await fetch(base + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
         var d; try { d = await r.json(); } catch (je) { throw { friendly: 'The assistant helper sent back something unexpected (status ' + r.status + '). It may need to be redeployed in Cloudflare.', reason: 'status ' + r.status }; }
-        if (r.status === 402 || d.error === 'plan') { ready = false; lock(true); throw { friendly: 'VyroAssistant is an upgrade, and it is not on this business\'s plan yet.', reason: '' }; }
+        if (r.status === 402 || d.error === 'plan') { ready = false; lock(true); throw { friendly: 'VyroAssistant is not turned on for this business yet. Sign out, sign back in and try again.', reason: '' }; }
         if (r.status === 429) throw { friendly: byo ? 'You have reached the daily limit for your own AI on this business. It resets tomorrow.' : again ? 'You have used today\'s Think harder answers for your business. They reset tomorrow.' : 'You have reached today\'s assistant limit for your business. It resets tomorrow.' };
         if (d.error === 'consent') { ready = false; lock(true); throw { friendly: 'Please accept the notice first. Reload this page to see it again.', reason: d.detail }; }
         if (r.status === 401 || r.status === 403) throw { friendly: 'I could not open your records. Please sign out and back in, then try again.', reason: d.detail || d.error || ('status ' + r.status) };
@@ -123,6 +162,12 @@
         var a = vyro.el('a', '', 'Copy'); a.href = '#';
         a.addEventListener('click', function (e) { e.preventDefault(); try { navigator.clipboard.writeText(text); a.textContent = 'Copied'; } catch (x) { a.textContent = 'Could not copy'; } });
         m.ts.appendChild(a);
+        if (TTS) {
+          var ls = vyro.el('a', 'spk', 'Listen'); ls.href = '#'; ls.style.marginLeft = '10px';
+          ls.addEventListener('click', function (e) { e.preventDefault(); if (window.speechSynthesis.speaking) { hush(); ls.textContent = 'Listen'; } else { say(text); ls.textContent = 'Stop'; } });
+          m.ts.appendChild(ls);
+          if (speakOn) say(text);
+        }
         if (again) { m.ts.insertBefore(document.createTextNode('Think harder answer · '), m.ts.firstChild); }
         else if (!byo) {
           var th = vyro.el('a', '', 'Think harder'); th.href = '#'; th.style.marginLeft = '10px';
