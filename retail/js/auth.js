@@ -409,6 +409,7 @@
         try { var es = document.createElement('script'); es.src = '/shared/errlog.js'; es.onload = function () { try { window.vyroErr.install(ctx); } catch (x) {} }; document.head.appendChild(es); } catch (x) { /* problem log is optional */ }
         try { var ei = document.createElement('script'); ei.src = '/shared/idle.js'; ei.onload = function () { try { window.vyroIdle.start(ctx, function () { return signOut().then(function () { location.href = loginUrl(); }); }); } catch (x) {} }; document.head.appendChild(ei); } catch (x) { /* idle sign-out is optional */ }
         await mountNav(ctx);
+        try { var ev = document.createElement('script'); ev.src = '/contractor/js/voice.js'; ev.onload = function () { try { window.vvoice.mount(ctx); } catch (x) { /* voice is optional */ } }; document.head.appendChild(ev); } catch (x) { /* voice is optional */ }
         await cb(ctx);
       } catch (err) {
                 var e = document.getElementById('err');
