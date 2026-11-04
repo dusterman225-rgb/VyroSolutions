@@ -71,6 +71,7 @@
   <div class="tag" id="bizTag" style="margin:22px 0 0">Dashboard</div>
   <div id="wpBox"></div>
 
+  <div id="vFlow" style="display:none"></div>
   <div id="vTiles" style="display:none"></div>
 
   <div class="qa">
@@ -111,6 +112,7 @@
 <script src="js/calendar.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/public.js"></script>
+<script src="js/flow.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
   var PRODUCT_NAMES = { contractor: 'VyroContractor', restaurant: 'VyroRestaurant', retail: 'VyroRetail' };
@@ -159,6 +161,15 @@
         $('acceptedBanner').style.display = 'block';
       }
     } catch (e) { /* best effort; needs the latest Firestore rules */ }
+
+    // portal answers, new contracts from approved estimates, and draft invoices from signed contracts
+    try {
+      var fl = await vflow.sync(ctx);
+      if (fl.notes.length) {
+        var fb = $('vFlow'); fb.style.cssText = 'display:block;margin:14px 0 4px;border:2px solid #4ba3ff;border-radius:14px;padding:10px 12px;background:#0b1624;box-shadow:0 0 14px rgba(75,163,255,.5)';
+        fl.notes.forEach(function (x) { var a = document.createElement('a'); a.href = x.href; a.textContent = x.text; a.style.cssText = 'display:block;color:#cfe6ff;padding:6px 0;text-decoration:none;overflow-wrap:anywhere'; fb.appendChild(a); });
+      }
+    } catch (e) { /* best effort */ }
 
     var n = { newLeads: 0, staleLeads: 0, due: 0, sent: 0, jobs: 0, owed: 0, over: 0, bills: 0, billsOver: 0, unread: 0 }, failed = false;
     var today = vutil.todayStr(), now = Date.now(), jobCost = {}, activeJobs = [];

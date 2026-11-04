@@ -76,6 +76,7 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/compose.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/contracts.js"></script>
 <script src="js/portal.js"></script>
@@ -187,11 +188,7 @@
 
     $('bEmail').addEventListener('click', function () {
       var em = (job.customerEmail || '').trim();
-      var first = (c.customerName || '').split(' ')[0] || 'there';
-      var subject = 'Your contract from ' + ctx.biz.name;
-      var body = 'Hello ' + first + ',\r\n\r\nYour contract for ' + (job.title || 'your project') + ' is ready. Sign in to your project portal to read it and print it:\r\n' +
-        location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html\r\n\r\nPlease print it, sign it, and return it to me. We can arrange a time to meet, or call with any questions' +
-        (ctx.biz.phone ? ': ' + ctx.biz.phone : '.') + '\r\n\r\nThank you,\r\n' + ctx.biz.name;
+      var m = vflow.message(ctx, em), subject = m.subject, body = m.body;
       vcompose.open({ to: em, subject: subject, body: body });
     });
 
@@ -203,7 +200,11 @@
     $('bSigned').addEventListener('click', async function () {
       var d = $('signedOn').value;
       if (!d) { $('sgMsg').textContent = 'Pick the date first.'; $('sgMsg').className = 'note err'; return; }
-      try { await cref.update({ status: 'Signed', signedOn: d, updatedAt: vyro.stamp() }); c.status = 'Signed'; c.signedOn = d; paint(); $('sgMsg').textContent = 'Marked signed.'; $('sgMsg').className = 'note'; }
+      try {
+        await cref.update({ status: 'Signed', signedOn: d, autoInvoice: true, updatedAt: vyro.stamp() }); c.status = 'Signed'; c.signedOn = d; c.autoInvoice = true; paint();
+        var fr = null; try { fr = await vflow.afterSigned(ctx, id); } catch (fe) { fr = null; }
+        $('sgMsg').textContent = fr && fr.invoice ? 'Marked signed. The dates are recorded and draft invoice ' + fr.invoice.number + ' was created (see Invoices).' : 'Marked signed. The date is recorded.'; $('sgMsg').className = 'note';
+      }
       catch (e) { $('sgMsg').textContent = vyro.friendly(e); $('sgMsg').className = 'note err'; }
     });
 

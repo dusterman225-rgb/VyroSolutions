@@ -73,6 +73,7 @@
       var s = await db.collection('portals').doc(p).collection('documents').doc(d).get();
       if (!s.exists) { $('dTitle').textContent = 'Not available'; $('err').textContent = 'This document is no longer available. Please contact your contractor.'; return; }
       var x = s.data();
+      if (x.kind === 'estimate') { $('apText').textContent = 'Approving tells the contractor you accept this estimate. A contract will follow for you to review and return. You can also ask for changes or decline, with a reason.'; }
       $('dTitle').textContent = x.title || 'Contract'; $('tag').textContent = x.businessName || 'Your contract';
       $('paper').textContent = x.body; $('paper').style.display = 'block'; $('bPrint').style.display = 'block';
       $('bPrint').addEventListener('click', function () { window.print(); });

@@ -107,11 +107,13 @@
     <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
       <div class="card" style="max-width:420px;width:100%;margin:auto">
         <h2>Send by email</h2>
-        <p>Tap <b>Open my email app</b>. It opens with the customer, subject and message already filled in. Press Send there, then come back and answer below.</p>
+        <p>The invoice goes to your customer's portal. Tap <b>Open my email app</b> to send the short message that tells them to look. If the subject or message comes up empty, use <b>Share</b> or <b>Copy</b>.</p>
         <a class="btn" id="askAgain" href="#">Open my email app</a>
+        <button class="btn ghost" id="askShare" type="button">Share to Gmail or any app</button>
         <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
         <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
         <div class="note" id="askMsg"></div>
+        <div class="note" id="portalMsg"></div>
         <h2 style="margin-top:18px">Was it sent?</h2>
         <button class="btn" id="askYes" type="button">Yes, it was sent</button>
         <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
@@ -149,6 +151,8 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/compose.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/needs.js"></script>
 <script>window.VYRO_STAFF_ONLY = true;</script>
 <script src="js/auth.js"></script>
 <script>
@@ -453,6 +457,7 @@
           });
           savedId = ref.id;
         }
+        if (st === 'Sent' || st === 'Partially Paid') { try { await vflow.invoiceToPortal(ctx, Object.assign({}, data, { id: savedId })); } catch (pe) { /* the portal copy is optional */ } }
         if (openSend) {      // stay on the page: open the mail app, then ask whether it was sent
           inv = Object.assign({}, data, { id: savedId }); status = st;
           history.replaceState(null, '', 'invoice.html?id=' + savedId);
@@ -467,18 +472,8 @@
     }
 
     $('form').addEventListener('submit', function (e) { e.preventDefault(); save(null); });
-    function emailParts() {
-      var t = calc(), to = $('cemail').value.trim();
-      var bal = t.totalCents - (inv ? inv.paidCents : 0);
-      var phone = (ctx.biz.phone || '').trim();
-      var subject = 'Invoice ' + inv.number + ' from ' + ctx.biz.name;
-      var body = 'Hi ' + $('cname').value.trim() + ',\n\nHere is invoice ' + inv.number +
-        ($('title').value.trim() ? ' for ' + $('title').value.trim() : '') + '. The amount due is ' + vutil.fmt(bal) +
-        ', due ' + $('dueDate').value + '.\n\n' +
-        (phone ? 'Questions? Call ' + ctx.biz.name + ': ' + phone : 'Questions? Just reply to this email.') +
-        '\n\nThank you,\n' + ctx.biz.name;
-      return { to: to, subject: subject, body: body };
-    }
+    vneeds.watch([['#cust', '#cname'], '#title', '#dueDate', '.line .r1 input[type=text]', '.line input[placeholder="0.00"]']);
+    function emailParts() { return vflow.message(ctx, $('cemail').value.trim()); }
     function ask(t, cls) { $('askMsg').textContent = t; $('askMsg').className = 'note ' + (cls || ''); }
     function afterEmail(p) {
       var warn = [];
@@ -513,6 +508,19 @@
       $('askModal').style.display = 'flex';
       $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
       var p0 = emailParts(); afterEmail(p0); $('askAgain').href = vcompose.href(p0);
+      sendToPortal();
+    }
+    // The invoice goes to the customer's portal (they can pay or see it there); there is no accept or decline on an invoice.
+    async function sendToPortal() {
+      var m = $('portalMsg'), r;
+      try {
+        if (status === 'Draft') { m.textContent = 'It will be added to the customer\'s portal when you answer Yes below.'; m.className = 'note'; return; }
+        r = await vflow.invoiceToPortal(ctx, inv);
+      } catch (e) { r = { ok: false, reason: 'error' }; }
+      if (r.ok) { m.textContent = 'In the customer\'s portal.'; m.className = 'note ok'; }
+      else if (r.reason === 'no-email') { m.textContent = 'This customer has no email on file, so there is no portal copy.'; m.className = 'note err'; }
+      else if (r.reason === 'no-job') { m.textContent = 'This invoice is not linked to an approved job, so it is not in a portal.'; m.className = 'note'; }
+      else { m.textContent = 'Could not update the portal yet.'; m.className = 'note err'; }
     }
     function markDone() { if (status === 'Draft') save('Sent'); else location.replace('invoice.html?id=' + inv.id); }
     $('askYes').addEventListener('click', markDone);
@@ -520,6 +528,7 @@
     $('askNo').addEventListener('click', function () { location.replace('invoice.html?id=' + inv.id); });
     $('askAgain').addEventListener('click', function () { var p1 = emailParts(); afterEmail(p1); this.href = vcompose.href(p1); });
     $('askGmail').addEventListener('click', openGmail);
+    $('askShare').addEventListener('click', async function () { var p = emailParts(); afterEmail(p); if (!(await vcompose.share(p))) ask('Sharing is not available here. Use Copy instead.', 'err'); });
     $('askCopy').addEventListener('click', copyEmail);
     $('bDraft').addEventListener('click', function () { save('Draft'); });
     $('bReopen').addEventListener('click', function () { save('Draft'); });

@@ -79,6 +79,7 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script>window.VYRO_STAFF_ONLY = true;</script>
+<script src="js/needs.js"></script>
 <script src="js/auth.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
@@ -197,6 +198,7 @@
     }
 
     $('form').addEventListener('submit', function (e) { e.preventDefault(); save(false); });
+    vneeds.watch(['#vendor', '#amount', '#date', '#description', '#desc', '#dueDate']);
     $('bPaid').addEventListener('click', function () { save(true); });
     $('bDel').addEventListener('click', async function () {
       if (!confirm('Delete this expense permanently?')) return;

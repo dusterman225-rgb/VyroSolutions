@@ -47,6 +47,7 @@
       </label>
       <label class="field"><span>Start date</span><input id="startDate" type="date"></label>
       <label class="field"><span>Target finish date</span><input id="targetEndDate" type="date"></label>
+      <label class="field"><span>Payment plan details (goes into the contract and the first invoice)</span><textarea id="paymentPlan" rows="3" maxlength="1500" placeholder="Example: 10% down at signing, 40% when framing is done, balance at final walk-through"></textarea></label>
       <label class="field"><span>Internal notes (never shown to the customer)</span><textarea id="internalNotes" rows="3" maxlength="2000"></textarea></label>
       <button class="btn" id="saveJob" type="button">Save progress</button>
       <div class="note" id="jMsg"></div>
@@ -197,7 +198,7 @@
     $('status').value = job.status;
     $('startDate').value = job.startDate || '';
     $('targetEndDate').value = job.targetEndDate || '';
-    $('internalNotes').value = job.internalNotes || '';
+    $('internalNotes').value = job.internalNotes || ''; $('paymentPlan').value = job.paymentPlan || '';
     if (canManage) $('bDel').style.display = 'block'; else {
       $('costSec').style.display = 'none'; $('invSec').style.display = 'none'; $('schedSec').style.display = 'none';
       var stp = document.querySelector('.strip'); if (stp) stp.style.display = 'none';
@@ -269,7 +270,7 @@
       try {
         var data = {
           status: st, startDate: $('startDate').value, targetEndDate: $('targetEndDate').value,
-          internalNotes: $('internalNotes').value.trim(), updatedAt: vyro.stamp()
+          internalNotes: $('internalNotes').value.trim(), paymentPlan: $('paymentPlan').value.trim(), updatedAt: vyro.stamp()
         };
         if (st === 'Completed' && job.status !== 'Completed') data.completedAt = vyro.stamp();
         var batch = vyro.db.batch();
