@@ -111,6 +111,11 @@
     try {
       if (c.status !== 'Draft') {
         var ps = await vyro.db.collection('portals').doc(c.jobId).collection('documents').doc(id).get();
+        if (ps.exists && !ps.data().approvedAt && ps.data().response) {
+          var rs = ps.data(), rw = rs.respondedAt && rs.respondedAt.toDate ? rs.respondedAt.toDate().toLocaleString() : '';
+          $('cWarn').textContent = (rs.response === 'declined' ? 'Customer DECLINED' : 'Customer asked for CHANGES') + (rs.respondedBy ? ' (' + rs.respondedBy + ')' : '') + (rw ? ' on ' + rw : '') + '. Reason: ' + (rs.responseReason || '') + (rs.response === 'revise' ? ' Edit the contract, then tap Update the shared copy; they can approve the new version.' : '');
+          $('cWarn').className = 'note late';
+        }
         if (ps.exists && ps.data().approvedAt) {
           var ap = ps.data(), when = ap.approvedAt.toDate ? ap.approvedAt.toDate().toLocaleString() : '';
           $('cWarn').textContent = 'Approved online by ' + ap.approvedBy + (when ? ' on ' + when : '') + '.'; $('cWarn').className = 'note ok';

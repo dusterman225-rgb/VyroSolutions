@@ -37,6 +37,15 @@
     <div class="note" id="msg"></div>
   </form>
 
+  <div class="card" id="retCard">
+    <h2>How customers return signed documents</h2>
+    <p>Pick every way you accept. Customers see this in their portal on each contract, and Vyro reminds you to chase any document still waiting to come back.</p>
+    <div id="retBoxes"></div>
+    <label class="field"><span>Extra instructions (optional)</span><textarea id="retNote" rows="2" maxlength="300" placeholder="For example: email a clear photo of every page to jane@example.com"></textarea></label>
+    <button class="btn" id="retSave" type="button">Save</button>
+    <div class="note" id="retMsg"></div>
+  </div>
+
   <a class="back" href="app.html">Back to dashboard</a>
   <div class="note err" id="err"></div>
 </div>
@@ -46,6 +55,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/contracts.js"></script>
 <script>
   var fields = { name: 'name', phone: 'phone', email: 'bemail', address: 'address', license: 'license', website: 'website' };
   var msg = document.getElementById('msg');
@@ -65,6 +75,30 @@
       var input = document.getElementById(fields[k]);
       input.value = (k === 'license' ? (ctx.biz.license || ctx.biz.licenseNumber) : ctx.biz[k]) || '';
       input.disabled = !isOwner;
+    });
+
+    // ---- how signed documents come back ----
+    var RET = ['Electronically (email a scan or clear photo)', 'Text a photo', 'In person', 'By mail', 'Drop off at my office or the job site'];
+    var picked = Array.isArray(ctx.biz.returnMethods) ? ctx.biz.returnMethods.slice() : [];
+    RET.concat(picked.filter(function (m) { return RET.indexOf(m) < 0; })).forEach(function (m) {
+      var lab = document.createElement('label'); lab.style.cssText = 'display:flex;align-items:center;gap:10px;margin:8px 0;min-height:36px';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = m; cb.checked = picked.indexOf(m) > -1; cb.disabled = !isOwner; cb.style.cssText = 'width:22px;height:22px;flex:none';
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(m)); document.getElementById('retBoxes').appendChild(lab);
+    });
+    document.getElementById('retNote').value = ctx.biz.returnNote || ''; document.getElementById('retNote').disabled = !isOwner;
+    if (!isOwner) document.getElementById('retSave').style.display = 'none';
+    document.getElementById('retSave').addEventListener('click', async function () {
+      var rm = document.getElementById('retMsg'), btn = this;
+      var methods = Array.prototype.map.call(document.querySelectorAll('#retBoxes input:checked'), function (c) { return c.value; });
+      var note = document.getElementById('retNote').value.trim();
+      btn.disabled = true; rm.className = 'note'; rm.textContent = 'Saving...';
+      try {
+        await ctx.bizRef.update({ returnMethods: methods, returnNote: note, updatedAt: vyro.stamp() });
+        ctx.biz.returnMethods = methods; ctx.biz.returnNote = note;
+        try { await vcontract.refreshReturn(ctx, methods, note); } catch (e2) { /* documents not shared yet */ }
+        rm.textContent = 'Saved. Customers now see this on their documents.'; rm.className = 'note ok';
+      } catch (e) { rm.textContent = vyro.friendly(e); rm.className = 'note err'; }
+      btn.disabled = false;
     });
     var save = document.getElementById('save');
     if (!isOwner) {

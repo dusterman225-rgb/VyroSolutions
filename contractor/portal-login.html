@@ -25,7 +25,7 @@
     <label class="field"><span>Email</span><input id="email" type="email" autocomplete="email" inputmode="email"></label>
     <label class="field"><span>Password</span><input id="pw" type="password" autocomplete="current-password"></label>
     <button class="btn" id="go" type="button">Sign in</button>
-    <button class="link" id="forgot" type="button">First time, or forgot your password?</button>
+    <button class="link" id="forgot" type="button">Forgot your password? (or first time here)</button>
     <div class="note" id="msg"></div>
   </div>
   <div class="card">
@@ -58,6 +58,7 @@
       var h = document.querySelector('.card h2'); if (h) h.textContent = 'Sign in to ' + b.name;
     }).catch(function () {});
   }
+  var pre = new URLSearchParams(location.search).get('e'); if (pre) $('email').value = pre;
   var hold = false;
   auth.onAuthStateChanged(function (u) { if (u && !hold) location.replace('portal.html'); });
   $('go').addEventListener('click', async function () {

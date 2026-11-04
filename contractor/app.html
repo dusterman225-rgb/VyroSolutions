@@ -71,6 +71,8 @@
   <div class="tag" id="bizTag" style="margin:22px 0 0">Dashboard</div>
   <div id="wpBox"></div>
 
+  <div id="vTiles" style="display:none"></div>
+
   <div class="qa">
     <a class="btn" href="leads.html?new=1">New lead</a>
     <a class="btn" href="estimate.html">New estimate</a>
@@ -105,6 +107,7 @@
 <script src="js/compose.js"></script>
 <script src="js/reminders.js"></script>
 <script src="js/daily.js"></script>
+<script src="js/tiles.js"></script>
 <script src="js/calendar.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/public.js"></script>
@@ -240,7 +243,12 @@
         n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
       ]]
     ];
-    try { if (window.vdaily) vdaily.run(ctx); } catch (e) { /* daily list is optional */ }
+    try {
+      vremind.collect(ctx).then(function (rem) {
+        try { vtiles.mount(ctx, $('vTiles'), rem); } catch (e) { /* tiles are optional */ }
+        try { if (window.vdaily) vdaily.run(ctx, rem); } catch (e) { /* daily list is optional */ }
+      }).catch(function () { /* reminders are optional */ });
+    } catch (e) { /* reminders are optional */ }
     var box = $('attBody'); box.textContent = ''; var any = false;
     groups.forEach(function (g) {
       var rows = g[1].filter(Boolean); if (!rows.length) return; any = true;

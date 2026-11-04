@@ -35,9 +35,20 @@
   </div>
   <div class="card" id="apCard" style="display:none">
     <h2>Approve online</h2>
-    <p id="apText">Read the document below. If you agree to this change and its price, type your full name and tap Approve. Your contractor is told right away. You can still print it to sign on paper.</p>
-    <label class="field" id="apField"><span>Your full name</span><input id="apName" type="text" maxlength="80" autocomplete="name"></label>
-    <button class="btn" id="apBtn" type="button">Approve this change</button>
+    <p id="apText">Approving online simply tells the contractor you approve the change. You must still return the contract to the contractor by the means indicated by the contractor. The contractor may not start the change prior to receiving the signed document.</p>
+    <div class="note" id="apReturn"></div>
+    <div id="apStatus" class="note" style="display:none"></div>
+    <div id="apForm">
+      <label class="field"><span>Your full name</span><input id="apName" type="text" maxlength="80" autocomplete="name"></label>
+      <button class="btn" id="apBtn" type="button">Approve this change</button>
+      <button class="btn ghost" id="rvBtn" type="button">Revise</button>
+      <button class="btn ghost" id="dcBtn" type="button" style="color:#ff8a8a">Decline</button>
+      <div id="rsBox" style="display:none">
+        <label class="field"><span id="rsLabel">Reason</span><textarea id="rsText" rows="4" maxlength="1000" placeholder="Tell your contractor why..."></textarea></label>
+        <button class="btn" id="rsSend" type="button">Send</button>
+        <button class="btn ghost" id="rsCancel" type="button">Cancel</button>
+      </div>
+    </div>
     <div class="note" id="apMsg"></div>
   </div>
   <div id="paper" style="display:none"></div>
@@ -65,19 +76,66 @@
       $('dTitle').textContent = x.title || 'Contract'; $('tag').textContent = x.businessName || 'Your contract';
       $('paper').textContent = x.body; $('paper').style.display = 'block'; $('bPrint').style.display = 'block';
       $('bPrint').addEventListener('click', function () { window.print(); });
-      function showApproved(x2) { $('apField').style.display = 'none'; $('apBtn').style.display = 'none'; $('apText').textContent = 'Approved by ' + x2.approvedBy + (x2.approvedAt && x2.approvedAt.toDate ? ' on ' + x2.approvedAt.toDate().toLocaleDateString() : '') + '. Your contractor has been told.'; }
+      var ref = db.collection('portals').doc(p).collection('documents').doc(d), pref = db.collection('portals').doc(p);
+      var methods = Array.isArray(x.returnMethods) && x.returnMethods.length ? x.returnMethods : [];
+      var retTxt = methods.length ? 'Return the signed document by: ' + methods.join(', ') + (x.returnNote ? '. ' + x.returnNote : '.') : (x.returnNote || '');
+      if (retTxt) { $('apReturn').textContent = retTxt; }
+      function setStatus(t, bad) { $('apStatus').style.display = 'block'; $('apStatus').textContent = t; $('apStatus').className = 'note' + (bad ? ' err' : ''); }
+      function msg(t, bad) { $('apMsg').textContent = t; $('apMsg').className = 'note' + (bad ? ' err' : ''); }
+      function paintState(x2) {
+        if (x2.approvedAt) {
+          $('apForm').style.display = 'none';
+          setStatus('Approved by ' + x2.approvedBy + (x2.approvedAt.toDate ? ' on ' + x2.approvedAt.toDate().toLocaleDateString() : '') + '. Your contractor has been told. Remember to return the signed document' + (methods.length ? ' (' + methods.join(', ') + ')' : '') + '.');
+        } else if (x2.response === 'declined') {
+          $('apForm').style.display = 'none';
+          setStatus('You declined this. Your reason: ' + (x2.responseReason || '') + '. Your contractor has been told.');
+        } else if (x2.response === 'revise') {
+          setStatus('You asked for changes: ' + (x2.responseReason || '') + '. Your contractor has been told and will send an updated version. You can still approve or decline below.');
+        }
+      }
+      // Tells the contractor in their message inbox (and bumps the unread count on the dashboard).
+      async function tell(text) {
+        var cur = (await pref.get()).data() || {};
+        var st = firebase.firestore.FieldValue.serverTimestamp(), who = cur.customerName || 'Customer';
+        var b = db.batch();
+        b.set(pref.collection('messages').doc(), { from: 'customer', text: text.slice(0, 1000), by: who, createdAt: st, read: false });
+        b.update(pref, { unreadCount: (cur.unreadCount || 0) + 1, lastMessageAt: st, lastMessageText: text.slice(0, 80) });
+        await b.commit();
+      }
       if (x.needsApproval) {
         $('apCard').style.display = 'block';
-        if (x.approvedAt) showApproved(x);
+        paintState(x);
+        var mode = '';
         $('apBtn').addEventListener('click', async function () {
           var nm = $('apName').value.trim();
-          if (nm.length < 2) { $('apMsg').textContent = 'Type your full name first.'; $('apMsg').className = 'note err'; return; }
-          this.disabled = true; $('apMsg').textContent = 'Saving...'; $('apMsg').className = 'note';
+          if (nm.length < 2) { msg('Type your full name first.', true); return; }
+          this.disabled = true; msg('Saving...');
           try {
-            var ref = db.collection('portals').doc(p).collection('documents').doc(d);
             await ref.update({ approvedBy: nm, approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            var again = await ref.get(); showApproved(again.data()); $('apMsg').textContent = '';
-          } catch (e) { $('apMsg').textContent = 'Could not save your approval. Please try again, or tell your contractor.'; $('apMsg').className = 'note err'; this.disabled = false; }
+            try { await tell('I approve online: ' + (x.title || 'the document') + '. I will return the signed copy.'); } catch (e2) { /* the approval itself is saved */ }
+            var again = await ref.get(); paintState(again.data()); msg('');
+          } catch (e) { msg('Could not save your approval. Please try again, or tell your contractor.', true); this.disabled = false; }
+        });
+        function openReason(m) {
+          var nm = $('apName').value.trim();
+          mode = m; $('rsBox').style.display = 'block';
+          $('rsLabel').textContent = m === 'revise' ? 'What would you like changed?' : 'Why are you declining?';
+          $('rsText').focus();
+        }
+        $('rvBtn').addEventListener('click', function () { openReason('revise'); });
+        $('dcBtn').addEventListener('click', function () { openReason('declined'); });
+        $('rsCancel').addEventListener('click', function () { $('rsBox').style.display = 'none'; $('rsText').value = ''; mode = ''; });
+        $('rsSend').addEventListener('click', async function () {
+          var nm = $('apName').value.trim(), why = $('rsText').value.trim();
+          if (nm.length < 2) { msg('Type your full name first (above).', true); return; }
+          if (why.length < 3) { msg('Please type a reason first.', true); return; }
+          this.disabled = true; msg('Sending...');
+          try {
+            await ref.update({ response: mode, responseReason: why, respondedBy: nm, respondedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            try { await tell((mode === 'revise' ? 'I would like changes to ' : 'I decline ') + (x.title || 'the document') + '. Reason: ' + why); } catch (e2) { /* saved on the document */ }
+            var again = await ref.get(); paintState(again.data()); $('rsBox').style.display = 'none'; $('rsText').value = ''; msg('Sent. Your contractor has been told.');
+          } catch (e) { msg('Could not send. Please try again, or contact your contractor.', true); }
+          this.disabled = false;
         });
       }
     } catch (e) { $('err').textContent = 'Could not open this document. Make sure you are signed in with the email your contractor used.'; }

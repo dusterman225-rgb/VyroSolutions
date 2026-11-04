@@ -46,7 +46,10 @@
     <div class="in">
       <p id="pStat">Checking...</p>
       <button class="btn" id="pMake" type="button" style="display:none">Create customer portal</button>
-      <button class="btn ghost" id="pResend" type="button" style="display:none">Email login link again</button>
+      <div class="note" id="pUrl" style="word-break:break-all;display:none"></div>
+      <button class="btn ghost" id="pCopy" type="button" style="display:none">Copy portal link</button>
+      <button class="btn" id="pResend" type="button" style="display:none">Send portal login link</button>
+      <button class="btn ghost" id="pReset" type="button" style="display:none">Send password reset link</button>
       <button class="btn ghost" id="pSync" type="button" style="display:none">Refresh what the customer sees</button>
       <button class="btn ghost" id="pDel" type="button" style="display:none;color:#ff8a8a">Delete portal</button>
       <div class="note">Customers never see costs, profit or internal notes. Archiving or deleting the customer deletes their portal.</div>
@@ -75,6 +78,7 @@
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/cascade.js"></script>
+<script src="js/compose.js"></script>
 <script src="js/portal.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
@@ -182,12 +186,13 @@
       var em = (c.email || '').trim(), has = false;
       if (!canPortal) {
         $('pStat').textContent = c.archived ? 'Archived customers have no portal. Restore the customer to create one.' : 'Only the owner or a supervisor can manage portals.';
-        ['pMake', 'pResend', 'pSync', 'pDel'].forEach(function (b) { $(b).style.display = 'none'; });
+        ['pMake', 'pResend', 'pReset', 'pSync', 'pDel', 'pCopy', 'pUrl'].forEach(function (b) { $(b).style.display = 'none'; });
         return;
       }
       try { has = await vportal.hasForCustomer(ctx, id, em.toLowerCase(), em); } catch (e) { has = false; }
       $('pMake').style.display = !has && em ? 'block' : 'none';
-      ['pResend', 'pSync', 'pDel'].forEach(function (b) { $(b).style.display = has ? 'block' : 'none'; });
+      ['pResend', 'pReset', 'pSync', 'pDel', 'pCopy', 'pUrl'].forEach(function (b) { $(b).style.display = has ? 'block' : 'none'; });
+      if (has) { try { $('pUrl').textContent = await vportal.portalUrl(ctx, em); } catch (e) { /* optional */ } }
       $('portSum').textContent = has ? 'On' : 'Off';
       $('pStat').textContent = has ? 'Portal is on for ' + em + '.' :
         (em ? 'No portal yet for ' + em + '.' : 'Add an email to this customer first (tap Edit), then come back to create their portal.');
@@ -196,18 +201,32 @@
       this.disabled = true; pmsg('Creating...');
       try {
         var r = await vportal.ensureForCustomer(ctx, id, (c.email || '').trim().toLowerCase(), c.name, c.email);
-        if (r && r.ok) pmsg('Done. ' + (r.emailed ? 'A link to set their password was emailed to ' + r.email + '.' : ''), '');
+        if (r && r.ok) pmsg('Done. ' + (r.emailed ? 'A link to set their password was emailed to ' + r.email + '.' : (r.existing ? r.email + ' already has a Vyro login, so no password email was sent. Tap Send portal login link to let them know.' : '')), '');
         else pmsg((r && r.message) || 'Could not create the portal.', 'err');
       } catch (e) { pmsg(vyro.friendly(e), 'err'); }
       this.disabled = false; paintPortal();
     });
+    // Login link: the customer already has a login, so the message just points them to the sign-in page (no password reset).
     $('pResend').addEventListener('click', async function () {
-      this.disabled = true; pmsg('Sending...');
+      this.disabled = true; pmsg('Opening your email...');
       try {
-        var r = await vportal.ensureForCustomer(ctx, id, (c.email || '').trim().toLowerCase(), c.name, c.email);
-        pmsg(r && r.ok ? 'Sent a new login link to ' + r.email + '.' : ((r && r.message) || 'Could not send.'), r && r.ok ? '' : 'err');
+        var em = (c.email || '').trim(), url = await vportal.portalUrl(ctx, em);
+        vcompose.open({ to: em, subject: 'Your customer portal from ' + ctx.biz.name, body: vportal.loginMessage(ctx, c.name, url) });
+        pmsg('Your email app opened with the login link ready to send.', '');
       } catch (e) { pmsg(vyro.friendly(e), 'err'); }
       this.disabled = false;
+    });
+    // Separate: Vyro emails the customer a link to choose a new password.
+    $('pReset').addEventListener('click', async function () {
+      var em = (c.email || '').trim();
+      if (!confirm('Email ' + em + ' a link to reset their password?')) return;
+      this.disabled = true; pmsg('Sending...');
+      var ok = await vportal.sendReset(em);
+      pmsg(ok ? 'Password reset email sent to ' + em + '. Ask them to check spam too.' : 'Could not send right now. Please try again in a few minutes.', ok ? '' : 'err');
+      this.disabled = false;
+    });
+    $('pCopy').addEventListener('click', async function () {
+      try { await navigator.clipboard.writeText($('pUrl').textContent); pmsg('Copied.', ''); } catch (e) { pmsg('Press and hold the link to copy it.', ''); }
     });
     $('pSync').addEventListener('click', async function () {
       this.disabled = true; pmsg('Refreshing...');

@@ -25,6 +25,13 @@
       <div id="list"></div>
       <div class="note" id="empty"></div>
     </div>
+    <div class="card">
+      <h2 style="margin:0 0 4px">Customer portal link</h2>
+      <div class="note">Customers sign in here to see their project, invoices and documents. Share this link or send it from their customer page.</div>
+      <div class="note"><b id="portalUrl" style="word-break:break-all"></b></div>
+      <button class="btn ghost" id="copyUrl" type="button">Copy link</button>
+      <div class="note" id="copyMsg"></div>
+    </div>
     <div class="note">Customers are added automatically when an estimate is approved.</div>
     <a class="back" href="app.html">Back to dashboard</a>
   </div>
@@ -52,6 +59,7 @@
 <script src="../shared/firebase-config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/cascade.js"></script>
+<script src="js/portal.js"></script>
 <script>
   var LANGS = [['en','English'],['es','Spanish'],['pt','Portuguese'],['fr','French'],['zh','Chinese'],
                ['vi','Vietnamese'],['tl','Tagalog'],['ar','Arabic'],['ru','Russian'],['ko','Korean'],['other','Other']];
@@ -150,6 +158,10 @@
       render();
     }
 
+    vportal.portalUrl(ctx, '').then(function (u) {
+      $('portalUrl').textContent = u;
+      $('copyUrl').addEventListener('click', async function () { try { await navigator.clipboard.writeText(u); $('copyMsg').textContent = 'Copied.'; } catch (e) { $('copyMsg').textContent = 'Press and hold the link to copy it.'; } });
+    }).catch(function () { $('portalUrl').textContent = ''; });
     $('q').addEventListener('input', render);
     $('cancel').addEventListener('click', showList);
 
