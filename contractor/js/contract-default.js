@@ -28,6 +28,7 @@ window.VYRO_CONTRACT_DEFAULT = {
 '',
 '6. DOWN PAYMENT AND PAYMENT SCHEDULE',
 'Down payment: {{deposit_amount}}, due at signing. [California: the down payment may not exceed the lesser of $1,000 or 10% of the Contract Price.]',
+'Payment plan details: {{payment_plan}}',
 'Payment schedule (each payment and the work it covers):',
 '  Payment 1: [amount], due when [work, materials or milestone] is complete.',
 '  Payment 2: [amount], due when [work, materials or milestone] is complete.',

@@ -48,6 +48,7 @@
       customer_address: first(cust.address, est.address, job.address),
       customer_phone: first(job.customerPhone, cust.phone, est.customerPhone), customer_email: first(job.customerEmail, cust.email, est.customerEmail),
       job_address: first(job.address, est.address, cust.address), project_title: first(job.title, est.title),
+      payment_plan: first(job.paymentPlan, est.paymentPlan),
       scope: scope, contract_total: total ? vutil.fmt(total) : '',
       deposit_amount: dep ? vutil.fmt(dep) : '',
       start_date: longDate(job.startDate), target_end_date: longDate(job.targetEndDate)

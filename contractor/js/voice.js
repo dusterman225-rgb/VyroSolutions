@@ -83,6 +83,9 @@
     if (field.inputMode === 'decimal' || field.inputMode === 'numeric') return t.replace(/[^0-9.]/g, '');
     return t;
   }
+  function micBlocked() {
+    sheet('The microphone did not start', 'Your browser says it allows the microphone for this site, but the phone itself may still be blocking it. On Android: Settings > Apps > your browser > Permissions > Microphone > Allow. Then close the browser fully and reopen Vyro. Until then you can use the microphone key on your keyboard.', [{ label: 'OK' }]);
+  }
   function stop() { if (active) { try { active.rec.stop(); } catch (e) { /* ignore */ } } }
   function dictate(field, btn) {
     if (!SR) {
@@ -100,7 +103,12 @@
       field.value = v; field.dispatchEvent(new Event('input', { bubbles: true }));
     };
     rec.onerror = function (e) {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') sheet('Microphone is blocked', 'Allow the microphone for this website in your browser settings, then try again.', [{ label: 'OK' }]);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        // Some browsers (and in-app browsers like Via) offer built-in speech typing but refuse to run it even when the site's
+        // microphone permission is on. Recording the sound directly works there, so try that before giving up.
+        if (canRecord()) { btn.classList.remove('rec'); active = null; record(field, btn); return; }
+        micBlocked();
+      }
     };
     rec.onend = function () { btn.classList.remove('rec'); if (active && active.rec === rec) active = null; field.dispatchEvent(new Event('change', { bubbles: true })); };
     active = { rec: rec, field: field };
@@ -158,7 +166,7 @@
       };
       active = { mr: mr, field: field, rec: { stop: function () { try { mr.stop(); } catch (e) { /* ignore */ } } } };
       btn.classList.add('rec'); mr.start();
-    }).catch(function () { sheet('Microphone is blocked', 'Allow the microphone for this website in your browser settings, then try again.', [{ label: 'OK' }]); });
+    }).catch(function () { micBlocked(); });
   }
 
   // ---- microphone buttons ----

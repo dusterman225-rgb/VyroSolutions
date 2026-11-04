@@ -5,7 +5,7 @@
   function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
   var DAY = 86400000;
 
-  var GROUPS = [['invoice-soon', 'Invoices due soon'], ['invoice', 'Payment reminders to send'], ['document', 'Signed documents still to come back'], ['estimate', 'Estimates to follow up on'], ['lead', 'Leads to call back']];
+  var GROUPS = [['invoice-soon', 'Invoices due soon'], ['invoice', 'Payment reminders to send'], ['document', 'Signed documents still to come back'], ['estimate', 'Estimates to follow up on'], ['bill', 'Bills you owe'], ['lead', 'Leads to call back']];
 
   async function gather(ctx, items) {
     var today = vutil.todayStr(), money = ctx.role === 'owner' || ctx.role === 'supervisor' || ctx.role === 'gm', out = { today: today, groups: [], urgent: false };

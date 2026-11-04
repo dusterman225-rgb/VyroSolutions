@@ -7,6 +7,7 @@
     '@media(min-width:620px){#vTiles{grid-template-columns:repeat(3,minmax(0,1fr))}}' +
     '#vTiles .vt{border:2px solid var(--c);background:linear-gradient(180deg,color-mix(in srgb,var(--c) 22%,#0a0e14),#0a0e14);border-radius:16px;padding:10px 11px;display:flex;flex-direction:column;gap:3px;min-width:0}' +
     '#vTiles .vt.urgent{box-shadow:0 0 0 2px #ff5a5a,0 0 16px rgba(255,90,90,.55)}' +
+    '#vTiles .vt.over{border:4px solid #ff3030;box-shadow:0 0 0 2px rgba(255,48,48,.55),0 0 22px 4px rgba(255,48,48,.8)}' +
     '#vTiles .k{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--c);font-weight:800}' +
     '#vTiles .n{font-weight:700;font-size:.92rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '#vTiles .d{color:var(--c);font-size:.8rem}#vTiles .d b{font-size:1.7rem;line-height:1;margin-right:4px}' +
@@ -19,14 +20,14 @@
   function render(ctx, box, items) {
     if (!document.getElementById('vTilesCss')) { var st = document.createElement('style'); st.id = 'vTilesCss'; st.textContent = CSS; document.head.appendChild(st); }
     box.textContent = '';
-    var shown = items.filter(function (i) { return !i.soon && !i.snoozed && i.days >= (i.kind === 'lead' ? 0 : 1); });
+    var shown = items.filter(function (i) { return !i.soon && !i.snoozed && (i.countdown || i.days >= (i.kind === 'lead' ? 0 : 1) || i.overdue); });
     box.style.display = shown.length ? 'grid' : 'none';
     shown.forEach(function (i) {
-      var t = el('div', 'vt' + (i.urgent ? ' urgent' : '') + (i.remindedToday ? ' did' : ''));
+      var t = el('div', 'vt' + (i.urgent ? ' urgent' : '') + (i.overdue ? ' over' : '') + (i.remindedToday ? ' did' : ''));
       t.style.setProperty('--c', i.color);
-      t.appendChild(el('div', 'k', i.label + (i.urgent ? ' · URGENT' : '')));
+      t.appendChild(el('div', 'k', i.label + (i.urgent ? ' · URGENT' : i.overdue ? ' · PAST DUE' : '')));
       t.appendChild(el('div', 'n', i.customer || i.title));
-      var d = el('div', 'd'); d.appendChild(el('b', '', i.kind === 'lead' && i.days < 1 ? '0' : String(i.days))); d.appendChild(document.createTextNode(i.kind === 'lead' && i.days < 1 ? ' days (due today)' : ' day' + (i.days === 1 ? '' : 's') + ' ' + i.dayWord)); t.appendChild(d);
+      var d = el('div', 'd'); d.appendChild(el('b', '', i.kind === 'lead' && i.days < 1 || i.days === 0 ? '0' : String(i.days))); d.appendChild(document.createTextNode(i.kind === 'lead' && i.days < 1 ? ' days (due today)' : i.days === 0 ? ' ' + i.dayWord : ' day' + (i.days === 1 ? '' : 's') + ' ' + i.dayWord)); t.appendChild(d);
       t.appendChild(el('div', 's', i.remindedToday ? 'Reminder sent today ✓' : (i.msg && i.msg.tone ? i.msg.tone : i.sub)));
       var r1 = el('div', 'row');
       var send;

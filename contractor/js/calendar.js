@@ -41,6 +41,7 @@
             var who = j.customerName || 'Job', what = j.title || j.estimateNumber || '';
             add(j.startDate, 'start', who, 'Job starts' + (what ? ' · ' + what : ''), 'job.html?id=' + d.id);
             add(j.targetEndDate, 'end', who, 'Job target finish' + (what ? ' · ' + what : ''), 'job.html?id=' + d.id);
+            add(j.contractSignedOn, 'start', who, 'Contract signed' + (what ? ' · ' + what : ''), 'job.html?id=' + d.id);
           });
         }),
         ctx.bizRef.collection('leads').get().then(function (s) {
