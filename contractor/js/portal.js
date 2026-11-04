@@ -20,13 +20,51 @@
         result.created = true;
       } catch (e) {
         if (!e || e.code !== 'auth/email-already-in-use') throw e;
+        result.existing = true;   // already has a login: no password email; the contractor sends a plain login link instead
       }
-      try { await a.sendPasswordResetEmail(email, { url: location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html' }); result.emailed = true; }
+      if (!result.existing) try { await a.sendPasswordResetEmail(email, { url: location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html' }); result.emailed = true; }
       catch (e2) { await a.sendPasswordResetEmail(email); result.emailed = true; }
+      if (result.existing) result.emailed = false;
       try { await a.signOut(); } catch (x) { /* ignore */ }
     } catch (e) { result.error = vyro.friendly(e); }
     try { await app.delete(); } catch (x) { /* ignore */ }
     return result;
+  }
+
+
+  // The web address customers use to sign in to their portal (with the business's own name on it).
+  async function portalUrl(ctx, email) {
+    var base = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html', slug = ctx.biz && ctx.biz.slug || '';
+    if (!slug) {
+      try { slug = sessionStorage.getItem('vyroSlug_' + ctx.bizId) || ''; } catch (e) { slug = ''; }
+      if (!slug) {
+        try { var qs = await vyro.db.collection('publicBrands').where('bizId', '==', ctx.bizId).get(); if (!qs.empty) slug = qs.docs[0].id; } catch (e) { slug = ''; }
+        try { if (slug) sessionStorage.setItem('vyroSlug_' + ctx.bizId, slug); } catch (e) { /* optional */ }
+      }
+    }
+    var q = [];
+    if (slug) q.push('r=' + encodeURIComponent(slug));
+    if (email) q.push('e=' + encodeURIComponent(email));
+    return base + (q.length ? '?' + q.join('&') : '');
+  }
+
+  // Customers who already have a login get a plain "sign in here" message (no password reset). Opens the contractor's own mail app.
+  function loginMessage(ctx, name, url) {
+    var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
+    return 'Hi ' + first + ',\n\nYou can see your project, invoices, documents and messages in your customer portal. Sign in here with your email and password:\n' + url +
+      '\n\nIf you ever forget your password, tap "Forgot your password?" on that page and a reset link will be emailed to you.\n\nThank you,\n' + ctx.biz.name;
+  }
+
+  // A separate email that only resets the password.
+  async function sendReset(email) {
+    var app = firebase.initializeApp(window.VYRO_FIREBASE_CONFIG, 'portal-reset-' + Date.now()), ok = true;
+    try {
+      var a = app.auth();
+      try { await a.sendPasswordResetEmail(email, { url: location.origin + location.pathname.replace(/[^\/]*$/, '') + 'portal-login.html' }); }
+      catch (e) { await a.sendPasswordResetEmail(email); }
+    } catch (e) { ok = false; }
+    try { await app.delete(); } catch (x) { /* ignore */ }
+    return ok;
   }
 
   // Customer-safe copy of the job + invoices. Never copies costs, profit or internal notes.
@@ -92,7 +130,7 @@
       await pref.update({ customerEmail: email, updatedAt: vyro.stamp() });
     }
     await syncJob(ctx, jobId, job);
-    return { ok: true, created: inv ? inv.created : false, emailed: inv ? inv.emailed : false, email: email };
+    return { ok: true, created: inv ? inv.created : false, emailed: inv ? inv.emailed : false, existing: !!(inv && inv.existing), email: email };
   }
 
   // Shows a note in the customer's portal.
@@ -162,5 +200,5 @@
 
   async function exists(jobId) { return (await portals().doc(jobId).get()).exists; }
 
-  window.vportal = { findJobs: findJobs, ensure: ensure, ensureForCustomer: ensureForCustomer, hasForCustomer: hasForCustomer, removeForCustomer: removeForCustomer, removeForJob: removeForJob, syncJob: syncJob, shareUpdate: shareUpdate, exists: exists };
+  window.vportal = { portalUrl: portalUrl, loginMessage: loginMessage, sendReset: sendReset, findJobs: findJobs, ensure: ensure, ensureForCustomer: ensureForCustomer, hasForCustomer: hasForCustomer, removeForCustomer: removeForCustomer, removeForJob: removeForJob, syncJob: syncJob, shareUpdate: shareUpdate, exists: exists };
 })();

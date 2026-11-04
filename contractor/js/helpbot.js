@@ -8,6 +8,7 @@
   var NAME = 'Vyro Help';   // change this word to rename the helper
   var css = document.createElement('style');
   css.textContent =
+    '#hbBtn,.hbBox,.hbBox *{font-family:Arial,Helvetica,sans-serif!important}' +
     '#hbBtn{position:fixed;right:14px;bottom:14px;z-index:50;padding:13px 18px;border-radius:999px;border:0;background:#2b7bd8;color:#fff;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.4)}' +
     '#hbBox{position:fixed;right:10px;left:10px;bottom:70px;max-width:400px;margin-left:auto;z-index:50;background:#0a0f16;border:1px solid #1c2530;border-radius:16px;display:none;flex-direction:column;height:min(520px,72vh);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5)}' +
     '#hbHead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #1c2530;color:#fff}' +

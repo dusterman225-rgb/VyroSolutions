@@ -5,40 +5,28 @@
   function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
   var DAY = 86400000;
 
-  async function gather(ctx) {
-    var today = vutil.todayStr(), money = ctx.role === 'owner' || ctx.role === 'supervisor' || ctx.role === 'gm', out = { today: today, groups: [] }, now = Date.now();
-    function ms(t) { return t && t.toMillis ? t.toMillis() : 0; }
-    var invoices = [], ests = [], leads = [];
+  var GROUPS = [['invoice-soon', 'Invoices due soon'], ['invoice', 'Payment reminders to send'], ['document', 'Signed documents still to come back'], ['estimate', 'Estimates to follow up on'], ['lead', 'Leads to call back']];
+
+  async function gather(ctx, items) {
+    var today = vutil.todayStr(), money = ctx.role === 'owner' || ctx.role === 'supervisor' || ctx.role === 'gm', out = { today: today, groups: [], urgent: false };
+    items = (items || await vremind.collect(ctx)).filter(function (i) { return !i.snoozed; });
+    GROUPS.forEach(function (g) {
+      var rows = items.filter(function (i) { return (g[0] === 'invoice-soon' ? (i.kind === 'invoice' && i.soon) : (i.kind === g[0] && !i.soon)); });
+      if (!rows.length) return;
+      rows.forEach(function (i) { if (i.urgent) out.urgent = true; });
+      out.groups.push({ title: g[1], rows: rows.map(function (i) {
+        return { title: i.title, sub: i.sub + (i.days > 0 && !i.soon ? ' · ' + i.days + ' day' + (i.days === 1 ? '' : 's') + ' ' + i.dayWord : '') + (i.msg && i.msg.tone && !i.soon ? ' · ' + i.msg.tone : ''), msg: i.msg, late: !!i.urgent || i.days > 7,
+          mark: i.sent, later: i.later, done: i.done, doneLabel: i.doneLabel, open: i.open };
+      }) });
+    });
     if (money) {
-      try { (await ctx.bizRef.collection('invoices').get()).forEach(function (d) { var x = d.data(); x.id = d.id; invoices.push(x); }); } catch (e) { /* optional */ }
-      try { (await ctx.bizRef.collection('estimates').get()).forEach(function (d) { var x = d.data(); x.id = d.id; ests.push(x); }); } catch (e) { /* optional */ }
+      var drafts = [];
+      try { (await ctx.bizRef.collection('invoices').where('status', '==', 'Draft').get()).forEach(function (d) { var x = d.data(); x.id = d.id; if (x.customerName && (x.totalCents || 0) > 0) drafts.push(x); }); } catch (e) { /* optional */ }
+      drafts = drafts.slice(0, 8);
+      if (drafts.length) out.groups.push({ title: 'Invoices not sent yet', rows: drafts.map(function (i) {
+        return { title: (i.customerName || '') + ' · ' + vutil.fmt(i.totalCents || 0), sub: (i.number || 'Draft invoice') + ' · saved but never sent', open: 'invoice.html?id=' + i.id, openLabel: 'Open and send' };
+      }) });
     }
-    try { (await ctx.bizRef.collection('leads').get()).forEach(function (d) { var x = d.data(); x.id = d.id; leads.push(x); }); } catch (e) { /* optional */ }
-
-    var over = invoices.filter(function (i) { return (i.status === 'Sent' || i.status === 'Partially Paid') && i.dueDate && i.dueDate < today && now - ms(i.lastReminderAt) > 3 * DAY; })
-      .sort(function (a, b) { return a.dueDate < b.dueDate ? -1 : 1; });
-    if (over.length) out.groups.push({ title: 'Payment reminders to send', rows: over.map(function (i) {
-      var p = vremind.invoice(ctx, i, today);
-      return { title: (i.customerName || '') + ' · ' + vutil.fmt((i.totalCents || 0) - (i.paidCents || 0)), sub: (i.number || '') + ' · ' + p.late + ' days late · ' + p.tone, msg: p, late: p.late > 30,
-        mark: function () { return ctx.bizRef.collection('invoices').doc(i.id).update({ lastReminderAt: vyro.stamp(), reminders: (i.reminders || 0) + 1 }); }, open: 'invoice.html?id=' + i.id };
-    }) });
-
-    var drafts = invoices.filter(function (i) { return i.status === 'Draft' && i.customerName && (i.totalCents || 0) > 0; }).slice(0, 8);
-    if (drafts.length) out.groups.push({ title: 'Invoices not sent yet', rows: drafts.map(function (i) {
-      return { title: (i.customerName || '') + ' · ' + vutil.fmt(i.totalCents || 0), sub: (i.number || 'Draft invoice') + ' · saved but never sent', open: 'invoice.html?id=' + i.id, openLabel: 'Open and send' };
-    }) });
-
-    var waiting = ests.filter(function (e) { return e.status === 'Sent' && now - Math.max(ms(e.sentAt), ms(e.lastFollowUpAt)) > 3 * DAY; });
-    if (waiting.length) out.groups.push({ title: 'Estimates to follow up on', rows: waiting.slice(0, 10).map(function (e) {
-      var p = vremind.estimate(ctx, e), sent = ms(e.sentAt), d = sent ? Math.floor((now - sent) / DAY) : null;
-      return { title: (e.customerName || '') + ' · ' + vutil.fmt(e.totalCents || 0), sub: (e.number || '') + (d != null ? ' · sent ' + d + ' days ago' : '') + ' · no answer yet', msg: p,
-        mark: function () { return ctx.bizRef.collection('estimates').doc(e.id).update({ lastFollowUpAt: vyro.stamp() }); }, open: 'estimate.html?id=' + e.id };
-    }) });
-
-    var due = leads.filter(function (l) { return l.followUpOn && l.followUpOn <= today && ['Won', 'Lost'].indexOf(l.status) < 0; });
-    if (due.length) out.groups.push({ title: 'Leads to call back', rows: due.slice(0, 10).map(function (l) {
-      return { title: l.name || 'Lead', sub: (l.jobDetails ? String(l.jobDetails).slice(0, 60) + ' · ' : '') + 'follow-up date ' + l.followUpOn, msg: vremind.lead(ctx, l), late: l.followUpOn < today, open: 'leads.html', openLabel: 'Open leads' };
-    }) });
     return out;
   }
 
@@ -65,6 +53,8 @@
           var sent = false;
           row.appendChild(vremind.buttons(r.msg, function () { if (sent) return; sent = true; row.classList.add('done'); try { if (r.mark) r.mark().catch(function () { /* optional */ }); } catch (e) { /* optional */ } }));
           var o = el('a', 'btn ghost', 'Open'); o.href = r.open; row.lastChild.appendChild(o);
+          if (r.later) { var lb = el('button', 'btn ghost', 'Later'); lb.type = 'button'; lb.addEventListener('click', function () { try { r.later().catch(function () { /* optional */ }); } catch (e) { /* optional */ } row.remove(); }); row.lastChild.appendChild(lb); }
+          if (r.done) { var db = el('button', 'btn ghost', r.doneLabel || 'Done'); db.type = 'button'; db.addEventListener('click', async function () { if (!confirm((r.doneLabel || 'Done') + '? This clears the reminder.')) return; try { await r.done(); row.remove(); } catch (e) { db.textContent = 'Try again'; } }); row.lastChild.appendChild(db); }
         } else { var a = el('a', 'btn', r.openLabel || 'Open'); a.href = r.open; a.style.marginTop = '8px'; row.appendChild(a); }
         inn.appendChild(row);
       });
@@ -76,11 +66,13 @@
     document.body.appendChild(ov);
   }
 
-  window.vdaily = { run: async function (ctx) {
+  window.vdaily = { run: async function (ctx, items) {
     if (!window.vremind || !window.vcompose) return;
-    var key = 'vyroDaily_' + ctx.bizId + '_' + ctx.user.uid, today = vutil.todayStr();
-    try { if (localStorage.getItem(key) === today) return; } catch (e) { /* show it */ }
-    var data = await gather(ctx);
+    var key = 'vyroDaily_' + ctx.bizId + '_' + ctx.user.uid, today = vutil.todayStr(), shown = false;
+    try { shown = localStorage.getItem(key) === today; } catch (e) { shown = false; }
+    var data = await gather(ctx, items);
+    // Anything more than 7 days late (urgent) keeps coming back every time the dashboard opens until it is settled or put off for today.
+    if (shown && !data.urgent) return;
     if (!data.groups.length) { try { localStorage.setItem(key, today); } catch (e) { /* ignore */ } return; }
     show(ctx, data, function (finished) { if (finished) { try { localStorage.setItem(key, today); } catch (e) { /* ignore */ } } });
   } };

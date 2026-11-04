@@ -86,12 +86,21 @@
     var pref = vyro.db.collection('portals').doc(c.jobId);
     await pref.collection('documents').doc(contractId).set({
       title: c.title || 'Contract', body: c.body, businessName: ctx.biz.name || '', sharedAt: vyro.stamp(),
-      needsApproval: /change order|subcontractor/i.test((c.title || '') + ' ' + (c.templateName || ''))
+      needsApproval: /change order|subcontractor/i.test((c.title || '') + ' ' + (c.templateName || '')),
+      returnMethods: Array.isArray(ctx.biz.returnMethods) ? ctx.biz.returnMethods : [], returnNote: ctx.biz.returnNote || ''
     });
+  }
+  // After the contractor changes how documents are returned, update every document already shared with a customer.
+  async function refreshReturn(ctx, methods, note) {
+    var qs = await ctx.bizRef.collection('contracts').where('status', '==', 'Shared').get();
+    for (var i = 0; i < qs.docs.length; i++) {
+      var c = qs.docs[i].data();
+      try { await vyro.db.collection('portals').doc(c.jobId).collection('documents').doc(qs.docs[i].id).update({ returnMethods: methods, returnNote: note }); } catch (e) { /* portal may be gone */ }
+    }
   }
   async function unshare(contractId, jobId) {
     try { await vyro.db.collection('portals').doc(jobId).collection('documents').doc(contractId).delete(); } catch (e) { /* may not exist */ }
   }
 
-  window.vcontract = { fill: fill, refill: refill, blanks: blanks, share: share, unshare: unshare, longDate: longDate };
+  window.vcontract = { fill: fill, refill: refill, blanks: blanks, share: share, unshare: unshare, refreshReturn: refreshReturn, longDate: longDate };
 })();

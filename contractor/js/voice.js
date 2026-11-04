@@ -1,11 +1,11 @@
-// VyroAssistant (included with VyroContractor) voice and "fill it for me". Loaded by js/auth.js after sign-in.
+// VyroAssistant (included with every Vyro app) voice and "fill it for me". Loaded by js/auth.js after sign-in.
 //  - A small microphone beside every typed field. Tap it, talk, and the words are typed in.
 //  - A "Fill by voice" bar on estimates, invoices, expenses and leads: say it all at once and the form fills in.
 //  - Both come with the VyroAssistant, which is included with VyroContractor.
 // Nothing is saved by voice. The person always checks the fields and taps Save.
 (function () {
   if (window.vvoice) return;
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;   // Chrome, Edge, Safari, Samsung Internet. Firefox has none.
   var base = '', ctxRef = null, planState = null, planPromise = null, active = null;
   function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
   function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -43,7 +43,7 @@
   // ---- messages ----
   function sheet(title, text, buttons) {
     var ov = el('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center';
-    var bx = el('div'); bx.style.cssText = 'background:#0C1117;color:#E8EDF2;border-radius:16px 16px 0 0;padding:20px;max-width:480px;width:100%;box-sizing:border-box;font:16px system-ui,sans-serif';
+    var bx = el('div'); bx.style.cssText = 'background:#0C1117;color:#E8EDF2;border-radius:16px 16px 0 0;padding:20px;max-width:480px;width:100%;box-sizing:border-box;font:16px Arial,Helvetica,sans-serif';
     var h = el('h2', '', title); h.style.margin = '0 0 8px'; bx.appendChild(h);
     var p = el('div', '', text); p.style.cssText = 'line-height:1.5;margin-bottom:14px'; bx.appendChild(p);
     buttons.forEach(function (b) {
@@ -53,16 +53,19 @@
     ov.appendChild(bx); ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); }); document.body.appendChild(ov);
   }
   function upgrade() {
-    sheet('Voice is not available right now', 'Talking instead of typing, filling in a form by voice, and scanning receipts come with the VyroAssistant, which is included with VyroContractor. It could not be reached just now. Check your connection, reload the page, and try again.',
+    sheet('Voice is not available right now', 'Talking instead of typing, filling in a form by voice, and scanning receipts come with the VyroAssistant, which is included with your Vyro subscription. It could not be reached just now. Check your connection, reload the page, and try again.',
       [{ label: 'OK' }]);
   }
   function needNotice() {
     sheet('One quick step first', 'Open the Assistant page once and accept its notice. After that, voice and form filling work everywhere.', [{ label: 'Open the Assistant', href: 'assistant.html' }, { label: 'Not now', ghost: true }]);
   }
   function micNotice(go) {
-    try { if (localStorage.getItem('vyroVoiceOk') === '1') { go(); return; } } catch (e) { /* ask each time */ }
-    sheet('Using your voice', 'Your phone\'s browser turns your voice into text using its own speech service (Google on Android, Apple on iPhone). Vyro does not record or keep audio. Do not say passwords or card numbers.',
-      [{ label: 'Continue', go: function () { try { localStorage.setItem('vyroVoiceOk', '1'); } catch (e) { /* ignore */ } go(); } }, { label: 'Cancel', ghost: true }]);
+    var key = SR ? 'vyroVoiceOk' : 'vyroVoiceRecOk';
+    try { if (localStorage.getItem(key) === '1') { go(); return; } } catch (e) { /* ask each time */ }
+    var text = SR
+      ? 'Your browser turns your voice into text using its own speech service (Google on Android and Chrome, Apple on iPhone and Mac). Vyro does not record or keep audio. Do not say passwords or card numbers.'
+      : 'Your browser cannot turn speech into text by itself, so Vyro records up to 25 seconds while you talk and sends that short recording to its AI service to type it for you. The recording is not saved. Do not say passwords or card numbers.';
+    sheet('Using your voice', text, [{ label: 'Continue', go: function () { try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ } go(); } }, { label: 'Cancel', ghost: true }]);
   }
 
   // ---- gate: runs fn only when the business has the assistant ----
@@ -82,7 +85,10 @@
   }
   function stop() { if (active) { try { active.rec.stop(); } catch (e) { /* ignore */ } } }
   function dictate(field, btn) {
-    if (!SR) { sheet('Voice typing is not available here', 'This browser cannot turn speech into text. Use the microphone key on your phone\'s keyboard instead, or try Chrome (Android) or Safari (iPhone).', [{ label: 'OK' }]); return; }
+    if (!SR) {
+      if (canRecord()) { record(field, btn); return; }
+      sheet('Voice typing is not available here', 'This browser cannot use the microphone (some in-app browsers block it). Open Vyro in Chrome, Firefox, Safari or Edge, or use the microphone key on your keyboard.', [{ label: 'OK' }]); return;
+    }
     if (active && active.field === field) { stop(); return; }
     stop();
     var rec = new SR(); rec.lang = navigator.language || 'en-US'; rec.interimResults = true; rec.continuous = false;
@@ -100,6 +106,59 @@
     active = { rec: rec, field: field };
     btn.classList.add('rec');
     try { rec.start(); } catch (e) { btn.classList.remove('rec'); active = null; }
+  }
+
+  // ---- browsers with no built-in speech to text (Firefox, some in-app browsers): record a short clip and let the assistant type it ----
+  function canRecord() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext)); }
+  function wavBase64(blob) {
+    return blob.arrayBuffer().then(function (ab) {
+      var AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
+      return ac.decodeAudioData(ab).then(function (buf) {
+        try { ac.close(); } catch (e) { /* ignore */ }
+        var rate = 16000, off = new OfflineAudioContext(1, Math.max(1, Math.ceil(buf.duration * rate)), rate), src = off.createBufferSource();
+        src.buffer = buf; src.connect(off.destination); src.start();
+        return off.startRendering();
+      });
+    }).then(function (out) {
+      var f = out.getChannelData(0), n = f.length, bytes = new Uint8Array(44 + n * 2), dv = new DataView(bytes.buffer);
+      function str(o, t) { for (var i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); }
+      str(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+      dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); str(36, 'data'); dv.setUint32(40, n * 2, true);
+      for (var i = 0; i < n; i++) { var v = Math.max(-1, Math.min(1, f[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true); }
+      var bin = '', CH = 0x8000; for (var j = 0; j < bytes.length; j += CH) bin += String.fromCharCode.apply(null, bytes.subarray(j, j + CH));
+      return btoa(bin);
+    });
+  }
+  function record(field, btn) {
+    if (active && active.field === field && active.mr) { try { active.mr.stop(); } catch (e) { /* ignore */ } return; }
+    stop();
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var chunks = [], mr;
+      try { mr = new MediaRecorder(stream); } catch (e) { stream.getTracks().forEach(function (t) { t.stop(); }); sheet('Recording is not available here', 'This browser could not start recording.', [{ label: 'OK' }]); return; }
+      var cap = setTimeout(function () { try { mr.stop(); } catch (e) { /* ignore */ } }, 25000);
+      mr.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      mr.onstop = function () {
+        clearTimeout(cap); stream.getTracks().forEach(function (t) { t.stop(); });
+        btn.classList.remove('rec'); active = null;
+        if (!chunks.length) return;
+        btn.classList.add('busy'); btn.disabled = true;
+        var before = field.value, sep = before && !/\s$/.test(before) && field.inputMode !== 'decimal' && field.type !== 'email' && field.type !== 'tel' ? ' ' : '';
+        wavBase64(new Blob(chunks, { type: mr.mimeType || 'audio/webm' })).then(function (b64) {
+          return post('/transcribe', { audio: b64, today: today() });
+        }).then(function (r) {
+          if (r.status === 402) { upgrade(); return; }
+          if (r.data && r.data.error === 'consent') { needNotice(); return; }
+          if (r.status === 429) { sheet('Voice limit reached', 'You have used today\'s voice typing for this business. It resets tomorrow. You can still type.', [{ label: 'OK' }]); return; }
+          if (r.status !== 200 || !r.data || typeof r.data.text !== 'string') { sheet('Could not type that', (r.data && r.data.detail) || 'Please try again in a minute.', [{ label: 'OK' }]); return; }
+          if (!r.data.text.trim()) { sheet('Did not catch that', 'I did not hear any speech. Tap the microphone, speak clearly, then tap it again to finish.', [{ label: 'OK' }]); return; }
+          var v = before + sep + tidy(field, r.data.text.trim());
+          if (field.maxLength > 0) v = v.slice(0, field.maxLength);
+          field.value = v; field.dispatchEvent(new Event('input', { bubbles: true })); field.dispatchEvent(new Event('change', { bubbles: true }));
+        }).catch(function () { sheet('Could not type that', 'Check your connection and try again.', [{ label: 'OK' }]); }).then(function () { btn.classList.remove('busy'); btn.disabled = false; });
+      };
+      active = { mr: mr, field: field, rec: { stop: function () { try { mr.stop(); } catch (e) { /* ignore */ } } } };
+      btn.classList.add('rec'); mr.start();
+    }).catch(function () { sheet('Microphone is blocked', 'Allow the microphone for this website in your browser settings, then try again.', [{ label: 'OK' }]); });
   }
 
   // ---- microphone buttons ----
@@ -186,7 +245,7 @@
   var css = document.createElement('style');
   css.textContent = '.vmic{position:absolute;right:6px;bottom:6px;width:34px;height:34px;border-radius:50%;border:1px solid #2f4a68;background:#0a0f16;color:#7fd0ff;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;z-index:2}' +
     '.vmic.mid{top:50%;bottom:auto;transform:translateY(-50%)}.vmic.rec{background:#c0392b;border-color:#c0392b;color:#fff;animation:vmicp 1s infinite}' +
-    '@keyframes vmicp{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.6)}50%{box-shadow:0 0 0 7px rgba(192,57,43,0)}}.vmic-in{padding-right:46px!important}';
+    '.vmic.busy{opacity:.5}@keyframes vmicp{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.6)}50%{box-shadow:0 0 0 7px rgba(192,57,43,0)}}.vmic-in{padding-right:46px!important}';
   document.head.appendChild(css);
 
   window.vvoice = {
@@ -195,6 +254,13 @@
       checkPlan(); scan(); attachFill();
       var t = null; new MutationObserver(function () { clearTimeout(t); t = setTimeout(function () { scan(); attachFill(); }, 200); }).observe(document.body, { childList: true, subtree: true });
     },
-    attachFill: attachFill, gate: gate, readReceipt: readReceipt, upgrade: upgrade
+    attachFill: attachFill, gate: gate, readReceipt: readReceipt, upgrade: upgrade,
+    // A ready-made microphone button for one field (used by the assistant chat box).
+    micButton: function (field) {
+      var b = el('button', 'vmic'); b.type = 'button'; b.innerHTML = MIC_SVG; b.setAttribute('aria-label', 'Speak instead of typing'); b.title = 'Speak instead of typing';
+      b.style.cssText = 'position:static;flex:0 0 auto;width:42px;height:42px;margin:0';
+      b.addEventListener('click', function (e) { e.preventDefault(); gate(function () { micNotice(function () { dictate(field, btn_); }); }); });
+      var btn_ = b; return b;
+    }
   };
 })();
