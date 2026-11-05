@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Expense - Vyro Business</title>
+<title>Expense - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -129,7 +129,7 @@
     }
     syncStatus();
 
-    // ---- VyroAssistant: fill by voice, and scan a receipt photo ----
+    // ---- VyqilAssistant: fill by voice, and scan a receipt photo ----
     function pickJob(hint) {
       hint = String(hint || '').toLowerCase().trim(); if (!hint) return;
       var hit = Object.keys(jobs).filter(function (k) { var j = jobs[k]; var t = ((j.customerName || '') + ' ' + (j.title || '')).toLowerCase(); return t.indexOf(hint) > -1 || hint.indexOf((j.customerName || '').toLowerCase()) > -1 && (j.customerName || ''); });

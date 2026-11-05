@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Dashboard - Vyro Business</title>
+<title>Dashboard - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -14,7 +14,7 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <img class="mark-small" src="images/logo.svg" alt="Vyro">
+    <img class="mark-small" src="images/logo.svg" alt="Vyqil">
     <div>
       <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu">Menu &#9662;</button>
       <div class="menu" id="menu">
@@ -42,7 +42,7 @@
           <a class="mi" href="expenses.html">Expenses and bills</a>
           <a class="mi" id="miRec" href="recurring.html">Recurring bills</a>
           <a class="mi" id="miFin" href="finances.html" style="display:none">Finances</a>
-          <a class="mi" id="miPay" href="paysettings.html" style="display:none">Pay with Vyro</a>
+          <a class="mi" id="miPay" href="paysettings.html" style="display:none">Pay with Vyqil</a>
         </details>
         <details>
           <summary class="mg">Tools</summary>
@@ -115,7 +115,7 @@
 <script src="js/flow.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
-  var PRODUCT_NAMES = { contractor: 'VyroContractor', restaurant: 'VyroRestaurant', retail: 'VyroRetail' };
+  var PRODUCT_NAMES = { contractor: 'VyqilContractor', restaurant: 'VyqilRestaurant', retail: 'VyqilRetail' };
 
   function setMenu(open) {
     $('menu').classList.toggle('open', open);

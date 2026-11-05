@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#05070A">
-<title>Assistant - Vyro Business</title>
+<title>Assistant - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -52,7 +52,7 @@
   <div class="chat-head">
     <a class="back-arrow" href="app.html" aria-label="Back">&#8249;</a>
     <div class="avatar" id="hAv">V<i></i></div>
-    <div><b id="hName">Vyro Assistant</b><small id="hSub">Online</small></div>
+    <div><b id="hName">Vyqil Assistant</b><small id="hSub">Online</small></div>
   </div>
 
   <div id="log"></div>
@@ -71,7 +71,7 @@
     <div class="note" id="xMsg" style="text-align:left"></div>
   </div></details>
   <details class="byo"><summary id="byoSum">Use your own AI (optional)</summary><div class="in">
-    <div class="note" style="text-align:left">Already pay for an AI service? Use it here at no extra Vyro charge. Your key is kept on this phone only and is never saved by Vyro. Each person on your team adds their own on their own phone.</div>
+    <div class="note" style="text-align:left">Already pay for an AI service? Use it here at no extra Vyqil charge. Your key is kept on this phone only and is never saved by Vyqil. Each person on your team adds their own on their own phone.</div>
     <select id="byoProv" aria-label="AI service"></select>
     <input id="byoModel" type="text" placeholder="Model name, for example gpt-4o-mini" autocomplete="off" autocapitalize="off" spellcheck="false">
     <input id="byoKey" type="password" placeholder="Paste your key" autocomplete="off">
@@ -121,7 +121,7 @@
         catch (e) { say(vyro.friendly(e), 'err'); }
       });
     }
-    VyroAssistantUI.mount(ctx, { name: 'Vyro Assistant', tips: [{"label": "What is overdue?", "text": "What is overdue?"}, {"label": "Who owes me the most?", "text": "Who owes me the most?"}, {"label": "What jobs are active?", "text": "What jobs are active?"}, {"label": "What needs my attention this week?", "text": "What needs my attention this week?"}, {"label": "Draft a payment reminder", "text": "Draft a polite payment reminder for my most overdue invoice."}], blocked: ok ? '' : 'The assistant shows sales and stock, so it is only for the owner and the general manager.' });
+    VyroAssistantUI.mount(ctx, { name: 'Vyqil Assistant', tips: [{"label": "What is overdue?", "text": "What is overdue?"}, {"label": "Who owes me the most?", "text": "Who owes me the most?"}, {"label": "What jobs are active?", "text": "What jobs are active?"}, {"label": "What needs my attention this week?", "text": "What needs my attention this week?"}, {"label": "Draft a payment reminder", "text": "Draft a polite payment reminder for my most overdue invoice."}], blocked: ok ? '' : 'The assistant shows sales and stock, so it is only for the owner and the general manager.' });
   });
 </script>
 </body>

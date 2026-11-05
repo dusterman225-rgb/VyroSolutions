@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Contract - Vyro Business</title>
+<title>Contract - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -39,7 +39,7 @@
     <h2>Edit this contract</h2>
     <div class="note">Fill in anything in [square brackets] before sharing.</div>
     <textarea id="body" rows="26" style="font-family:ui-monospace,Menlo,monospace;font-size:.85rem;width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:10px;padding:12px;line-height:1.45"></textarea>
-    <button class="btn ghost" id="bAuto" type="button">Fill in what Vyro already knows</button>
+    <button class="btn ghost" id="bAuto" type="button">Fill in what Vyqil already knows</button>
     <button class="btn" id="bSave" type="button">Save changes</button>
     <div class="note" id="sMsg"></div>
   </div>
@@ -50,7 +50,7 @@
     <button class="btn ghost" id="bEmail" type="button" style="display:none">Email customer the portal link</button>
     <button class="btn ghost" id="bUnshare" type="button" style="display:none">Stop sharing</button>
     <button class="btn ghost" id="bPrint" type="button">Preview and print</button>
-    <details class="more"><summary>How signing works</summary><div class="in"><div class="note">The customer opens it in their portal, prints and signs it, and returns it to you. Vyro does not collect signatures online. Keep the signed original and give them a copy.</div></div></details>
+    <details class="more"><summary>How signing works</summary><div class="in"><div class="note">The customer opens it in their portal, prints and signs it, and returns it to you. Vyqil does not collect signatures online. Keep the signed original and give them a copy.</div></div></details>
     <div class="note" id="shMsg"></div>
   </div>
 
@@ -136,7 +136,7 @@
       try {
         var r = await vcontract.refill(ctx, c.jobId, $('body').value);
         if (r.filled) { $('body').value = r.text; var n = vcontract.blanks(r.text); $('cWarn').textContent = n ? n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still to complete or delete.' : ''; $('cWarn').className = n ? 'note late' : 'note'; smsg('Filled in ' + r.filled + ' item' + (r.filled === 1 ? '' : 's') + ' from your job, customer and business info. Tap Save changes to keep them.'); }
-        else if (manual) smsg('Nothing more to fill in. What is left in brackets is not in Vyro yet.');
+        else if (manual) smsg('Nothing more to fill in. What is left in brackets is not in Vyqil yet.');
       } catch (e) { if (manual) smsg(vyro.friendly(e), 'err'); }
     }
     $('bAuto').addEventListener('click', function () { autoFill(true); });

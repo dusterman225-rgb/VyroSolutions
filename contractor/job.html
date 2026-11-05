@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Job - Vyro Business</title>
+<title>Job - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -57,7 +57,7 @@
   <details class="sec" id="crewSec">
     <summary>Crew <small id="crewSum"></small></summary>
     <div class="in">
-      <div class="note" style="text-align:left">Tick who is working this job. Vyro warns you if someone is already on another job on the same dates.</div>
+      <div class="note" style="text-align:left">Tick who is working this job. Vyqil warns you if someone is already on another job on the same dates.</div>
       <div id="crewList"></div>
       <div class="note" id="crewWarn"></div>
       <button class="btn" id="crewSave" type="button">Save crew</button>
@@ -233,7 +233,7 @@
       function picked() { return people.filter(function (p) { return chosen[p.kind + ':' + p.id]; }); }
       function warn() {
         var c = clashes(picked());
-        $('crewWarn').textContent = c.length ? 'Double-booked: ' + c.join('; ') + '.' : (picked().length && !($('startDate').value) ? 'Set a start date above so Vyro can check for double-booking.' : '');
+        $('crewWarn').textContent = c.length ? 'Double-booked: ' + c.join('; ') + '.' : (picked().length && !($('startDate').value) ? 'Set a start date above so Vyqil can check for double-booking.' : '');
         $('crewWarn').className = c.length ? 'note late' : 'note';
         $('crewSum').textContent = picked().length ? picked().map(function (p) { return p.name.split(' (')[0]; }).join(', ') : 'no one assigned';
         return c;

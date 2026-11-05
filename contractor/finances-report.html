@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Tax report - Vyro Business</title>
+<title>Tax report - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <style>
@@ -102,10 +102,10 @@
     if (!exRows.length) exRows = [['No expenses paid in this period', '$0.00']];
     p.appendChild(table(['Category and suggested Schedule C line', 'Amount'], exRows, ['Total expenses', vfin.money(m.totalCosts)]));
 
-    p.appendChild(h('h3', '', 'Vyro fees included above'));
+    p.appendChild(h('h3', '', 'Vyqil fees included above'));
     p.appendChild(table(['Item', 'Amount'], [
-      ['Vyro subscription (' + m.months + ' month' + (m.months === 1 ? '' : 's') + (vfin.VYRO_MONTHLY_FEE_CENTS ? '' : ', free during launch') + ')', vfin.money(m.vyroSub)],
-      ['Pay with Vyro transaction fees (' + m.vyroCount + ' transaction' + (m.vyroCount === 1 ? '' : 's') + ')', vfin.money(m.vyroFees)]
+      ['Vyqil subscription (' + m.months + ' month' + (m.months === 1 ? '' : 's') + (vfin.VYRO_MONTHLY_FEE_CENTS ? '' : ', free during launch') + ')', vfin.money(m.vyroSub)],
+      ['Pay with Vyqil transaction fees (' + m.vyroCount + ' transaction' + (m.vyroCount === 1 ? '' : 's') + ')', vfin.money(m.vyroFees)]
     ]));
 
     p.appendChild(h('h3', '', 'Net profit'));
@@ -132,7 +132,7 @@
     p.appendChild(h('h3', '', 'Snapshot at time of report'));
     p.appendChild(h('div', 'muted', 'Customers owe you: ' + vfin.money(m.owed) + '\nUnpaid bills you owe: ' + vfin.money(m.billsOwed)));
 
-    var note = h('div', 'small', 'This is a bookkeeping summary prepared from records entered in Vyro, on a cash basis. It is not tax advice and it is not a filed return. Schedule C line references are suggestions for sole proprietors and single-member LLCs only, so other business types report differently. Review everything with a qualified tax professional before filing.');
+    var note = h('div', 'small', 'This is a bookkeeping summary prepared from records entered in Vyqil, on a cash basis. It is not tax advice and it is not a filed return. Schedule C line references are suggestions for sole proprietors and single-member LLCs only, so other business types report differently. Review everything with a qualified tax professional before filing.');
     note.style.marginTop = '24px'; p.appendChild(note);
 
     $('print').addEventListener('click', function () { window.print(); });

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Pay with Vyro - Vyro Business</title>
+<title>Pay with Vyqil - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -15,7 +15,7 @@
 <div class="wrap">
   <div class="brand">
     <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
-    <div class="tag" id="pageTag">Pay with Vyro</div>
+    <div class="tag" id="pageTag">Pay with Vyqil</div>
   </div>
 
   <div id="testBanner" style="display:none;margin:8px 0;padding:6px 12px;border:1px solid #d4af37;border-radius:999px;text-align:center;font-size:.78rem;color:#d4af37">TEST MODE: no real money</div>
@@ -29,7 +29,7 @@
   <div class="card" id="setupCard" style="display:none">
     <h2>Set up first</h2>
     <p id="setupText"></p>
-    <a class="btn" href="paysettings.html">Pay with Vyro setup</a>
+    <a class="btn" href="paysettings.html">Pay with Vyqil setup</a>
   </div>
 
   <div class="card" id="coinCard" style="display:none">
@@ -42,7 +42,7 @@
     <h2>Customer: scan this</h2>
     <div id="qrBox" style="background:#fff;padding:6px;border-radius:10px;max-width:340px;margin:8px auto"></div>
     <div class="row"><span>They send</span><b id="qAmt"></b></div>
-    <div class="row"><span>You receive (after 2% Vyro fee)</span><b id="qNet"></b></div>
+    <div class="row"><span>You receive (after 2% Vyqil fee)</span><b id="qNet"></b></div>
     <div class="note">Keep this page open. It marks the invoice paid by itself.</div>
     <button class="btn" id="bCheck" type="button">Check payment now</button>
     <details class="more">
@@ -102,7 +102,7 @@
 
     var wallet = ctx.biz.payWallet, coins = ctx.biz.payCoins || [];
     var cfgBad = /PUT-YOUR/.test(CFG.feeWallet) || !vchain.isAddress(CFG.feeWallet);
-    if (cfgBad) { $('setupCard').style.display = 'block'; $('setupText').textContent = 'The Vyro fee wallet is not set in js/chain-config.js yet.'; return; }
+    if (cfgBad) { $('setupCard').style.display = 'block'; $('setupText').textContent = 'The Vyqil fee wallet is not set in js/chain-config.js yet.'; return; }
     if (!wallet || !coins.length) { $('setupCard').style.display = 'block'; $('setupText').textContent = ctx.role === 'owner' ? 'Add your wallet address and the coins you accept.' : 'The owner needs to add the business wallet first.'; return; }
 
     var reqCol = iref.collection('payRequests');
@@ -143,7 +143,7 @@
         if (ps.exists) return;                       // already recorded
         var d = is.data(), paid = d.paidCents + req.usdCents;
         if (paid > d.totalCents) throw { code: 'vyro/overpay' };
-        tx.set(pref, { amountCents: req.usdCents, method: 'Pay with Vyro', receivedOn: today, note: req.coin + ' on ' + (req.net === 'mainnet' ? 'Solana' : 'Solana TEST network'),
+        tx.set(pref, { amountCents: req.usdCents, method: 'Pay with Vyqil', receivedOn: today, note: req.coin + ' on ' + (req.net === 'mainnet' ? 'Solana' : 'Solana TEST network'),
           source: 'vyro', reversed: false, recordedBy: ctx.user.uid, createdAt: vyro.stamp(),
           txSignature: found.signature, coin: req.coin, network: req.net, feeCents: Math.round(req.usdCents * CFG.feeBps / 10000) });
         tx.update(iref, { paidCents: paid, status: deriveStatus(d, paid), updatedAt: vyro.stamp() });

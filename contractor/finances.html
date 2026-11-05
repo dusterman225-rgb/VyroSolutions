@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Finances - Vyro Business</title>
+<title>Finances - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -31,7 +31,7 @@
       <div class="row big"><span>Net profit</span><b id="fProfit">-</b></div>
       <div class="row"><span>Earnings (payments received)</span><b id="fIncome">-</b></div>
       <div class="row"><span>Expenses (bills paid)</span><b id="fSpent">-</b></div>
-      <div class="row"><span>Vyro fees</span><b id="fVyro">-</b></div>
+      <div class="row"><span>Vyqil fees</span><b id="fVyro">-</b></div>
       <div class="row"><span>Profit margin</span><b id="fMargin">-</b></div>
     </div>
 
@@ -53,10 +53,10 @@
     </details>
 
     <details class="sec">
-      <summary>Vyro fees</summary>
+      <summary>Vyqil fees</summary>
       <div class="in">
-        <div class="row"><span>Vyro monthly fee</span><b id="vSub">-</b></div>
-        <div class="row"><span>Pay with Vyro payments</span><b id="vCount">-</b></div>
+        <div class="row"><span>Vyqil monthly fee</span><b id="vSub">-</b></div>
+        <div class="row"><span>Pay with Vyqil payments</span><b id="vCount">-</b></div>
         <div class="row"><span>Transaction fees (<span id="vPct"></span>%)</span><b id="vFees">-</b></div>
         <div class="note" id="vNote"></div>
       </div>
@@ -127,7 +127,7 @@
       $('vSub').textContent = vfin.money(m.vyroSub);
       $('vCount').textContent = m.vyroCount ? m.vyroCount + ' (' + vfin.money(m.vyroGross) + ')' : '0';
       $('vPct').textContent = vfin.VYRO_TX_FEE_PCT; $('vFees').textContent = vfin.money(m.vyroFees);
-      $('vNote').textContent = vfin.VYRO_MONTHLY_FEE_CENTS ? '' : 'The Vyro subscription is free during launch.';
+      $('vNote').textContent = vfin.VYRO_MONTHLY_FEE_CENTS ? '' : 'The Vyqil subscription is free during launch.';
 
       $('nOwed').textContent = vfin.money(m.owed); $('nBills').textContent = vfin.money(m.billsOwed);
     }

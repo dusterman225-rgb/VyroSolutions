@@ -1,6 +1,6 @@
 {
-  "name": "VyroContractor",
-  "short_name": "VyroContractor",
+  "name": "VyqilContractor",
+  "short_name": "VyqilContractor",
   "start_url": "/contractor/app.html",
   "scope": "/contractor/",
   "display": "standalone",
@@ -33,5 +33,5 @@
     }
   ],
   "id": "/contractor/",
-  "description": "Vyro Business"
+  "description": "Vyqil Business"
 }

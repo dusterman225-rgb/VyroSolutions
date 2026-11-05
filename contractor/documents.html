@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Documents - Vyro Business</title>
+<title>Documents - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -52,7 +52,7 @@
     <label class="field"><span>Wording</span><textarea id="tpBody" rows="22" style="font-family:ui-monospace,Menlo,monospace;font-size:.8rem"></textarea></label>
     <div class="note">Words like {{customer_name}} are filled in automatically. Available: contract_date, estimate_number, business_name, business_address, business_phone, business_email, license_number, customer_name, customer_address, customer_phone, customer_email, job_address, project_title, scope, contract_total, deposit_amount, start_date, target_end_date. Anything in [square brackets] is for you to complete per job.</div>
     <button class="btn" id="tpSave" type="button">Save template</button>
-    <button class="btn ghost" id="tpReset" type="button">Replace with Vyro starter wording</button>
+    <button class="btn ghost" id="tpReset" type="button">Replace with Vyqil starter wording</button>
     <button class="btn ghost" id="tpBack" type="button">Back</button>
     <button class="link" id="tpDel" type="button" style="display:none;color:#ff8a8a">Delete template</button>
     <div class="note" id="tpMsg"></div>
@@ -161,7 +161,7 @@
     }
     $('newT').addEventListener('click', function () { openTemplate(null); });
     $('tpBack').addEventListener('click', function () { show('mainView'); });
-    $('tpReset').addEventListener('click', function () { if (confirm('Replace the wording in the box with Vyro\'s starter wording? Your edits in the box are lost until you save.')) $('tpBody').value = VYRO_CONTRACT_DEFAULT.body; });
+    $('tpReset').addEventListener('click', function () { if (confirm('Replace the wording in the box with Vyqil\'s starter wording? Your edits in the box are lost until you save.')) $('tpBody').value = VYRO_CONTRACT_DEFAULT.body; });
     $('tpSave').addEventListener('click', async function () {
       var name = $('tpName').value.trim(), body = $('tpBody').value;
       if (!name || body.trim().length < 20) { $('tpMsg').textContent = 'Give the template a name and some wording.'; $('tpMsg').className = 'note err'; return; }

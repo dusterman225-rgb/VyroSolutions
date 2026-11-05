@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Team - Vyro Business</title>
+<title>Team - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="manifest" href="manifest.webmanifest">
@@ -25,7 +25,7 @@
 
   <div class="card" id="invCard" style="display:none">
     <h2>Waiting to accept</h2>
-    <p>These people already had a Vyro login, so they were sent an invitation. They accept it after signing in (it shows on their dashboard).</p>
+    <p>These people already had a Vyqil login, so they were sent an invitation. They accept it after signing in (it shows on their dashboard).</p>
     <div id="invites"></div>
   </div>
 
@@ -106,9 +106,9 @@
 
     function welcome(name, email, existing) {
       var first = (String(name || '').trim().split(/\s+/)[0]) || 'there', url = location.origin + '/login.html';
-      var body = 'Hi ' + first + ',\n\nI have added you to ' + ctx.biz.name + ' on Vyro. ' +
-        (existing ? 'You already have a Vyro login, so just sign in here and accept the invitation on your dashboard:\n' : 'Sign in here with your email (check your inbox for a separate email to choose your password):\n') + url + '\n\nThank you,\n' + (vyro.who ? vyro.who(ctx) : ctx.biz.name);
-      return { to: email, subject: 'You have been added to ' + ctx.biz.name + ' on Vyro', body: body };
+      var body = 'Hi ' + first + ',\n\nI have added you to ' + ctx.biz.name + ' on Vyqil. ' +
+        (existing ? 'You already have a Vyqil login, so just sign in here and accept the invitation on your dashboard:\n' : 'Sign in here with your email (check your inbox for a separate email to choose your password):\n') + url + '\n\nThank you,\n' + (vyro.who ? vyro.who(ctx) : ctx.biz.name);
+      return { to: email, subject: 'You have been added to ' + ctx.biz.name + ' on Vyqil', body: body };
     }
     function mailBtn(label, p) { var a = vyro.el('a', 'mini', label); a.href = vcompose.href(p); a.addEventListener('click', function () { this.href = vcompose.href(p); }); return a; }
     async function loadInvites() {
@@ -147,11 +147,11 @@
           var r = await vyro.addMember(ctx.bizId, email, name, role);
           msg.className = 'note ok'; msg.textContent = '';
           if (r.invited) {
-            msg.textContent = 'That email already has a Vyro login, so an invitation was saved (see "Waiting to accept" above). Vyro cannot email an existing login, so tap Email them to let them know.';
+            msg.textContent = 'That email already has a Vyqil login, so an invitation was saved (see "Waiting to accept" above). Vyqil cannot email an existing login, so tap Email them to let them know.';
           } else {
             msg.textContent = (r.emailSent
-              ? 'Added. Vyro emailed ' + email + ' a link to choose a password (ask them to check spam). '
-              : 'Added, but Vyro could not send the password email. Tap Resend login next to their name. ') + 'You can also send them a welcome message yourself:';
+              ? 'Added. Vyqil emailed ' + email + ' a link to choose a password (ask them to check spam). '
+              : 'Added, but Vyqil could not send the password email. Tap Resend login next to their name. ') + 'You can also send them a welcome message yourself:';
           }
           msg.appendChild(document.createElement('br'));
           msg.appendChild(mailBtn('Email them a welcome', welcome(name, email, !!r.invited)));
@@ -160,7 +160,7 @@
         } catch (err) {
           msg.className = 'note err';
           msg.textContent = (err && err.code === 'auth/email-already-in-use')
-            ? 'That email already has a Vyro login, so it cannot be added here yet. Use a different email for now.'
+            ? 'That email already has a Vyqil login, so it cannot be added here yet. Use a different email for now.'
             : vyro.friendly(err);
         }
         btn.disabled = false;

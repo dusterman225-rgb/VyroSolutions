@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Create account - Vyro Business</title>
+<title>Create account - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -14,7 +14,7 @@
 <body>
 <div class="wrap">
   <div class="brand">
-    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Vyro home"></a>
+    <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Vyqil home"></a>
     <div class="tag">Create your business account</div>
   </div>
 
@@ -36,7 +36,7 @@
 <script src="js/auth.js"></script>
 <script>
   vyro.redirectIfSignedIn();
-  var PRODUCTS = { contractor: 'VyroContractor' };
+  var PRODUCTS = { contractor: 'VyqilContractor' };
   var product = new URLSearchParams(location.search).get('product');
   if (!PRODUCTS[product]) { location.replace('choose.html'); }
   else { document.querySelector('.tag').textContent = 'Sign up for ' + PRODUCTS[product]; }

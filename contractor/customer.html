@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Customer - Vyro Business</title>
+<title>Customer - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -201,7 +201,7 @@
       this.disabled = true; pmsg('Creating...');
       try {
         var r = await vportal.ensureForCustomer(ctx, id, (c.email || '').trim().toLowerCase(), c.name, c.email);
-        if (r && r.ok) pmsg('Done. ' + (r.emailed ? 'A link to set their password was emailed to ' + r.email + '.' : (r.existing ? r.email + ' already has a Vyro login, so no password email was sent. Tap Send portal login link to let them know.' : '')), '');
+        if (r && r.ok) pmsg('Done. ' + (r.emailed ? 'A link to set their password was emailed to ' + r.email + '.' : (r.existing ? r.email + ' already has a Vyqil login, so no password email was sent. Tap Send portal login link to let them know.' : '')), '');
         else pmsg((r && r.message) || 'Could not create the portal.', 'err');
       } catch (e) { pmsg(vyro.friendly(e), 'err'); }
       this.disabled = false; paintPortal();
@@ -216,7 +216,7 @@
       } catch (e) { pmsg(vyro.friendly(e), 'err'); }
       this.disabled = false;
     });
-    // Separate: Vyro emails the customer a link to choose a new password.
+    // Separate: Vyqil emails the customer a link to choose a new password.
     $('pReset').addEventListener('click', async function () {
       var em = (c.email || '').trim();
       if (!confirm('Email ' + em + ' a link to reset their password?')) return;

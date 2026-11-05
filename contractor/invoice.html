@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Invoice - Vyro Business</title>
+<title>Invoice - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -18,7 +18,7 @@
     <div class="tag" id="pageTag">New invoice</div>
   </div>
 
-  <div id="topPay" style="display:none"><button class="btn" id="bTopPay" type="button">Payment received</button><a class="btn ghost" id="bVyro" href="#">Pay with Vyro (crypto)</a></div>
+  <div id="topPay" style="display:none"><button class="btn" id="bTopPay" type="button">Payment received</button><a class="btn ghost" id="bVyro" href="#">Pay with Vyqil (crypto)</a></div>
 
   <div class="card" id="lockNote" style="display:none"><p id="lockText"></p></div>
 
@@ -131,7 +131,7 @@
       <label class="field"><span>Method</span>
         <select id="payMethod">
           <option>Cash</option><option>Check</option><option>Bank transfer</option>
-          <option>Card (outside Vyro)</option><option>Other</option>
+          <option>Card (outside Vyqil)</option><option>Other</option>
         </select>
       </label>
       <label class="field"><span>Date received</span><input id="payDate" type="date"></label>
@@ -374,7 +374,7 @@
     }
     recalc();
 
-    // ---------- VyroAssistant: fill by voice ----------
+    // ---------- VyqilAssistant: fill by voice ----------
     function applyInvoice(f) {
       if (f.customerName) {
         var nm = f.customerName.toLowerCase(), hit = Object.keys(customers).filter(function (k) { return (customers[k].name || '').toLowerCase() === nm; })[0];
