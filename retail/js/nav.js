@@ -22,7 +22,7 @@
       I('close', 'End of day close', 'Close', 'close.html', 'money', 'Sales, cash count and best sellers for a day.', staff),
       I('coupons', 'Coupons', 'Coupons', 'coupons.html', 'money', 'Create and switch off coupon codes.', ol),
       I('finances', 'Sales reports', 'Reports', 'finances.html', 'money', 'Sales over time.', ol),
-      I('paysettings', 'Pay with Vyro setup', 'Vyro pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol),
+      I('paysettings', 'Pay with Vyqil setup', 'Vyqil pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol),
       I('assistant', 'Assistant', 'Assistant', 'assistant.html', 'money', 'Ask questions about your sales and stock. Read-only.', ol),
       I('data', 'Data and activity', 'Data', 'data.html', 'settings', 'Download your data, see who did what, hand over ownership.', ol),
       I('settings', 'Settings', 'Settings', 'settings.html', 'settings', 'All your store setup in one place.', ol),
@@ -131,7 +131,7 @@
 
 
   // ---- switch business: one tap from any page ----
-  var PRODUCT_NAME = { restaurant: 'VyroRestaurant', takeout: 'VyroTakeout', retail: 'VyroRetail', contractor: 'VyroContractor' };
+  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
   function homeFor(w) {
     var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
     return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
@@ -144,13 +144,13 @@
         holder.textContent = ''; list.sort(function (x, y) { return x.name.localeCompare(y.name); });
         list.forEach(function (w) {
           var here = w.id === ctx.bizId, a = el('button', 'btn' + (here ? '' : ' ghost'), w.name + (here ? ' (you are here)' : '')); a.type = 'button'; a.style.cssText = 'display:block;width:100%;text-align:left;margin:6px 0';
-          a.appendChild(el('small', '', ' ' + (window.vroles ? (window.vroles.ROLES[w.role] || w.role) : w.role) + ' · ' + (PRODUCT_NAME[w.product] || 'Vyro')));
+          a.appendChild(el('small', '', ' ' + (window.vroles ? (window.vroles.ROLES[w.role] || w.role) : w.role) + ' · ' + (PRODUCT_NAME[w.product] || 'Vyqil')));
           a.addEventListener('click', async function () { if (here) { bg.classList.remove('open'); return; } a.disabled = true; try { await window.vyro.switchWorkplace(w.id, ctx.bizId); location.href = homeFor(w); } catch (e) { a.disabled = false; holder.textContent = 'Could not switch. Try again.'; } });
           holder.appendChild(a);
         });
         if (!list.length) holder.textContent = 'No other businesses on this login.';
       }).catch(function () { holder.textContent = 'Could not load your businesses.'; });
-      var all = el('a', 'btn ghost', 'Vyro owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
+      var all = el('a', 'btn ghost', 'Vyqil owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
       var inst = el('span'); inst.id = 'vInstall2'; inst.style.cssText = 'display:block;text-align:center;margin:10px 0'; b.appendChild(inst);
       if (window.vinstall) { var ib = el('button', 'btn ghost', 'Install this app on your home screen'); ib.type = 'button'; ib.addEventListener('click', function () { window.vinstall.open(); }); inst.appendChild(ib); }
       var so = el('button', 'btn ghost', 'Sign out'); so.type = 'button'; so.addEventListener('click', async function () { try { await window.vyro.signOut(); } catch (e) {} location.href = (window.vyro && window.vyro.loginUrl ? window.vyro.loginUrl() : 'login.html'); }); b.appendChild(so);
