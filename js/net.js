@@ -1,9 +1,9 @@
-/* Vyro Network: one login, many businesses, apps switched on per business.
+/* Vyqil Network: one login, many businesses, apps switched on per business.
    Identity (users) is separate from the business (businesses), the team (members), the apps (businesses.apps),
    the plan (businesses/{id}/network/subscription) and storage (businesses/{id}/network/storage). */
 (function () {
   'use strict';
-  if (!window.VYRO_FIREBASE_CONFIG) { document.addEventListener('DOMContentLoaded', function () { var e = document.getElementById('err'); if (e) e.textContent = 'Setup problem: js/firebase-config.js is missing. Copy it from your other Vyro repo.'; }); return; }
+  if (!window.VYRO_FIREBASE_CONFIG) { document.addEventListener('DOMContentLoaded', function () { var e = document.getElementById('err'); if (e) e.textContent = 'Setup problem: js/firebase-config.js is missing. Copy it from your other Vyqil repo.'; }); return; }
   firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
   var auth = firebase.auth(), db = firebase.firestore(), FV = firebase.firestore.FieldValue;
   function stamp() { return FV.serverTimestamp(); }
@@ -11,11 +11,11 @@
   var URLS = window.VYRO_APP_URLS || {};
 
   var APPS = [
-    { id: 'restaurant', name: 'VyroRestaurant', desc: 'Tables, point of sale, kitchen, team, Pay with Vyro.', live: true },
-    { id: 'takeout', name: 'VyroTakeout', desc: 'Takeout and fast food only. No tables or table QR codes. Costs less.', live: true },
-    { id: 'contractor', name: 'VyroContractor', desc: 'Estimates, jobs, invoices, customer portal.', live: true },
-    { id: 'retail', name: 'VyroRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true },
-    { id: 'crm', name: 'VyroCRM', desc: 'Shared customer relationships.', live: false }
+    { id: 'restaurant', name: 'VyqilRestaurant', desc: 'Tables, point of sale, kitchen, team, Pay with Vyqil.', live: true },
+    { id: 'takeout', name: 'VyqilTakeout', desc: 'Takeout and fast food only. No tables or table QR codes. Costs less.', live: true },
+    { id: 'contractor', name: 'VyqilContractor', desc: 'Estimates, jobs, invoices, customer portal.', live: true },
+    { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true },
+    { id: 'crm', name: 'VyqilCRM', desc: 'Shared customer relationships.', live: false }
   ];
   // Defaults are names. The real power comes from the rules, not these labels.
   var ROLE_LABEL = { owner: 'Owner', gm: 'Administrator', supervisor: 'Manager', employee: 'Employee', cook: 'Employee (cook)', server: 'Employee (server)', host: 'Employee (host)', kiosk: 'Device' };
@@ -28,7 +28,7 @@
   function friendly(e) {
     var c = e && e.code || '', m = e && e.message || String(e);
     var map = { 'auth/invalid-credential': 'That email and password do not match.', 'auth/wrong-password': 'That email and password do not match.', 'auth/user-not-found': 'That email and password do not match.',
-      'auth/email-already-in-use': 'That email already has a Vyro account. Sign in instead.', 'auth/weak-password': 'Use a password with at least 10 characters.', 'auth/invalid-email': 'That email does not look right.',
+      'auth/email-already-in-use': 'That email already has a Vyqil account. Sign in instead.', 'auth/weak-password': 'Use a password with at least 10 characters.', 'auth/invalid-email': 'That email does not look right.',
       'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.', 'auth/network-request-failed': 'No connection. Check your internet and try again.',
       'permission-denied': 'You are not allowed to do that here.', 'auth/requires-recent-login': 'Please sign out and sign in again, then retry.' };
     return map[c] || (/permission/i.test(m) ? map['permission-denied'] : m);
