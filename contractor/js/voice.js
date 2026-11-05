@@ -1,7 +1,7 @@
-// VyroAssistant (included with every Vyro app) voice and "fill it for me". Loaded by js/auth.js after sign-in.
+// VyqilAssistant (included with every Vyqil app) voice and "fill it for me". Loaded by js/auth.js after sign-in.
 //  - A small microphone beside every typed field. Tap it, talk, and the words are typed in.
 //  - A "Fill by voice" bar on estimates, invoices, expenses and leads: say it all at once and the form fills in.
-//  - Both come with the VyroAssistant, which is included with VyroContractor.
+//  - Both come with the VyqilAssistant, which is included with VyqilContractor.
 // Nothing is saved by voice. The person always checks the fields and taps Save.
 (function () {
   if (window.vvoice) return;
@@ -22,7 +22,7 @@
     return { status: r.status, data: d };
   }
 
-  // ---- does this business have the VyroAssistant? (asked of the helper; remembered for 10 minutes) ----
+  // ---- does this business have the VyqilAssistant? (asked of the helper; remembered for 10 minutes) ----
   function cacheKey() { return 'vyroPlan_' + (ctxRef ? ctxRef.bizId : ''); }
   function checkPlan() {
     if (planPromise) return planPromise;
@@ -53,7 +53,7 @@
     ov.appendChild(bx); ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); }); document.body.appendChild(ov);
   }
   function upgrade() {
-    sheet('Voice is not available right now', 'Talking instead of typing, filling in a form by voice, and scanning receipts come with the VyroAssistant, which is included with your Vyro subscription. It could not be reached just now. Check your connection, reload the page, and try again.',
+    sheet('Voice is not available right now', 'Talking instead of typing, filling in a form by voice, and scanning receipts come with the VyqilAssistant, which is included with your Vyqil subscription. It could not be reached just now. Check your connection, reload the page, and try again.',
       [{ label: 'OK' }]);
   }
   function needNotice() {
@@ -63,8 +63,8 @@
     var key = SR ? 'vyroVoiceOk' : 'vyroVoiceRecOk';
     try { if (localStorage.getItem(key) === '1') { go(); return; } } catch (e) { /* ask each time */ }
     var text = SR
-      ? 'Your browser turns your voice into text using its own speech service (Google on Android and Chrome, Apple on iPhone and Mac). Vyro does not record or keep audio. Do not say passwords or card numbers.'
-      : 'Your browser cannot turn speech into text by itself, so Vyro records up to 25 seconds while you talk and sends that short recording to its AI service to type it for you. The recording is not saved. Do not say passwords or card numbers.';
+      ? 'Your browser turns your voice into text using its own speech service (Google on Android and Chrome, Apple on iPhone and Mac). Vyqil does not record or keep audio. Do not say passwords or card numbers.'
+      : 'Your browser cannot turn speech into text by itself, so Vyqil records up to 25 seconds while you talk and sends that short recording to its AI service to type it for you. The recording is not saved. Do not say passwords or card numbers.';
     sheet('Using your voice', text, [{ label: 'Continue', go: function () { try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ } go(); } }, { label: 'Cancel', ghost: true }]);
   }
 
@@ -84,13 +84,13 @@
     return t;
   }
   function micBlocked() {
-    sheet('The microphone did not start', 'Your browser says it allows the microphone for this site, but the phone itself may still be blocking it. On Android: Settings > Apps > your browser > Permissions > Microphone > Allow. Then close the browser fully and reopen Vyro. Until then you can use the microphone key on your keyboard.', [{ label: 'OK' }]);
+    sheet('The microphone did not start', 'Your browser says it allows the microphone for this site, but the phone itself may still be blocking it. On Android: Settings > Apps > your browser > Permissions > Microphone > Allow. Then close the browser fully and reopen Vyqil. Until then you can use the microphone key on your keyboard.', [{ label: 'OK' }]);
   }
   function stop() { if (active) { try { active.rec.stop(); } catch (e) { /* ignore */ } } }
   function dictate(field, btn) {
     if (!SR) {
       if (canRecord()) { record(field, btn); return; }
-      sheet('Voice typing is not available here', 'This browser cannot use the microphone (some in-app browsers block it). Open Vyro in Chrome, Firefox, Safari or Edge, or use the microphone key on your keyboard.', [{ label: 'OK' }]); return;
+      sheet('Voice typing is not available here', 'This browser cannot use the microphone (some in-app browsers block it). Open Vyqil in Chrome, Firefox, Safari or Edge, or use the microphone key on your keyboard.', [{ label: 'OK' }]); return;
     }
     if (active && active.field === field) { stop(); return; }
     stop();

@@ -5,7 +5,7 @@
   if (!URL_ || /PUT-YOUR/.test(URL_)) return;
   window.__vyroHelpbot = true;
   var KEY = 'vyroHelp';
-  var NAME = 'Vyro Help';   // change this word to rename the helper
+  var NAME = 'Vyqil Help';   // change this word to rename the helper
   var css = document.createElement('style');
   css.textContent =
     '#hbBtn,.hbBox,.hbBox *{font-family:Arial,Helvetica,sans-serif!important}' +

@@ -1,9 +1,9 @@
-// Shared finance calculations for Vyro Business.
+// Shared finance calculations for Vyqil Business.
 // Cash basis: income = payments actually received, expenses = bills actually paid.
 (function () {
-  // ---- Vyro's own fees (change these when pricing is decided) ----
-  var VYRO_MONTHLY_FEE_CENTS = 500;   // Vyro subscription. Free during launch, so $0 for now.
-  var VYRO_TX_FEE_PCT = 2;          // Pay with Vyro fee, paid by the receiving business (not live yet).
+  // ---- Vyqil's own fees (change these when pricing is decided) ----
+  var VYRO_MONTHLY_FEE_CENTS = 500;   // Vyqil subscription. Free during launch, so $0 for now.
+  var VYRO_TX_FEE_PCT = 2;          // Pay with Vyqil fee, paid by the receiving business (not live yet).
 
   // Suggested IRS Schedule C lines (sole proprietor / single-member LLC). Not tax advice.
   var SCHED_C = {
@@ -17,11 +17,11 @@
     'Tools': 'Line 22 Supplies (large tools may be Line 13 depreciation)',
     'Office and software': 'Line 18 Office expense',
     'Other': 'Line 27a Other expenses',
-    'Vyro fees': 'Line 27a Other expenses'
+    'Vyqil fees': 'Line 27a Other expenses'
   };
 
   var PERIODS = [['lastMonth', 'Last month'], ['thisMonth', 'This month'], ['thisYear', 'This year so far'],
-                 ['lastYear', 'Last year'], ['all', 'Since joining Vyro']];
+                 ['lastYear', 'Last year'], ['all', 'Since joining Vyqil']];
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -49,7 +49,7 @@
     if (key === 'thisMonth') { from = ymd(new Date(y, m, 1)); to = today; label = now.toLocaleString('en-US', { month: 'long', year: 'numeric' }) + ' (so far)'; }
     else if (key === 'thisYear') { from = y + '-01-01'; to = today; label = y + ' (so far)'; }
     else if (key === 'lastYear') { from = (y - 1) + '-01-01'; to = (y - 1) + '-12-31'; label = String(y - 1); }
-    else if (key === 'all') { from = '0000-01-01'; to = today; label = 'Since joining Vyro (' + joined + ')'; }
+    else if (key === 'all') { from = '0000-01-01'; to = today; label = 'Since joining Vyqil (' + joined + ')'; }
     else { key = 'lastMonth'; var lm = new Date(y, m - 1, 1); from = ymd(lm); to = ymd(new Date(y, m, 0)); label = lm.toLocaleString('en-US', { month: 'long', year: 'numeric' }); }
     return { key: key, from: from, to: to, label: label, today: today };
   }
@@ -72,7 +72,7 @@
       var m = p.method || 'Other'; byMethod[m] = (byMethod[m] || 0) + (p.amountCents || 0);
       var isVyro = p.source === 'vyro';
       if (isVyro) { vyroGross += p.amountCents || 0; vyroFees += p.feeCents || 0; vyroCount++; }
-      ledger.push({ date: p.receivedOn, type: 'Income', desc: (p.customerName || 'Customer') + ' payment', cat: m, ref: p.invoiceNumber, cents: p.amountCents || 0, status: isVyro ? 'Pay with Vyro' : 'Recorded' });
+      ledger.push({ date: p.receivedOn, type: 'Income', desc: (p.customerName || 'Customer') + ' payment', cat: m, ref: p.invoiceNumber, cents: p.amountCents || 0, status: isVyro ? 'Pay with Vyqil' : 'Recorded' });
     });
 
     var byCat = {}, spent = 0, subs = {};
@@ -91,11 +91,11 @@
 
     var months = monthsActive(r.from, r.to, data.joined);
     var vyroSub = months * VYRO_MONTHLY_FEE_CENTS;
-    if (vyroSub) ledger.push({ date: r.to, type: 'Expense', desc: 'Vyro subscription (' + months + ' mo)', cat: 'Vyro fees', ref: 'Overhead', cents: -vyroSub, status: 'Charged' });
-    if (vyroFees) ledger.push({ date: r.to, type: 'Expense', desc: 'Pay with Vyro fees (' + VYRO_TX_FEE_PCT + '%)', cat: 'Vyro fees', ref: 'Overhead', cents: -vyroFees, status: 'Charged' });
+    if (vyroSub) ledger.push({ date: r.to, type: 'Expense', desc: 'Vyqil subscription (' + months + ' mo)', cat: 'Vyqil fees', ref: 'Overhead', cents: -vyroSub, status: 'Charged' });
+    if (vyroFees) ledger.push({ date: r.to, type: 'Expense', desc: 'Pay with Vyqil fees (' + VYRO_TX_FEE_PCT + '%)', cat: 'Vyqil fees', ref: 'Overhead', cents: -vyroFees, status: 'Charged' });
 
     var cats = Object.keys(byCat).map(function (c) { return { cat: c, cents: byCat[c], line: SCHED_C[c] || SCHED_C.Other }; });
-    if (vyroSub + vyroFees) cats.push({ cat: 'Vyro fees', cents: vyroSub + vyroFees, line: SCHED_C['Vyro fees'] });
+    if (vyroSub + vyroFees) cats.push({ cat: 'Vyqil fees', cents: vyroSub + vyroFees, line: SCHED_C['Vyqil fees'] });
     cats.sort(function (a, b) { return b.cents - a.cents; });
 
     var totalCosts = spent + vyroSub + vyroFees, profit = income - totalCosts;
@@ -127,13 +127,13 @@
     L.push('INCOME (payments received): ' + money(m.income));
     Object.keys(m.byMethod).forEach(function (k) { L.push('  ' + k + ': ' + money(m.byMethod[k])); });
     L.push('');
-    L.push('EXPENSES (bills paid + Vyro fees): ' + money(m.totalCosts));
+    L.push('EXPENSES (bills paid + Vyqil fees): ' + money(m.totalCosts));
     m.cats.forEach(function (c) { L.push('  ' + c.cat + ': ' + money(c.cents) + '   [' + c.line + ']'); });
     L.push('');
     L.push('NET PROFIT: ' + money(m.profit) + (m.margin === null ? '' : ' (' + m.margin + '% margin)'));
     L.push('Sales tax billed on invoices in this period: ' + money(m.taxBilled));
     L.push('');
-    L.push('Prepared from records entered in Vyro. Not tax advice. Review with a qualified tax professional.');
+    L.push('Prepared from records entered in Vyqil. Not tax advice. Review with a qualified tax professional.');
     return L.join('\n');
   }
 

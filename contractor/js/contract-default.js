@@ -1,4 +1,4 @@
-// Default contract template text. Words in {{double braces}} are filled in by Vyro; [square brackets] are for you to complete.
+// Default contract template text. Words in {{double braces}} are filled in by Vyqil; [square brackets] are for you to complete.
 // IMPORTANT: have an attorney review this and insert the exact required legal notices before real use.
 window.VYRO_CONTRACT_DEFAULT = {
   name: 'Home improvement contract (starter)',
@@ -182,7 +182,7 @@ window.VYRO_FINAL_RECEIPT_DEFAULT = {
 'Total received to date: {{paid_to_date}}',
 'Balance remaining: {{balance_due}}',
 '',
-'Final payment received today: [amount]     Method: [cash / check no. / card / Vyro crypto]',
+'Final payment received today: [amount]     Method: [cash / check no. / card / Vyqil crypto]',
 '',
 'The Contractor acknowledges receipt of the payment above. [If the balance remaining is $0.00: This receipt confirms the contract has been paid in full.]',
 '',

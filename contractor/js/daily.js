@@ -1,4 +1,4 @@
-// The daily "to send" pop-up. Vyro cannot send email or texts by itself, so once a day, when the contractor opens
+// The daily "to send" pop-up. Vyqil cannot send email or texts by itself, so once a day, when the contractor opens
 // the dashboard, this lists everything that is waiting to go out, with the message already written.
 // Shows once per person per day. "Remind me later" brings it back the next time the dashboard opens.
 (function () {
@@ -43,7 +43,7 @@
     var ov = el('div'); ov.id = 'vDaily'; var box = el('div', 'box'); ov.appendChild(box);
     var total = 0; data.groups.forEach(function (g) { total += g.rows.length; });
     var top = el('div', 'top'); top.appendChild(el('h2', '', 'Today: ' + total + ' thing' + (total === 1 ? '' : 's') + ' to send'));
-    top.appendChild(el('p', '', 'Vyro cannot send these for you, so they are ready here. Tap Email or Text, read it, and send it from your phone.')); box.appendChild(top);
+    top.appendChild(el('p', '', 'Vyqil cannot send these for you, so they are ready here. Tap Email or Text, read it, and send it from your phone.')); box.appendChild(top);
     var inn = el('div', 'in'); box.appendChild(inn);
     data.groups.forEach(function (g) {
       inn.appendChild(el('h3', '', g.title));
