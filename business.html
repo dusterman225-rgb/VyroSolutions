@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>Business - Vyro Network</title>
+<title>Business - Vyqil Network</title>
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head><body><div class="wrap">
 
 
-<div class="top"><a class="brand" href="dashboard.html">&larr; VYRO NETWORK</a></div>
+<div class="top"><a class="brand" href="dashboard.html">&larr; VYQIL NETWORK</a></div>
 <h1 id="bname">Business</h1><div class="note" id="brole"></div>
 <div class="note err" id="err"></div><div class="note ok" id="msg"></div>
 <div id="closed" class="banner hide">This business is closed. Its data is kept. The owner can reopen it.</div>
@@ -48,7 +48,7 @@ var R={
      else right.appendChild(vnet.el('span','pill',vnet.ROLE_LABEL[m.role]||m.role));
      p.appendChild(row((m.name||m.email)+(m.uid===U.uid?' (you)':''),m.email,right)); });
    if(inv.length){ p.appendChild(vnet.el('h3','','Waiting to accept')); inv.forEach(function(i){ var x=i.expiresAt&&i.expiresAt.toDate?i.expiresAt.toDate():null; p.appendChild(row(i.email,(vnet.ROLE_LABEL[i.role]||i.role)+(x?' - expires '+x.toLocaleDateString():''),btn('Cancel','ghost',guard(async function(){ await vnet.cancelInvite(ws,i.id); R.team(); })))); }); }
-   if(mine.length){ p.appendChild(vnet.el('h3','','Invite someone')); p.appendChild(vnet.el('div','note','They create a Vyro account with this exact email, then accept on their dashboard. Invitations expire after 14 days.'));
+   if(mine.length){ p.appendChild(vnet.el('h3','','Invite someone')); p.appendChild(vnet.el('div','note','They create a Vyqil account with this exact email, then accept on their dashboard. Invitations expire after 14 days.'));
      var n=document.createElement('input'); n.placeholder='Name'; var e=document.createElement('input'); e.type='email'; e.placeholder='Email'; var s=document.createElement('select'); mine.forEach(function(r){ var o=vnet.el('option','',vnet.ROLE_LABEL[r]); o.value=r; s.appendChild(o); });
      p.appendChild(n); p.appendChild(e); p.appendChild(s); p.appendChild(btn('Send invitation','',guard(async function(){ await vnet.invite(ws,U,e.value,n.value.trim(),s.value); msg('Invitation sent.'); R.team(); }))); } },
  apps:function(){ var p=$('p_apps'); p.textContent=''; p.appendChild(vnet.el('h2','','Apps for this business')); p.appendChild(vnet.el('div','note','Turning an app off never deletes its data.')); p.appendChild(vnet.el('div','note','Turning an app on here keeps this business\'s name. For a different company with its own name, create a separate business from your dashboard.'));
@@ -60,7 +60,7 @@ var R={
    if(!admin){ p.appendChild(vnet.el('div','note','Only the owner and administrators see billing.')); return; }
    p.appendChild(row('Plan',s?(s.note||''):'No plan record yet',vnet.el('span','pill good',s?s.plan+' / '+s.status:'none')));
    var pr=window.VYRO_PRICES||{}; vnet.APPS.filter(function(a){return a.live&&ws.biz.apps&&ws.biz.apps[a.id]}).forEach(function(a){ var v=pr[a.id]; p.appendChild(row(a.name,'Planned price when billing starts',vnet.el('span','pill',v==null?'not set yet':'$'+v+' / month'))); });
-   p.appendChild(vnet.el('div','banner','Payments are not switched on. This business is free while Vyro is in launch. When billing starts, each business gets its own plan and its own invoices. Crypto payments will be checked by the server, never trusted from the screen.'));
+   p.appendChild(vnet.el('div','banner','Payments are not switched on. This business is free while Vyqil is in launch. When billing starts, each business gets its own plan and its own invoices. Crypto payments will be checked by the server, never trusted from the screen.'));
    p.appendChild(vnet.el('h3','','How a plan moves'));
    p.appendChild(vnet.el('div','note','trialing, active, past due, grace period, suspended, canceled, expired. A missed payment never deletes your data.')); },
  store:async function(){ var p=$('p_store'); p.textContent=''; p.appendChild(vnet.el('h2','','Photo storage')); if(!admin){ p.appendChild(vnet.el('div','note','Only the owner and administrators see storage.')); return; }

@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>Dashboard - Vyro Network</title>
+<title>Dashboard - Vyqil Network</title>
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head><body><div class="wrap">
 
-<div class="top"><span class="brand">VYRO NETWORK</span><span><span id="vInstall"></span> <a href="account.html">Account</a></span></div>
+<div class="top"><span class="brand">VYQIL NETWORK</span><span><span id="vInstall"></span> <a href="account.html">Account</a></span></div>
 <h1 id="hi">Your businesses</h1>
 <div class="note err" id="err"></div>
 <div id="verify" class="banner hide">Please verify your email. Check your inbox for the link. <a href="#" id="resend">Send it again</a></div>
@@ -76,7 +76,7 @@ vnet.requireAuth(async function(u){
   function drawApps(){
     var box=$('bapps'); box.textContent=''; var t=$('bt').value;
     if(t==='Restaurant or cafe'){
-      [['restaurant','VyroRestaurant','Tables, kitchen screen, point of sale and team.'],['takeout','VyroTakeout','Takeout and fast food only. No tables. Costs less.']].forEach(function(o,k){
+      [['restaurant','VyqilRestaurant','Tables, kitchen screen, point of sale and team.'],['takeout','VyqilTakeout','Takeout and fast food only. No tables. Costs less.']].forEach(function(o,k){
         var l=vnet.el('label'); l.style.cssText='display:flex;gap:8px;align-items:flex-start;color:var(--text);margin:6px 0';
         var c=document.createElement('input'); c.type='radio'; c.name='restApp'; c.value=o[0]; c.style.width='auto'; c.checked=(k===0);
         var d=vnet.el('span'); d.appendChild(vnet.el('b','',o[1])); d.appendChild(document.createElement('br')); d.appendChild(vnet.el('small','',o[2]));

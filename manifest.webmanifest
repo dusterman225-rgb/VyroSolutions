@@ -1,6 +1,6 @@
 {
-  "name": "Vyro Network",
-  "short_name": "Vyro",
+  "name": "Vyqil Network",
+  "short_name": "Vyqil",
   "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",
@@ -33,5 +33,5 @@
     }
   ],
   "id": "/",
-  "description": "Vyro Business"
+  "description": "Vyqil Business"
 }

@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>VyroSolutions - Simple software for small businesses</title>
-<meta name="description" content="VyroSolutions makes simple apps for contractors, restaurants, takeout and retail shops: point of sale, teams, scheduling, invoices, inventory and an AI assistant. One login, add apps as you grow.">
+<title>VyqilSolutions - Simple software for small businesses</title>
+<meta name="description" content="VyqilSolutions makes simple apps for contractors, restaurants, takeout and retail shops: point of sale, teams, scheduling, invoices, inventory and an AI assistant. One login, add apps as you grow.">
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <style>
   .hero{padding:26px 0 8px;text-align:center}
@@ -38,12 +39,13 @@
 </style>
 </head><body><div class="wrap">
 
-<div class="nav"><a class="brand" href="/">VYRO<span style="color:var(--blue)">SOLUTIONS</span></a>
+<div class="nav"><a class="brand" href="/"><img src="icons/icon-192.png" alt="VyqilSolutions" style="height:38px;width:38px;border-radius:9px;display:block"></a>
   <span><a class="btn ghost" id="navIn" href="login.html">Log in</a></span></div>
 
 <div class="hero">
+  <img src="images/vyqil-solutions.png" alt="VyqilSolutions - One Vision. Endless Possibilities." style="width:min(92vw,460px);height:auto;display:block;margin:0 auto 14px">
   <h1>Run your whole business from your phone.</h1>
-  <p>VyroSolutions makes simple, affordable apps for contractors, restaurants, takeout counters and retail shops. One login. Add an app when you need it.</p>
+  <p>VyqilSolutions makes simple, affordable apps for contractors, restaurants, takeout counters and retail shops. One login. Add an app when you need it.</p>
   <div class="cta" id="cta">
     <a class="btn" href="login.html?signup=1" id="ctaUp">Sign up</a>
     <a class="btn ghost" href="login.html" id="ctaIn">Log in</a>
@@ -52,8 +54,8 @@
 </div>
 
 <section id="about">
-  <h2>About VyroSolutions</h2>
-  <p class="lead">Small businesses should not need five different tools, a stack of logins and an IT person. VyroSolutions builds one family of apps that work the same way, so what you learn in one carries to the next.</p>
+  <h2>About VyqilSolutions</h2>
+  <p class="lead">Small businesses should not need five different tools, a stack of logins and an IT person. VyqilSolutions builds one family of apps that work the same way, so what you learn in one carries to the next.</p>
   <div class="trust">
     <div><b>One account.</b> Sign in once and switch between your businesses from a list. Starting a restaurant besides your contracting company? Each business keeps its own name, team and records.</div>
     <div><b>Built for phones.</b> Install it like an app. The checkout keeps working when the internet drops and catches up when it returns.</div>
@@ -77,8 +79,8 @@
     <h3>Upgrades</h3>
     <ul>
       <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>VyroAssistant</b> is included in every Vyro app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyroContractor. It only reads your records, and you accept a notice before first use.</li>
-      <li><b>Bring your own AI</b> is included with the VyroAssistant: already have your own AI account? Connect it at no extra charge.</li>
+      <li><b>VyqilAssistant</b> is included in every Vyqil app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyqilContractor. It only reads your records, and you accept a notice before first use.</li>
+      <li><b>Bring your own AI</b> is included with the VyqilAssistant: already have your own AI account? Connect it at no extra charge.</li>
     </ul>
   </div>
 </section>
@@ -99,7 +101,7 @@
     <div><b>Separated by business.</b> One business cannot see another's records.</div>
     <div><b>Roles.</b> Owners, managers and staff see only what they need. Money and finance pages are limited to managers.</div>
     <div><b>Encrypted connection.</b> Everything travels over HTTPS.</div>
-    <div><b>AI you control.</b> The help bot never sees your business records. The VyroAssistant does, only after you accept a notice, and you can use your own AI account instead.</div>
+    <div><b>AI you control.</b> The help bot never sees your business records. The VyqilAssistant does, only after you accept a notice, and you can use your own AI account instead.</div>
   </div>
 </section>
 
@@ -108,7 +110,7 @@
 </section>
 
 <footer>
-  &copy; <span id="yr"></span> VyroSolutions &middot; <a href="legal.html">Terms and privacy (draft)</a>
+  &copy; <span id="yr"></span> VyqilSolutions &middot; <a href="legal.html">Terms and privacy (draft)</a>
 </footer>
 
 </div>
@@ -122,10 +124,10 @@
   $('yr').textContent = new Date().getFullYear();
   var P = window.VYRO_PRICES || {};
   var APPS = [
-    { id: 'contractor', name: 'VyroContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
-    { id: 'restaurant', name: 'VyroRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
-    { id: 'takeout', name: 'VyroTakeout', who: 'Takeout and fast food', items: ['Fast counter checkout and customer kiosk', 'Order board and kitchen screen', 'Same menu as your restaurant, or its own', 'Coupons and discounts with manager approval', 'Staff schedule and end of day close'] },
-    { id: 'retail', name: 'VyroRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
+    { id: 'contractor', name: 'VyqilContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
+    { id: 'restaurant', name: 'VyqilRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
+    { id: 'takeout', name: 'VyqilTakeout', who: 'Takeout and fast food', items: ['Fast counter checkout and customer kiosk', 'Order board and kitchen screen', 'Same menu as your restaurant, or its own', 'Coupons and discounts with manager approval', 'Staff schedule and end of day close'] },
+    { id: 'retail', name: 'VyqilRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
   ];
   function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
   var grid = $('appGrid');
