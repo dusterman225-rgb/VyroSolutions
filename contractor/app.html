@@ -133,6 +133,14 @@
     if (ctx.biz.name) $('bizTag').textContent = ctx.biz.name;
     if (vyro.mountSwitcher) vyro.mountSwitcher(ctx, $('wpBox'));
     $('mProduct').textContent = PRODUCT_NAMES[ctx.biz.product] || '';
+    // Reminder tiles load first and on their own, so a slow or failing count can never hide them.
+    (function loadTiles(tries) {
+      try {
+        vremind.collect(ctx).then(function (rem) {
+          try { if (!rem.length && tries < 1) { setTimeout(function () { loadTiles(tries + 1); }, 2500); return; } vtiles.mount(ctx, $('vTiles'), rem).catch(function () { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); }); } catch (e) { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); }
+        }).catch(function () { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); });
+      } catch (e) { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); }
+    })(0);
     if (ctx.role === 'owner') $('miLink').style.display = '';
     $('mWho').textContent = ctx.role + ' \u00b7 ' + ctx.user.email;
     if (ctx.role === 'owner') { $('miFin').style.display = 'block'; $('miPay').style.display = 'block'; }
@@ -254,12 +262,6 @@
         n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
       ]]
     ];
-    try {
-      vremind.collect(ctx).then(function (rem) {
-        try { vtiles.mount(ctx, $('vTiles'), rem); } catch (e) { /* tiles are optional */ }
-        try { if (window.vdaily) vdaily.run(ctx, rem); } catch (e) { /* daily list is optional */ }
-      }).catch(function () { /* reminders are optional */ });
-    } catch (e) { /* reminders are optional */ }
     var box = $('attBody'); box.textContent = ''; var any = false;
     groups.forEach(function (g) {
       var rows = g[1].filter(Boolean); if (!rows.length) return; any = true;
