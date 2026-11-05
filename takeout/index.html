@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Home - Vyro Business</title>
+<title>Home - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -143,7 +143,7 @@
           steps.push([tax, 'Set your sales tax', 'Check your tax rate so receipts are right.', 'menu.html']);
           var seenLink = false; try { seenLink = localStorage.getItem('vlink_' + ctx.bizRef.id) === '1'; } catch (e) {}
           steps.push([seenLink, 'Create your team sign-in page', 'Tap More at the bottom, then Settings, then Staff sign-in link. Share it with your team.', 'signinlink.html']);
-          steps.push([!!ctx.biz.payWallet, 'Turn on Pay with Vyro (optional)', 'Let customers pay with crypto.', 'paysettings.html']);
+          steps.push([!!ctx.biz.payWallet, 'Turn on Pay with Vyqil (optional)', 'Let customers pay with crypto.', 'paysettings.html']);
           var req = steps.slice(0, steps.length - 1), left = req.filter(function (s) { return !s[0]; }).length;
           if (!left) { try { localStorage.setItem(key, '1'); } catch (e) {} return; }
           $('setup').style.display = 'block'; $('setupSub').textContent = left + ' step' + (left === 1 ? '' : 's') + ' left. Tap one to do it.';

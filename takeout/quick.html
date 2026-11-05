@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Quick order - Vyro Business</title>
+<title>Quick order - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -38,7 +38,7 @@
       <button class="btn" id="payCash" type="button" style="flex:1">Cash</button>
       <button class="btn" id="payCard" type="button" style="flex:1">Card</button>
       <button class="btn ghost" id="payOther" type="button" style="flex:1">Other</button>
-      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyro (crypto QR)</button>
+      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyqil (crypto QR)</button>
     </div>
     <button class="btn ghost" id="clear" type="button">Clear order</button>
     <div class="note" id="msg"></div>
@@ -191,10 +191,10 @@
             status: 'Open', kitchenStatus: 'Hold', payReq: req, lastRound: 1, number: number, label: 'Takeout', dateKey: vutil.todayStr(), byUid: ctx.user.uid, byName: who, createdAt: vyro.stamp(), clientAt: Date.now(), updatedAt: vyro.stamp() };
           if (lo) { var d2 = {}; Object.keys(d).forEach(function (k) { if (['byUid', 'byName', 'createdAt', 'clientAt', 'dateKey', 'label', 'number'].indexOf(k) < 0) d2[k] = d[k]; }); await ocol.doc(id).update(d2); } else await ocol.doc(id).set(d); say('');
           vrpay.qrModal(ctx, req, number, async function (found) {
-            try { await vrpay.markPaid(ctx, id, d, found, who); if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); cart = []; disc = null; loaded = null; $('loadedNote').style.display = 'none'; drawCart(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Order ' + number + ' paid with Vyro and sent to the kitchen. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a); }
+            try { await vrpay.markPaid(ctx, id, d, found, who); if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); cart = []; disc = null; loaded = null; $('loadedNote').style.display = 'none'; drawCart(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Order ' + number + ' paid with Vyqil and sent to the kitchen. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a); }
             catch (e) { say('The payment arrived but saving failed. Open order ' + number + ' in Orders. Reference: ' + found.signature, 'err'); }
           }, function () { say('Cancelled. Order ' + number + ' was saved unpaid and is on hold. Find it by number on the Point of sale page, or ignore it.', 'err'); cart = []; disc = null; drawCart(); });
-        } catch (e) { say(e && e.code === 'vyro/offline' ? 'Pay with Vyro needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
+        } catch (e) { say(e && e.code === 'vyro/offline' ? 'Pay with Vyqil needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
         busy = false; btn.disabled = false;
       });
     });

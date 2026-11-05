@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>End of day close - Vyro Business</title>
+<title>End of day close - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -65,12 +65,12 @@
     async function load() {
       var day = $('day').value, s = await col.where('dateKey', '==', day).get();
       rows = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
-      var sales = 0, n = 0, tips = 0, tax = 0, disc = 0, voids = 0, voidAmt = 0, meth = {}, items = {}, hrs = {}, open = 0; cashNet = 0;
+      var sales = 0, n = 0, tips = 0, tax = 0, disc = 0, voids = 0, voidAmt = 0, refunded = 0, meth = {}, items = {}, hrs = {}, open = 0; cashNet = 0;
       rows.forEach(function (o) {
         if (o.status === 'Voided') { voids++; voidAmt += o.totalCents || 0; return; }
         if (o.status === 'Open') { open++; return; }
-        n++; sales += o.totalCents || 0; tips += o.tipCents || 0; tax += o.taxCents || 0; disc += o.discountCents || 0;
-        (o.payments || [{ method: o.method || 'Other', amountCents: o.totalCents || 0 }]).forEach(function (p) { meth[p.method] = (meth[p.method] || 0) + (p.amountCents || 0); if (p.method === 'Cash') cashNet += p.amountCents || 0; });
+        n++; sales += (o.totalCents || 0) - (o.refundedCents || 0); refunded += o.refundedCents || 0; tips += o.tipCents || 0; tax += o.taxCents || 0; disc += o.discountCents || 0;
+        (o.payments || [{ method: o.method || 'Other', amountCents: o.totalCents || 0 }]).forEach(function (p) { meth[p.method] = (meth[p.method] || 0) + (p.amountCents || 0); if (p.method === 'Cash') cashNet += p.amountCents || 0; }); (o.refunds || []).forEach(function (r) { meth[r.method] = (meth[r.method] || 0) - (r.cents || 0); if (r.method === 'Cash') cashNet -= r.cents || 0; });
         (o.items || []).forEach(function (i) { var k = i.name; items[k] = items[k] || { q: 0, c: 0 }; items[k].q += i.qty; items[k].c += i.qty * i.priceCents; });
         var h = new Date(o.clientAt || 0).getHours(); hrs[h] = (hrs[h] || 0) + (o.totalCents || 0);
       });
@@ -78,6 +78,7 @@
       var m = $('money'); m.textContent = ''; m.appendChild(line('Sales (with tax)', f(sales))); m.appendChild(line('of which tax', f(tax)));
       Object.keys(meth).sort().forEach(function (k) { m.appendChild(line('Paid by ' + k, f(meth[k]))); });
       if (disc) m.appendChild(line('Discounts and comps given', f(disc)));
+      if (refunded) m.appendChild(line('Refunds (already taken off sales)', '-' + f(refunded)));
       m.appendChild(line('Cancelled orders', voids + ' (' + f(voidAmt) + ')')); if (open) m.appendChild(line('Still open (unpaid)', String(open)));
       $('cSales').textContent = f(cashNet);
       var t = $('top'); t.textContent = ''; Object.keys(items).sort(function (a, b) { return items[b].q - items[a].q; }).slice(0, 10).forEach(function (k) { t.appendChild(line(items[k].q + ' x ' + k, f(items[k].c))); }); if (!Object.keys(items).length) t.appendChild(vyro.el('div', 'note', 'No paid orders on this day.'));

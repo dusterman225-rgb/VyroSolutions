@@ -1,6 +1,6 @@
 {
-  "name": "VyroTakeout",
-  "short_name": "VyroTakeout",
+  "name": "VyqilTakeout",
+  "short_name": "VyqilTakeout",
   "start_url": "/takeout/index.html",
   "scope": "/takeout/",
   "display": "standalone",
@@ -33,5 +33,5 @@
     }
   ],
   "id": "/takeout/",
-  "description": "Vyro Business"
+  "description": "Vyqil Business"
 }
