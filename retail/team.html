@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Team - Vyro Business</title>
+<title>Team - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -89,7 +89,7 @@
     sel.addEventListener('change', roleChange); setPerms(R.PRESETS['Manager']); roleChange();
     function reset() { editing = null; $('name').value = ''; $('email').value = ''; $('email').disabled = false; $('title').value = ''; $('empType').value = ''; $('wkHrs').value = ''; sel.value = 'employee'; setPerms(R.PRESETS['Manager']); roleChange(); $('save').textContent = 'Add'; $('formTitle').textContent = 'Add a team member'; $('cancel').style.display = 'none'; }
     $('cancel').addEventListener('click', reset);
-    // ---- people who were invited (they already had a Vyro login) and the message to send a new person ----
+    // ---- people who were invited (they already had a Vyqil login) and the message to send a new person ----
     async function signInLink() {
       try { var q = await vyro.db.collection('publicBrands').where('bizId', '==', ctx.bizId).limit(1).get(); if (!q.empty) return location.origin + '/' + q.docs[0].id + '/login'; } catch (e) {}
       return location.origin + '/' + 'retail' + '/login.html';
@@ -97,7 +97,7 @@
     async function shareBlock(em, nm, invited) {
       var box = $('shareBox'); if (!box) { box = vyro.el('div', 'card'); box.id = 'shareBox'; $('msg').parentNode.insertBefore(box, $('msg').nextSibling); }
       box.textContent = ''; var link = await signInLink(), biz = ctx.biz.name || 'our business';
-      var text = 'Hi ' + (nm || '') + ', you have been added to ' + biz + ' on Vyro.\n\nSign in here: ' + link + '\nYour email: ' + em + '\n' + (invited ? 'You already have a Vyro login, so sign in with it. You will see the invitation on your home screen. Tap Accept.' : 'First time? On that page tap "Forgot your password?" and set your own password.');
+      var text = 'Hi ' + (nm || '') + ', you have been added to ' + biz + ' on Vyqil.\n\nSign in here: ' + link + '\nYour email: ' + em + '\n' + (invited ? 'You already have a Vyqil login, so sign in with it. You will see the invitation on your home screen. Tap Accept.' : 'First time? On that page tap "Forgot your password?" and set your own password.');
       box.appendChild(vyro.el('b', '', 'Send them their sign-in details'));
       box.appendChild(vyro.el('div', 'note', 'Automatic emails often land in spam, so send this message yourself as well.'));
       var m = vyro.el('a', 'btn ghost', 'Email it'); m.href = 'mailto:' + em + '?subject=' + encodeURIComponent('Your ' + biz + ' sign-in') + '&body=' + encodeURIComponent(text); m.style.cssText = 'display:block;text-align:center'; box.appendChild(m);
@@ -109,7 +109,7 @@
       try {
         var s = await vyro.db.collection('invites').where('bizId', '==', ctx.bizId).get(); if (s.empty) return;
         var h = vyro.el('h2', '', 'Invited, not accepted yet'); h.style.cssText = 'margin:14px 0 4px;font-size:1rem'; box.appendChild(h);
-        box.appendChild(vyro.el('div', 'note', 'These people already have a Vyro login. They appear on your team after they sign in and accept.'));
+        box.appendChild(vyro.el('div', 'note', 'These people already have a Vyqil login. They appear on your team after they sign in and accept.'));
         s.forEach(function (d) {
           var x = d.data(), row = vyro.el('div', 'item'), l = vyro.el('div', 'grow'); l.appendChild(vyro.el('b', '', (x.name || x.email))); l.appendChild(vyro.el('small', '', x.email + ' · ' + R.label(x.role) + (x.title ? ' · ' + x.title : ''))); row.appendChild(l);
           var a = vyro.el('button', 'btn ghost', 'Message'); a.type = 'button'; a.addEventListener('click', function () { shareBlock(x.email, x.name, true); $('shareBox').scrollIntoView(); }); row.appendChild(a);
@@ -153,7 +153,7 @@
           await col.doc(editing).update(upd); vcache.bump(ctx, 'members'); vyro.audit(ctx, 'member changed', em + ' ' + role); $('msg').textContent = 'Saved.'; $('msg').className = 'note ok';
         } else {
           var r = await vyro.addMember(ctx.bizId, em, n, role, extra); vcache.bump(ctx, 'members'); vyro.audit(ctx, 'member added', em + ' ' + role);
-          $('msg').textContent = r.invited ? 'That email already has a Vyro login. They were sent an invitation: when they sign in, they will see it on their home screen and can accept it. They keep their other job.' : r.emailSent ? 'Added. They were emailed a link to set their password.' : 'Added, but the email could not be sent. Ask them to use "Forgot password" on the sign-in page.'; $('msg').className = 'note ok';
+          $('msg').textContent = r.invited ? 'That email already has a Vyqil login. They were sent an invitation: when they sign in, they will see it on their home screen and can accept it. They keep their other job.' : r.emailSent ? 'Added. They were emailed a link to set their password.' : 'Added, but the email could not be sent. Ask them to use "Forgot password" on the sign-in page.'; $('msg').className = 'note ok';
         }
         var wasAdd = !editing; var sh = { em: em, n: n, inv: false }; reset(); load(); loadInvites();
         if (wasAdd) { shareBlock(em, n, !!(typeof r !== 'undefined' && r && r.invited)); }

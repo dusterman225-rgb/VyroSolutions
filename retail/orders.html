@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Order history - Vyro Business</title>
+<title>Order history - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -62,14 +62,14 @@
         draw();
       }, function (e) { $('err').textContent = vyro.friendly(e); rows = []; draw(); });
     }
-    // Refund: money goes back by the same way the customer paid. Vyro records it; the manager hands back the money.
+    // Refund: money goes back by the same way the customer paid. Vyqil records it; the manager hands back the money.
     async function refund(o) {
       var left = (o.totalCents || 0) - (o.refundedCents || 0), t = prompt('Refund how much? Order ' + (o.number || '') + ' can be refunded up to ' + vutil.fmt(left) + '.\nType the amount in dollars, or leave blank for the full ' + vutil.fmt(left) + '.');
       if (t === null) return; var c = t.trim() === '' ? left : vutil.toCents(t);
       if (!(c > 0) || c > left) { $('err').textContent = 'Enter an amount between $0.01 and ' + vutil.fmt(left) + '.'; return; }
       var why = prompt('Reason for the refund (optional):'); if (why === null) return;
       var pm = (o.payments && o.payments[0] && o.payments[0].method) || o.method || 'Other';
-      var note = pm === 'Pay with Vyro' ? '\n\nThis was paid with crypto. Vyro records the refund; you must send the crypto back yourself from your wallet.' : (pm === 'Card' ? '\n\nRefund it on your card reader too.' : pm === 'Cash' ? '\n\nHand the customer the cash.' : '');
+      var note = pm === 'Pay with Vyqil' ? '\n\nThis was paid with crypto. Vyqil records the refund; you must send the crypto back yourself from your wallet.' : (pm === 'Card' ? '\n\nRefund it on your card reader too.' : pm === 'Cash' ? '\n\nHand the customer the cash.' : '');
       if (!confirm('Refund ' + vutil.fmt(c) + ' on order ' + (o.number || '') + '?' + note)) return;
       var list = (o.refunds || []).concat([{ cents: c, reason: String(why || '').slice(0, 100), by: vyro.who(ctx), byUid: ctx.user.uid, atMs: Date.now(), method: pm }]);
       try { await col.doc(o.id).update({ refunds: list, refundedCents: (o.refundedCents || 0) + c, updatedAt: vyro.stamp() }); vyro.audit(ctx, 'refund', (o.number || '') + ' ' + vutil.fmt(c)); } catch (e) { $('err').textContent = vyro.friendly(e); return; }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Sign in - VyroRetail</title>
+<title>Sign in - VyqilRetail</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -15,7 +15,7 @@
 <div class="wrap">
   <div class="brand">
     <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Home"></a>
-    <div class="tag" id="tag">VyroRetail</div>
+    <div class="tag" id="tag">VyqilRetail</div>
   </div>
   <div id="brandBox" style="display:none;text-align:center;margin:8px 0 4px">
     <img id="brandLogo" alt="" style="max-height:72px;max-width:70%;display:none;margin:0 auto 8px">
@@ -49,7 +49,7 @@
 <script src="../shared/loginnav.js"></script>
 <script src="../shared/install.js"></script>
 <script>
-  var KIND = 'retail', KIND_NAME = 'VyroRetail';
+  var KIND = 'retail', KIND_NAME = 'VyqilRetail';
   var $ = function (id) { return document.getElementById(id); };
   function say(t, c) { $('msg').textContent = t; $('msg').className = 'note ' + (c || ''); }
   var brand = null, slug = (new URLSearchParams(location.search).get('r') || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -70,7 +70,7 @@
     } catch (e) { say('Could not load this sign-in page. Check your connection.', 'err'); }
   }
   ready = loadBrand();
-  // Someone already signed in on this site (for example from the Vyro owner page): offer to continue, or switch account.
+  // Someone already signed in on this site (for example from the Vyqil owner page): offer to continue, or switch account.
   vyro.auth.onAuthStateChanged(async function (u) {
     if (!u || window.__busy) return; await ready;
     if (slug && !brand) return;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Home - Vyro Business</title>
+<title>Home - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -37,7 +37,7 @@
 <div class="wrap">
   <div class="brand">
     <a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a>
-    <div class="tag">VyroRetail</div>
+    <div class="tag">VyqilRetail</div>
   </div>
 
   <div class="strip" id="strip">
@@ -84,7 +84,7 @@
     if (!onlyRestaurant(ctx)) return;
     var R = vroles, role = ctx.role, staff = R.isStaff(ctx);
     if (window.vsummary && R.isOwnerLevel(ctx)) vsummary.mount(ctx, $('dsum'), { stock: true });
-    document.querySelector('.tag').textContent = ctx.biz.name || 'VyroRetail';
+    document.querySelector('.tag').textContent = ctx.biz.name || 'VyqilRetail';
     $('who').textContent = (vyro.who(ctx)) + ' \u00b7 ' + ((ctx.me && ctx.me.title) || R.label(role));
     if (role === 'kiosk') {
       ['strip', 'who', 'setup', 'tiles', 'boardBox', 'wpBox', 'all'].forEach(function (id) { if ($(id)) $(id).style.display = 'none'; });
@@ -132,7 +132,7 @@
             [tax, 'Set your sales tax', 'Tap More, then Settings, then Tax and receipts.', 'taxsettings.html'],
             [(await one('members')) > 1, 'Add your team', 'Tap More, then Team. Add cashiers and managers.', 'team.html'],
             [seenLink, 'Create your team sign-in page', 'Tap More, then Settings, then Staff sign-in link. Share it with your team.', 'signinlink.html'],
-            [!!ctx.biz.payWallet, 'Turn on Pay with Vyro (optional)', 'Let customers pay with crypto.', 'paysettings.html']
+            [!!ctx.biz.payWallet, 'Turn on Pay with Vyqil (optional)', 'Let customers pay with crypto.', 'paysettings.html']
           ];
           var req = steps.slice(0, steps.length - 1), left = req.filter(function (s) { return !s[0]; }).length;
           if (!left) { try { localStorage.setItem(key, '1'); } catch (e) {} return; }

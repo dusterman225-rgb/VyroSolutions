@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Checkout - Vyro Business</title>
+<title>Checkout - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -47,7 +47,7 @@
       <button class="btn" id="payCash" type="button" style="flex:1">Cash</button>
       <button class="btn" id="payCard" type="button" style="flex:1">Card</button>
       <button class="btn ghost" id="payOther" type="button" style="flex:1">Other</button>
-      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyro (crypto QR)</button>
+      <button class="btn" id="payVyro" type="button" style="flex:1 1 100%;display:none">Pay with Vyqil (crypto QR)</button>
     </div>
     <button class="btn ghost" id="clear" type="button">Clear sale</button>
     <div class="note" id="msg"></div>
@@ -269,16 +269,16 @@
         try {
           if (!navigator.onLine) throw { code: 'vyro/offline' };
           var req = await vrpay.makeReq(ctx, coin, t.total), id = ocol.doc().id, lines = cart.slice(), cu = cust;
-          var d = build('Pay with Vyro', 0, t, { status: 'Open', payReq: req }); delete d.paidAt; delete d.paidBy; d.payments = []; d.method = '';
+          var d = build('Pay with Vyqil', 0, t, { status: 'Open', payReq: req }); delete d.paidAt; delete d.paidBy; d.payments = []; d.method = '';
           await ocol.doc(id).set(d); say('msg', '');
           vrpay.qrModal(ctx, req, d.number, async function (found) {
             try {
               await vrpay.markPaid(ctx, id, d, found, who);
               try { var b = vyro.db.batch(); stockBatch(b, lines, cu, d.pointsEarned, d.pointsUsed); await b.commit(); localAfter(lines, d.pointsEarned, d.pointsUsed); } catch (e2) { addPend(lines); }
-              if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); reset(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Sale ' + d.number + ' paid with Vyro. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a);
+              if (disc && disc.coupon) vcoupon.used(ctx, disc.coupon); reset(); var m = $('msg'); m.className = 'note ok'; m.textContent = ''; m.appendChild(vyro.el('b', '', 'Sale ' + d.number + ' paid with Vyqil. ')); var a = vyro.el('a', 'link', 'Print receipt'); a.href = 'receipt.html?id=' + id; m.appendChild(a);
             } catch (e) { say('msg', 'The payment arrived but saving failed. Open sale ' + d.number + ' in Sales history. Reference: ' + found.signature, 'err'); }
           }, function () { say('msg', 'Cancelled. Sale ' + d.number + ' was saved unpaid. Find it in Sales history, or cancel it there.', 'err'); reset(); });
-        } catch (e) { say('msg', e && e.code === 'vyro/offline' ? 'Pay with Vyro needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
+        } catch (e) { say('msg', e && e.code === 'vyro/offline' ? 'Pay with Vyqil needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)), 'err'); }
         busy = false; btn.disabled = false;
       });
     });

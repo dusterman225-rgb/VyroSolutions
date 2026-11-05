@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Receipt - Vyro Business</title>
+<title>Receipt - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -59,12 +59,12 @@
     function show(req) {
       box.textContent = '';
       var q = document.createElement('div'); q.style.cssText = 'width:150px;margin:8px auto;background:#fff;padding:4px'; var svg = vrpay.qr(req, o.number, ctx); q.innerHTML = svg || ''; box.appendChild(q);
-      var t = vyro.el('div', 'note', 'Scan with the Vyro app to pay ' + vutil.fmt(req.usdCents) + ' in ' + req.coin + (req.net === 'mainnet' ? '' : ' (TEST)')); box.appendChild(t);
-      vrpay.watch(req, async function (f) { try { await vrpay.markPaid(ctx, id, o, f, vyro.who(ctx)); box.textContent = ''; $('rThanks').textContent = 'PAID with Vyro. Thank you! Reload to print the paid receipt.'; } catch (e) { $('err').textContent = vyro.friendly(e); } }, 6000);
+      var t = vyro.el('div', 'note', 'Scan with the Vyqil app to pay ' + vutil.fmt(req.usdCents) + ' in ' + req.coin + (req.net === 'mainnet' ? '' : ' (TEST)')); box.appendChild(t);
+      vrpay.watch(req, async function (f) { try { await vrpay.markPaid(ctx, id, o, f, vyro.who(ctx)); box.textContent = ''; $('rThanks').textContent = 'PAID with Vyqil. Thank you! Reload to print the paid receipt.'; } catch (e) { $('err').textContent = vyro.friendly(e); } }, 6000);
     }
     if (o.payReq) { show(o.payReq); return; }
     if (!vrpay.enabled(ctx)) return;
-    var b = vyro.el('button', 'btn', 'Add a Pay with Vyro QR to this check'); b.type = 'button'; b.className = 'btn noprint'; box.appendChild(b);
+    var b = vyro.el('button', 'btn', 'Add a Pay with Vyqil QR to this check'); b.type = 'button'; b.className = 'btn noprint'; box.appendChild(b);
     b.addEventListener('click', function () {
       var coins = ctx.biz.payCoins || [], coin = coins.indexOf('USDC') > -1 ? 'USDC' : coins[0]; b.disabled = true;
       vrpay.makeReq(ctx, coin, o.totalCents || 0).then(function (req) { return ctx.bizRef.collection('orders').doc(id).update({ payReq: req, updatedAt: vyro.stamp() }).then(function () { o.payReq = req; show(req); }); })
