@@ -219,5 +219,17 @@
     return { notes: notes };
   }
 
-  window.vflow = { message: message, portalLink: portalLink, estimateToPortal: estimateToPortal, invoiceToPortal: invoiceToPortal, makeContract: makeContract, afterSigned: afterSigned, sync: sync };
+  // A reminder goes into the customer's portal as a message. Returns { ok } or { ok:false, reason }.
+  async function reminderToPortal(ctx, item) {
+    try {
+      if (!item.portalId || !item.msg) return { ok: false, reason: 'no-portal' };
+      var pr = vyro.db.collection('portals').doc(item.portalId), ps = await pr.get();
+      if (!ps.exists) return { ok: false, reason: 'no-portal' };
+      var text = String(item.msg.body || '').replace(/\n{3,}/g, '\n\n').slice(0, 1000);
+      await pr.collection('messages').add({ from: 'contractor', text: text, by: myName(ctx), createdAt: vyro.stamp(), read: false });
+      return { ok: true };
+    } catch (err) { return { ok: false, reason: 'error' }; }
+  }
+
+  window.vflow = { reminderToPortal: reminderToPortal, message: message, portalLink: portalLink, estimateToPortal: estimateToPortal, invoiceToPortal: invoiceToPortal, makeContract: makeContract, afterSigned: afterSigned, sync: sync };
 })();

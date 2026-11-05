@@ -112,6 +112,7 @@
     ]);
     function acts(col, x) {
       return {
+        portalId: col === 'invoices' ? (x.estimateId || '') : col === 'estimates' ? (x.portalShared ? x.id : '') : col === 'contracts' ? (x.jobId || '') : '',
         snoozed: x.remindLaterOn === today,
         remindedToday: ymdOf(Math.max(ms(x.lastReminderAt), ms(x.lastFollowUpAt))) === today,
         later: function () { x.remindLaterOn = today; return ctx.bizRef.collection(col).doc(x.id).update({ remindLaterOn: today }); },
@@ -129,8 +130,14 @@
         add({ kind: 'invoice', color: COLORS.invoice, label: 'Invoice', id: i.id, customer: i.customerName || '', title: 'Invoice due from ' + (i.customerName || 'customer') + ' on ' + pretty(i.dueDate), sub: (i.number || '') + ' · ' + bal, days: p.late, dayWord: 'past due', stage: p.stage, urgent: p.stage === 'urgent', overdue: true, msg: p, doneLabel: 'Paid', open: 'invoice.html?id=' + i.id }, acts('invoices', i));
       } else if (days(today, i.dueDate) <= 3) {
         var left = days(today, i.dueDate);
-        add({ kind: 'invoice', color: COLORS.invoice, label: 'Invoice', id: i.id, customer: i.customerName || '', title: 'Invoice due from ' + (i.customerName || 'customer') + ' on ' + pretty(i.dueDate), sub: (i.number || '') + ' · ' + bal + ' · ' + (left === 0 ? 'due today' : 'due in ' + left + ' day' + (left === 1 ? '' : 's')), days: 0, soon: true, stage: 0, msg: invoice(ctx, i, i.dueDate), open: 'invoice.html?id=' + i.id }, acts('invoices', i));
+        add({ kind: 'invoice', color: COLORS.invoice, label: 'Invoice', id: i.id, customer: i.customerName || '', title: 'Invoice due from ' + (i.customerName || 'customer') + ' on ' + pretty(i.dueDate), sub: (i.number || '') + ' · ' + bal + ' · ' + (left === 0 ? 'due today' : 'due in ' + left + ' day' + (left === 1 ? '' : 's')), days: left, countdown: true, dayWord: left === 0 ? 'due today' : 'left', soon: true, stage: 0, msg: invoice(ctx, i, i.dueDate), open: 'invoice.html?id=' + i.id }, acts('invoices', i));
       }
+    });
+    // Invoices that were written but never sent
+    invoices.forEach(function (i) {
+      if (i.status !== 'Draft' || !i.customerName || !(i.totalCents > 0)) return;
+      var age = Math.floor((now - ms(i.createdAt)) / DAY); if (!(age >= 1)) return;
+      add({ kind: 'invoice', color: COLORS.invoice, label: 'Unsent invoice', id: i.id, customer: i.customerName, title: 'Invoice for ' + i.customerName + ' was never sent', sub: (i.number || 'Draft') + ' · ' + vutil.fmt(i.totalCents || 0), days: age, dayWord: 'unsent', stage: 0, urgent: false, overdue: false, doneLabel: 'Open', open: 'invoice.html?id=' + i.id }, acts('invoices', i));
     });
     ests.forEach(function (e) {
       if (e.status !== 'Sent') return;
