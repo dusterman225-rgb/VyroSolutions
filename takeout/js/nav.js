@@ -9,11 +9,11 @@
     function I(id, label, short, href, group, desc, ok, help) { return { id: id, label: label, short: short, href: href, group: group, desc: desc, ok: !!ok, help: help || '' }; }
     return [
       I('pos', 'Point of sale', 'Sell', 'pos.html', 'service', 'Tap a table to take its order, send it to the kitchen and take payment.', tables && front, 'Tap a red (occupied) table to open its order. Pick a category, tap items, then Send to kitchen. Tap Take payment when they are done.'),
-      I('quick', 'Quick order', 'Quick', 'quick.html', 'service', 'Fast take-out ordering. Tap items, take payment, done.', quick && front, 'Tap a category, tap items, then Cash, Card, Other or Pay with Vyro. The order goes straight to the kitchen.'),
+      I('quick', 'Quick order', 'Quick', 'quick.html', 'service', 'Fast take-out ordering. Tap items, take payment, done.', quick && front, 'Tap a category, tap items, then Cash, Card, Other or Pay with Vyqil. The order goes straight to the kitchen.'),
       I('kitchen', 'Kitchen screen', 'Kitchen', 'kitchen.html', 'service', 'For cooks: orders to make, one at a time. Move each one along.', staff || cook || server || emp, 'Tap an order to move it from New to Preparing to Ready. The server is told when it is Ready. This is for cooks. To look up an old order, use Order history.'),
       I('orders', 'Order history', 'Orders', 'orders.html', 'service', 'Find any order from today, print a receipt, or cancel one.', front || cook || host, 'Find an order, print its receipt, or (managers) cancel it. To make orders, cooks use the Kitchen screen.'),
       I('board', 'Pickup board', 'Board', 'board.html', 'screens', 'A big screen for customers showing which order numbers are ready.', kiosk, 'This is a customer screen. Leave it open on a TV or tablet at the counter.'),
-      I('kiosk', 'Customer kiosk', 'Kiosk', 'kiosk.html', 'screens', 'The ordering screen customers use themselves.', kiosk, 'Open this on the kiosk tablet. Customers order and pay with the Vyro app or at the counter.'),
+      I('kiosk', 'Customer kiosk', 'Kiosk', 'kiosk.html', 'screens', 'The ordering screen customers use themselves.', kiosk, 'Open this on the kiosk tablet. Customers order and pay with the Vyqil app or at the counter.'),
       I('tables', 'Tables and seating', 'Tables', 'tables.html', 'floor', 'Seat guests, mark tables clean, filter by open, reserved or dirty.', tables && (staff || host || server), 'Tap a table. Green is open, blue reserved, red taken, orange needs cleaning.'),
       I('reservations', 'Reservations', 'Booked', 'reservations.html', 'floor', 'Bookings for any day. Seat a party at a table.', tables && (staff || host || server), 'Pick a day, add a booking, tap Seat when they arrive.'),
       I('schedule', 'Schedule', 'Schedule', 'schedule.html', 'people', 'Who works when. Ask to swap a shift or offer to cover one.', ns, 'Slide sideways to see the week. Tap Request swap on your shift, or Offer to cover on a swap request from someone with your title. Managers approve or reject.'),
@@ -26,12 +26,12 @@
       I('shopping', 'Shopping list', 'Shop', 'shopping.html', 'stock', 'What to reorder, grouped by vendor. Text or email it.', staff || cook || emp, 'Everything low on supply, ready to text to your vendor.'),
       I('timeclock', 'Time clock', 'Clock', 'timeclock.html', 'people', 'Clock in and out. See your hours.', ns, 'Tap Clock in when you start and Clock out when you finish.'),
       I('tips', 'Tips', 'Tips', 'tips.html', 'people', 'Tips by person and by day.', staff || server || emp, 'Pick the dates. Download a spreadsheet if you need one.'),
-      I('team', 'Team', 'Team', 'team.html', 'people', 'Add people, change titles and roles, remove people.', R.can(ctx, 'team'), 'Add a person with their email. If they already have a Vyro login, they get an invitation to accept.'),
+      I('team', 'Team', 'Team', 'team.html', 'people', 'Add people, change titles and roles, remove people.', R.can(ctx, 'team'), 'Add a person with their email. If they already have a Vyqil login, they get an invitation to accept.'),
       I('records', 'Employee records', 'Records', 'records.html', 'people', 'One employee\'s hours and orders.', R.can(ctx, 'timekeeping'), 'Pick a name and a start date.'),
       I('close', 'End of day close', 'Close', 'close.html', 'money', 'Sales, cash count and best sellers for a day.', staff, 'Pick the day, count the drawer, tap Save. Download the day as a spreadsheet.'),
       I('coupons', 'Coupons', 'Coupons', 'coupons.html', 'money', 'Create and switch off coupon codes.', ol, 'Make a code, set the discount and limits, then switch it on or off.'),
       I('finances', 'Sales reports', 'Reports', 'finances.html', 'money', 'Sales over time.', ol, 'Pick a period to see the totals.'),
-      I('paysettings', 'Pay with Vyro setup', 'Vyro pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol, 'Paste your wallet address, tick the coins, Save. Check the address twice.'),
+      I('paysettings', 'Pay with Vyqil setup', 'Vyqil pay', 'paysettings.html', 'money', 'Where crypto payments are sent, and which coins you accept.', ol, 'Paste your wallet address, tick the coins, Save. Check the address twice.'),
       I('assistant', 'Assistant', 'Assistant', 'assistant.html', 'money', 'Ask questions about your sales and stock. Read-only.', ol, 'Ask about sales, best sellers and what is running low. It reads your records and cannot change anything.'),
       I('data', 'Data and activity', 'Data', 'data.html', 'settings', 'Download your data, see who did what, hand over ownership.', ol, 'Save a copy of your records, search the activity log, see app problems.'),
       I('settings', 'Settings', 'Settings', 'settings.html', 'settings', 'All your business setup in one place.', ol, 'Everything you set up once: service type, menu, team, payments, colours.'),
@@ -148,7 +148,7 @@
 
 
   // ---- switch business: one tap from any page ----
-  var PRODUCT_NAME = { restaurant: 'VyroRestaurant', takeout: 'VyroTakeout', retail: 'VyroRetail', contractor: 'VyroContractor' };
+  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
   function homeFor(w) {
     var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
     return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
@@ -161,13 +161,13 @@
         holder.textContent = ''; list.sort(function (x, y) { return x.name.localeCompare(y.name); });
         list.forEach(function (w) {
           var here = w.id === ctx.bizId, a = el('button', 'btn' + (here ? '' : ' ghost'), w.name + (here ? ' (you are here)' : '')); a.type = 'button'; a.style.cssText = 'display:block;width:100%;text-align:left;margin:6px 0';
-          a.appendChild(el('small', '', ' ' + (window.vroles ? (window.vroles.ROLES[w.role] || w.role) : w.role) + ' · ' + (PRODUCT_NAME[w.product] || 'Vyro')));
+          a.appendChild(el('small', '', ' ' + (window.vroles ? (window.vroles.ROLES[w.role] || w.role) : w.role) + ' · ' + (PRODUCT_NAME[w.product] || 'Vyqil')));
           a.addEventListener('click', async function () { if (here) { bg.classList.remove('open'); return; } a.disabled = true; try { await window.vyro.switchWorkplace(w.id, ctx.bizId); location.href = homeFor(w); } catch (e) { a.disabled = false; holder.textContent = 'Could not switch. Try again.'; } });
           holder.appendChild(a);
         });
         if (!list.length) holder.textContent = 'No other businesses on this login.';
       }).catch(function () { holder.textContent = 'Could not load your businesses.'; });
-      var all = el('a', 'btn ghost', 'Vyro owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
+      var all = el('a', 'btn ghost', 'Vyqil owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
       var inst = el('span'); inst.id = 'vInstall2'; inst.style.cssText = 'display:block;text-align:center;margin:10px 0'; b.appendChild(inst);
       if (window.vinstall) { var ib = el('button', 'btn ghost', 'Install this app on your home screen'); ib.type = 'button'; ib.addEventListener('click', function () { window.vinstall.open(); }); inst.appendChild(ib); }
       var so = el('button', 'btn ghost', 'Sign out'); so.type = 'button'; so.addEventListener('click', async function () { try { await window.vyro.signOut(); } catch (e) {} location.href = (window.vyro && window.vyro.loginUrl ? window.vyro.loginUrl() : 'login.html'); }); b.appendChild(so);

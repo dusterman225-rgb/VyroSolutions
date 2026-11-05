@@ -4,7 +4,7 @@
 (function () {
   var KEY = 'vyroTheme';
   var PRESETS = {
-    'Vyro dark': { accent: '#4B9CD3', bg: '#05070A', text: '#E6EBF0' },
+    'Vyqil dark': { accent: '#4B9CD3', bg: '#05070A', text: '#E6EBF0' },
     'Warm cafe': { accent: '#B5651D', bg: '#FFF8EE', text: '#3A2A1A' },
     'Fresh green': { accent: '#2E9E5B', bg: '#0B1410', text: '#E8F3EC' },
     'Classic red': { accent: '#C8102E', bg: '#FFFFFF', text: '#1B1B1B' },
