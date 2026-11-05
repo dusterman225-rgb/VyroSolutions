@@ -12,13 +12,13 @@
   if (window.VyroConsent) return;
   var NOTICES = {
     help: { version: 1, title: 'Before you chat',
-      text: 'Be mindful that this bot is hosted by a third-party vendor and Vyro is not responsible for any information you put into this bot. Please do not type your name, phone number, email, address, passwords, card numbers or any other personal details. This helper cannot see your account or your business records. Answers can be wrong.',
+      text: 'Be mindful that this bot is hosted by a third-party vendor and Vyqil is not responsible for any information you put into this bot. Please do not type your name, phone number, email, address, passwords, card numbers or any other personal details. This helper cannot see your account or your business records. Answers can be wrong.',
       button: 'I understand, accept' },
     assistant: { version: 1, title: 'Before you use the assistant',
-      text: 'Be mindful that this assistant is run by a third-party AI vendor and Vyro is not responsible for any information that is processed by it. To answer, it is sent a summary of your business records (such as invoices, orders, stock and customer names). Vyro does not control what the vendor does with it after that. Do not use it if you are not comfortable sharing that information. It is read-only, it cannot change anything, and answers can be wrong, so check amounts before you rely on them.',
+      text: 'Be mindful that this assistant is run by a third-party AI vendor and Vyqil is not responsible for any information that is processed by it. To answer, it is sent a summary of your business records (such as invoices, orders, stock and customer names). Vyqil does not control what the vendor does with it after that. Do not use it if you are not comfortable sharing that information. It is read-only, it cannot change anything, and answers can be wrong, so check amounts before you rely on them.',
       button: 'I understand, accept' },
     byo: { version: 1, title: 'Using your own AI service',
-      text: 'You are choosing to send your business summary to an AI service that you picked and pay for yourself. Your key is kept only on this phone. When you ask a question, it passes through Vyro\'s server for a moment so it can reach your provider; Vyro does not save it. That provider\'s own terms and privacy rules apply, and Vyro is not responsible for what it does with your information.',
+      text: 'You are choosing to send your business summary to an AI service that you picked and pay for yourself. Your key is kept only on this phone. When you ask a question, it passes through Vyqil\'s server for a moment so it can reach your provider; Vyqil does not save it. That provider\'s own terms and privacy rules apply, and Vyqil is not responsible for what it does with your information.',
       button: 'I understand, accept' }
   };
 

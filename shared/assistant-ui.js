@@ -1,4 +1,4 @@
-// The assistant chat page, shared by VyroContractor, VyroRestaurant, VyroTakeout and VyroRetail.
+// The assistant chat page, shared by VyqilContractor, VyqilRestaurant, VyqilTakeout and VyqilRetail.
 // Each app's assistant.html only sets the name and the example questions, then calls VyroAssistantUI.mount.
 (function () {
   var PROVIDERS = [['openai', 'OpenAI'], ['openrouter', 'OpenRouter (also reaches Claude, Llama and more)'], ['gemini', 'Google Gemini'], ['groq', 'Groq'], ['mistral', 'Mistral'], ['together', 'Together AI']];
@@ -6,7 +6,7 @@
   function clock() { return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 
   window.VyroAssistantUI = { mount: function (ctx, o) {
-    var NAME = o.name || 'Vyro Assistant', biz = ctx.biz.name || 'your business', bizId = ctx.bizId || (ctx.bizRef && ctx.bizRef.id) || '';
+    var NAME = o.name || 'Vyqil Assistant', biz = ctx.biz.name || 'your business', bizId = ctx.bizId || (ctx.bizRef && ctx.bizRef.id) || '';
     $('hName').textContent = NAME; $('hSub').textContent = 'AI assistant for ' + biz + ' · Online'; $('hAv').firstChild.nodeValue = NAME.charAt(0);
 
     // ---- Arial for everything the assistant shows ----
@@ -70,7 +70,7 @@
     function getByo() { try { var v = JSON.parse(localStorage.getItem(BYO_KEY) || 'null'); return v && v.provider && v.model && v.key ? v : null; } catch (e) { return null; } }
     function drawByo() {
       var b = getByo();
-      $('byoState').textContent = b ? 'On: using your ' + b.provider + ' key (' + b.model + '). Your key stays on this phone.' : 'Off: Vyro\'s AI is used.';
+      $('byoState').textContent = b ? 'On: using your ' + b.provider + ' key (' + b.model + '). Your key stays on this phone.' : 'Off: Vyqil\'s AI is used.';
       $('byoSum').textContent = b ? 'Using your own AI' : 'Use your own AI (optional)';
       $('byoRemove').style.display = b ? 'block' : 'none';
       $('hSub').textContent = 'AI assistant for ' + biz + ' · ' + (b ? 'your own AI' : 'Online');
@@ -112,11 +112,11 @@
     if (!base || /PUT-YOUR/.test(base)) { $('err').textContent = 'The assistant is not connected yet (shared/helpbot-config.js).'; lock(true); return; }
     if (o.blocked) { bubble('bot', o.blocked); lock(true); return; }
 
-    // VyroAssistant is an upgrade. The server checks too; this just shows the message before the notice.
+    // VyqilAssistant is an upgrade. The server checks too; this just shows the message before the notice.
     function upgradeCard(why) {
       var c = vyro.el('div', 'vyroConsent'); c.style.cssText = 'background:#101a26;border:1px solid #2f4a68;border-radius:14px;padding:14px;margin:10px;color:#e8eef6;font-size:.9rem;line-height:1.45';
-      c.appendChild(vyro.el('b', '', 'VyroAssistant is not turned on for this business'));
-      c.appendChild(vyro.el('div', '', 'It is included with your Vyro subscription. If you see this, sign out and back in, then reload this page. If it stays, contact Vyro support.'));
+      c.appendChild(vyro.el('b', '', 'VyqilAssistant is not turned on for this business'));
+      c.appendChild(vyro.el('div', '', 'It is included with your Vyqil subscription. If you see this, sign out and back in, then reload this page. If it stays, contact Vyqil support.'));
       if (why) { var w = vyro.el('div', '', 'Reason: ' + why); w.style.cssText = 'margin-top:8px;opacity:.7;font-size:.8rem'; c.appendChild(w); }
       $('log').appendChild(c);
       $('q').placeholder = 'Not turned on for this business';
@@ -151,7 +151,7 @@
         if (byo) payload.byo = byo;
         var r = await fetch(base + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
         var d; try { d = await r.json(); } catch (je) { throw { friendly: 'The assistant helper sent back something unexpected (status ' + r.status + '). It may need to be redeployed in Cloudflare.', reason: 'status ' + r.status }; }
-        if (r.status === 402 || d.error === 'plan') { ready = false; lock(true); throw { friendly: 'VyroAssistant is not turned on for this business yet. Sign out, sign back in and try again.', reason: '' }; }
+        if (r.status === 402 || d.error === 'plan') { ready = false; lock(true); throw { friendly: 'VyqilAssistant is not turned on for this business yet. Sign out, sign back in and try again.', reason: '' }; }
         if (r.status === 429) throw { friendly: byo ? 'You have reached the daily limit for your own AI on this business. It resets tomorrow.' : again ? 'You have used today\'s Think harder answers for your business. They reset tomorrow.' : 'You have reached today\'s assistant limit for your business. It resets tomorrow.' };
         if (d.error === 'consent') { ready = false; lock(true); throw { friendly: 'Please accept the notice first. Reload this page to see it again.', reason: d.detail }; }
         if (r.status === 401 || r.status === 403) throw { friendly: 'I could not open your records. Please sign out and back in, then try again.', reason: d.detail || d.error || ('status ' + r.status) };
