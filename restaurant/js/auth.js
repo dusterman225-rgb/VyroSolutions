@@ -30,7 +30,7 @@
       'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.',
       'auth/network-request-failed': 'No connection. Check your internet and try again.',
       'permission-denied': 'Permission denied. Check the Firestore rules were published, or you may not have access.',
-      'vyro/email-in-use': 'That email already has a Vyro login with a different password. Type that login\'s password here to add this business to it, or go to the sign in page and tap "Forgot your password?".',
+      'vyro/email-in-use': 'That email already has a Vyqil login with a different password. Type that login\'s password here to add this business to it, or go to the sign in page and tap "Forgot your password?".',
       'vyro/no-business': 'No business found for this account. You may have been removed from the team.'
     };
     return map[err && err.code] || 'Something went wrong. Please try again.';
@@ -43,7 +43,7 @@
     return n;
   }
 
-  // Creates a login and a business. If the email already has a Vyro login (for example a customer or an employee who now
+  // Creates a login and a business. If the email already has a Vyqil login (for example a customer or an employee who now
   // owns a business), the same password signs in and the new business is added to that one login.
   async function signUp(email, password, businessName, product) {
     busy = true;
@@ -91,7 +91,7 @@
   }
 
   // Owner or supervisor adds a team member. A brand new email gets a login with a random password nobody sees.
-  // An email that already has a Vyro account gets an INVITATION instead; they accept it after signing in.
+  // An email that already has a Vyqil account gets an INVITATION instead; they accept it after signing in.
   async function addMember(bizId, email, name, role, extra) {
     email = String(email || '').trim().toLowerCase();
     try { var dup = await db.collection('businesses').doc(bizId).collection('members').where('email', '==', email).limit(1).get(); if (!dup.empty) { throw { msg: 'That email is already on your team.' }; } }
@@ -332,7 +332,7 @@
       }
     }
     if (!res[0].exists || !res[1].exists) { throw { code: 'vyro/no-business' }; }
-    if (res[0].data().status === 'closed') { throw { code: 'vyro/closed', message: 'This business is closed. The owner can reopen it in Vyro Network.' }; }
+    if (res[0].data().status === 'closed') { throw { code: 'vyro/closed', message: 'This business is closed. The owner can reopen it in Vyqil Network.' }; }
     var bizData = res[0].data(); if (APP === 'takeout') { bizData.service = 'quick'; }
     try { var rl = res[1].data().role, sg = (bizData).slug; if ((rl === 'owner' || rl === 'gm') || !sg) localStorage.removeItem('vyro_login_url'); else localStorage.setItem('vyro_login_url', '/' + sg + '/login'); } catch (e) { /* ignore */ }
     return { user: user, bizId: bizRef.id, bizRef: bizRef, biz: bizData, me: res[1].data(), role: res[1].data().role };
@@ -367,7 +367,7 @@
     var slack = Math.min(p.coords.accuracy || 0, 100);
     if (d <= (g.radiusM || 150) + slack) { try { localStorage.setItem(key, String(Date.now())); } catch (e) {} return true; }
     try { localStorage.removeItem(key); } catch (e) {}
-    throw { msg: 'You are about ' + (d >= 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m') + ' from work. You can use Vyro Restaurant only when you are at work.' };
+    throw { msg: 'You are about ' + (d >= 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m') + ' from work. You can use Vyqil Restaurant only when you are at work.' };
   }
   function workGate(ctx) {
     return new Promise(function (done) {
