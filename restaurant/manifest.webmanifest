@@ -1,6 +1,6 @@
 {
-  "name": "VyroRestaurant",
-  "short_name": "VyroRestaurant",
+  "name": "VyqilRestaurant",
+  "short_name": "VyqilRestaurant",
   "start_url": "/restaurant/index.html",
   "scope": "/restaurant/",
   "display": "standalone",
@@ -33,5 +33,5 @@
     }
   ],
   "id": "/restaurant/",
-  "description": "Vyro Business"
+  "description": "Vyqil Business"
 }

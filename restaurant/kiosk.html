@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Kiosk - Vyro Business</title>
+<title>Kiosk - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -41,7 +41,7 @@
       <h2>Your order number</h2>
       <div id="num" style="font-size:3.2rem;font-weight:800;letter-spacing:.08em;margin:10px 0"></div>
       <div id="doneTot" class="note"></div>
-      <div id="vyroPay" style="display:none"><button class="btn" id="vyroBtn" type="button">Pay now with the Vyro app</button><div id="vyroBox"></div></div>
+      <div id="vyroPay" style="display:none"><button class="btn" id="vyroBtn" type="button">Pay now with the Vyqil app</button><div id="vyroBox"></div></div>
       <p id="cashierNote">Or go to the counter, tell the cashier this number and pay. After you pay, your order goes to the kitchen.</p>
       <button class="btn" id="again" type="button">New order</button>
     </div>
@@ -134,10 +134,10 @@
               btn.style.display = 'none'; var box = $('vyroBox'); box.textContent = '';
               var q = document.createElement('div'); q.style.cssText = 'background:#fff;padding:8px;border-radius:12px;max-width:320px;margin:10px auto'; q.innerHTML = vrpay.qr(req, num, ctx) || ''; box.appendChild(q);
               if (req.net !== 'mainnet') box.appendChild(vyro.el('div', 'note', 'TEST MODE: no real money'));
-              box.appendChild(vyro.el('div', 'note', 'Open the Vyro app and scan this code, or take a photo of it with the app. Pay ' + vrpay.coinText(req.amountBase, req.coin, req.decimals) + ' (' + vutil.fmt(req.usdCents) + '). Vyro adds a small 1% fee.'));
+              box.appendChild(vyro.el('div', 'note', 'Open the Vyqil app and scan this code, or take a photo of it with the app. Pay ' + vrpay.coinText(req.amountBase, req.coin, req.decimals) + ' (' + vutil.fmt(req.usdCents) + '). Vyqil adds a small 1% fee.'));
               var st = vyro.el('div', 'note', 'Waiting for your payment...'); box.appendChild(st); $('cashierNote').style.display = 'none';
               vrpay.watch(req, async function (f) {
-                try { await ctx.bizRef.collection('orders').doc(oid).update({ status: 'Paid', kitchenStatus: 'New', method: 'Pay with Vyro', payments: [{ method: 'Pay with Vyro', amountCents: t.total }], tipCents: 0, changeCents: 0, paidAt: vyro.stamp(), paidBy: 'Kiosk (Vyro)', txSignature: f.signature, payCoin: req.coin, payNet: req.net, updatedAt: vyro.stamp() });
+                try { await ctx.bizRef.collection('orders').doc(oid).update({ status: 'Paid', kitchenStatus: 'New', method: 'Pay with Vyqil', payments: [{ method: 'Pay with Vyqil', amountCents: t.total }], tipCents: 0, changeCents: 0, paidAt: vyro.stamp(), paidBy: 'Kiosk (Vyqil)', txSignature: f.signature, payCoin: req.coin, payNet: req.net, updatedAt: vyro.stamp() });
                   box.textContent = ''; box.appendChild(vyro.el('h2', '', 'Paid. Thank you!')); box.appendChild(vyro.el('div', 'note', 'Your order ' + num + ' is on its way to the kitchen.')); clearTimeout(resetTimer); resetTimer = setTimeout(reset, 15000);
                 } catch (e) { st.textContent = 'We received your payment but could not send the order. Please show this number to the cashier: ' + num; st.className = 'note err'; }
               }, 5000);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Colours - Vyro Business</title>
+<title>Colours - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -26,7 +26,7 @@
     <label class="field"><span>Text colour</span><input id="text" type="color"></label>
     <div class="note err" id="warn"></div>
     <button class="btn" id="save" type="button">Save colours</button>
-    <button class="btn ghost" id="reset" type="button">Back to Vyro colours</button>
+    <button class="btn ghost" id="reset" type="button">Back to Vyqil colours</button>
     <div class="note" id="msg"></div>
   </div>
   <div class="card">
@@ -73,7 +73,7 @@
       catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
     });
     $('reset').addEventListener('click', async function () {
-      if (!confirm('Go back to the standard Vyro colours?')) return;
+      if (!confirm('Go back to the standard Vyqil colours?')) return;
       try { await ref.delete(); vtheme.remember(null); location.reload(); } catch (e) { $('msg').textContent = vyro.friendly(e); $('msg').className = 'note err'; }
     });
   });

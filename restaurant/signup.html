@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Sign up - VyroRestaurant</title>
+<title>Sign up - VyqilRestaurant</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -25,7 +25,7 @@
     <label class="field"><span>Password (8+ characters)</span><input id="pw" type="password" placeholder="Password" autocomplete="new-password" required></label>
     <button class="btn" id="go" type="submit">Create account</button>
     <div class="note" id="msg"></div>
-    <div class="note">VyroRestaurant is free during early access, then $20 a month. No card is needed now.</div>
+    <div class="note">VyqilRestaurant is free during early access, then $20 a month. No card is needed now.</div>
     <a class="link" href="login.html">Already have an account? Sign in</a>
   </form>
 </div>
@@ -44,7 +44,7 @@
     var biz = document.getElementById('biz').value.trim(), email = document.getElementById('email').value.trim(), pw = document.getElementById('pw').value;
     msg.className = 'note';
     if (!biz) { msg.textContent = 'Enter your restaurant name.'; msg.className = 'note err'; return; }
-    if (pw.length < 8) { msg.textContent = 'Password must be at least 8 characters.'; msg.className = 'note err'; return; }
+    if (pw.length < 10) { msg.textContent = 'Password must be at least 10 characters.'; msg.className = 'note err'; return; }
     var btn = document.getElementById('go'); btn.disabled = true; msg.textContent = 'Creating your account...';
     try { await vyro.signUp(email, pw, biz, 'restaurant'); location.href = 'index.html'; }
     catch (err) { msg.textContent = vyro.friendly(err); msg.className = 'note err'; btn.disabled = false; }

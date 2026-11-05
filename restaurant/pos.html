@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Point of sale - Vyro Business</title>
+<title>Point of sale - Vyqil Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -86,7 +86,7 @@
       <div class="note" id="msg"></div>
     </div>
   </div>
-  <div class="note">Pay with Vyro crypto is not part of the point of sale yet. Record Cash, Card (on your own reader) or Other.</div>
+  <div class="note">Pay with Vyqil crypto is not part of the point of sale yet. Record Cash, Card (on your own reader) or Other.</div>
   <div class="note err" id="err"></div>
 </div>
 <div class="modal-bg" id="ingBg"><div class="modal" id="ingBox"></div></div>
@@ -102,7 +102,7 @@
   <button class="btn ghost" id="addPay" type="button">Split: add another payment</button>
   <div class="note" id="change"></div>
   <button class="btn" id="payOk" type="button">Mark as paid</button>
-  <button class="btn" id="payVyro" type="button" style="display:none">Pay with Vyro (crypto QR)</button>
+  <button class="btn" id="payVyro" type="button" style="display:none">Pay with Vyqil (crypto QR)</button>
   <button class="btn ghost" id="payNo" type="button">Cancel</button>
   <div class="note" id="payMsg"></div>
 </div></div>
@@ -418,7 +418,7 @@
       if (!ok) { $('payMsg').textContent = $('msg').textContent; $('payMsg').className = 'note err'; return; }
       afterPaid(label, tableRef);
     });
-    // ---- Pay with Vyro: save the order, show a QR, wait for the payment on the blockchain
+    // ---- Pay with Vyqil: save the order, show a QR, wait for the payment on the blockchain
     $('payVyro').addEventListener('click', function () {
       var due = payDue(), tableRef = cur.table, label = cur.table ? 'Table ' + cur.table.name : 'The order', btn = this;
       vrpay.pickCoin(ctx, async function (coin) {
@@ -429,19 +429,19 @@
           var req = await vrpay.makeReq(ctx, coin, due); await ocol.doc(cur.id).update({ payReq: req, tipCents: tipCents, updatedAt: vyro.stamp() });
           $('payMsg').textContent = ''; btn.disabled = false;
           vrpay.qrModal(ctx, req, cur.number, async function (found) {
-            var ok = await commit('Paid', { method: 'Pay with Vyro', payments: [{ method: 'Pay with Vyro', amountCents: due }], tipCents: tipCents, changeCents: 0, paidAt: vyro.stamp(), paidBy: who, txSignature: found.signature, payCoin: req.coin, payNet: req.net });
+            var ok = await commit('Paid', { method: 'Pay with Vyqil', payments: [{ method: 'Pay with Vyqil', amountCents: due }], tipCents: tipCents, changeCents: 0, paidAt: vyro.stamp(), paidBy: who, txSignature: found.signature, payCoin: req.coin, payNet: req.net });
             if (ok) afterPaid(label, tableRef); else { $('payMsg').textContent = 'The payment arrived but saving failed. Open the order and use Mark as paid. Reference: ' + found.signature; $('payMsg').className = 'note err'; }
           }, function () { $('payMsg').textContent = 'Payment cancelled. The order is saved and still unpaid.'; $('payMsg').className = 'note'; });
-        } catch (e) { btn.disabled = false; $('payMsg').textContent = e && e.code === 'vyro/offline' ? 'Pay with Vyro needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)); $('payMsg').className = 'note err'; }
+        } catch (e) { btn.disabled = false; $('payMsg').textContent = e && e.code === 'vyro/offline' ? 'Pay with Vyqil needs the internet.' : (e && e.code === 'vyro/no-price' ? 'Could not get the SOL price. Try USDC.' : vyro.friendly(e)); $('payMsg').className = 'note err'; }
       });
     });
-    // checks are printed with a Pay with Vyro QR: watch the open orders so a payment made later is recorded
+    // checks are printed with a Pay with Vyqil QR: watch the open orders so a payment made later is recorded
     var watching = {};
     setInterval(function () {
       if (!vrpay.enabled(ctx) || document.hidden) return;
       orders.filter(function (o) { return o.status === 'Open' && o.payReq && Date.now() - (o.payReq.madeAt || 0) < 4 * 3600000 && !watching[o.id]; }).slice(0, 8).forEach(function (o) {
         watching[o.id] = 1;
-        vchain.findPayment(o.payReq).then(function (f) { if (f) return vrpay.markPaid(ctx, o.id, o, f, 'Vyro'); }).catch(function () {}).then(function () { setTimeout(function () { delete watching[o.id]; }, 15000); });
+        vchain.findPayment(o.payReq).then(function (f) { if (f) return vrpay.markPaid(ctx, o.id, o, f, 'Vyqil'); }).catch(function () {}).then(function () { setTimeout(function () { delete watching[o.id]; }, 15000); });
       });
     }, 10000);
 

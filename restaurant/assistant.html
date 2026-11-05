@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070A">
+<title>Assistant - Vyqil Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>
+  html,body{height:100%;margin:0}
+  body{display:flex;flex-direction:column;height:100dvh;background:#05070A}
+  .chat-head{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid #1c2530;background:#0a0f16;flex:0 0 auto}
+  .chat-head a.back-arrow{color:inherit;text-decoration:none;font-size:1.4rem;line-height:1;padding:4px 8px 4px 0}
+  .avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#4ba3ff,#7fd0ff);display:flex;align-items:center;justify-content:center;color:#031018;font-weight:800;flex:0 0 auto;position:relative}
+  .avatar i{position:absolute;right:0;bottom:0;width:11px;height:11px;border-radius:50%;background:#3ddc84;border:2px solid #0a0f16}
+  .chat-head b{display:block;font-size:1rem}
+  .chat-head small{display:block;opacity:.7;font-size:.78rem}
+  #log{flex:1 1 auto;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+  .row2{display:flex;gap:8px;max-width:100%}
+  .row2.me{justify-content:flex-end}
+  .row2 .avatar{width:28px;height:28px;font-size:.72rem;align-self:flex-end}
+  .bub{max-width:82%;padding:10px 13px;border-radius:18px;white-space:pre-wrap;word-break:break-word;line-height:1.45;font-size:.93rem}
+  .bot .bub{background:#161d27;border-bottom-left-radius:5px}
+  .me .bub{background:#2b7bd8;color:#fff;border-bottom-right-radius:5px}
+  .ts{display:block;font-size:.68rem;opacity:.55;margin-top:5px}
+  .ts a{color:inherit;margin-left:8px}
+  .typing .bub{display:flex;gap:5px;padding:14px 16px}
+  .typing .bub span{width:7px;height:7px;border-radius:50%;background:#8aa0b8;animation:blink 1.2s infinite}
+  .typing .bub span:nth-child(2){animation-delay:.2s}.typing .bub span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 8px 50px}
+  .chips button{border:1px solid #2f4a68;background:transparent;color:#cfe6ff;border-radius:999px;padding:8px 13px;font-size:.84rem}
+  .composer{flex:0 0 auto;display:flex;gap:8px;align-items:flex-end;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #1c2530;background:#0a0f16}
+  .composer textarea{flex:1;resize:none;max-height:120px;border-radius:20px;padding:10px 14px;margin:0;min-height:42px;box-sizing:border-box}
+  .composer button{border:0;border-radius:50%;width:42px;height:42px;background:#2b7bd8;color:#fff;font-size:1.1rem;flex:0 0 auto}
+  .composer button:disabled{opacity:.4}
+  .fine{font-size:.68rem;opacity:.55;text-align:center;padding:0 12px 6px}
+  #err{padding:0 14px}
+
+  .byo{flex:0 0 auto;border-top:1px solid #1c2530;background:#0a0f16;font-size:.84rem}
+  .byo summary{padding:9px 14px;cursor:pointer;opacity:.8}
+  .byo .in{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px}
+  .byo select,.byo input{margin:0;box-sizing:border-box;width:100%}
+  .byo .rowb{display:flex;gap:8px}.byo .rowb button{flex:1}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+  <div class="chat-head">
+    <a class="back-arrow" href="index.html" aria-label="Back">&#8249;</a>
+    <div class="avatar" id="hAv">V<i></i></div>
+    <div><b id="hName">Vyqil Assistant</b><small id="hSub">Online</small></div>
+  </div>
+
+  <div id="log"></div>
+  <div class="chips" id="chips"></div>
+  <div class="note err" id="err"></div>
+  <details class="byo"><summary id="byoSum">Use your own AI (optional)</summary><div class="in">
+    <div class="note" style="text-align:left">Already pay for an AI service? Use it here at no extra Vyqil charge. Your key is kept on this phone only and is never saved by Vyqil. Each person on your team adds their own on their own phone.</div>
+    <select id="byoProv" aria-label="AI service"></select>
+    <input id="byoModel" type="text" placeholder="Model name, for example gpt-4o-mini" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <input id="byoKey" type="password" placeholder="Paste your key" autocomplete="off">
+    <div id="byoNotice"></div>
+    <div class="rowb"><button class="btn" id="byoSave" type="button">Save on this phone</button><button class="btn ghost" id="byoRemove" type="button" style="display:none">Remove</button></div>
+    <div class="note" id="byoState" style="text-align:left"></div><div class="note" id="byoMsg" style="text-align:left"></div>
+  </div></details>
+  <div class="fine">Third-party AI can make mistakes. Check amounts before relying on them. I can read your records but can't change anything.</div>
+  <div class="composer">
+    <textarea id="q" rows="1" maxlength="800" placeholder="Type your question..."></textarea>
+    <button id="send" type="button" aria-label="Send">&#10148;</button>
+  </div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script>window.__vyroHelpbot = true;</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="../shared/aiconsent.js"></script>
+<script src="../shared/assistant-ui.js"></script>
+<script>
+  vyro.start(async function (ctx) {
+    var ok = ctx.role === 'owner' || ctx.role === 'gm';
+    VyroAssistantUI.mount(ctx, { name: 'Vyqil Assistant', tips: [{"label": "How were sales this week?", "text": "How were my sales this week compared with each day?"}, {"label": "Best sellers", "text": "What are my best sellers this week?"}, {"label": "What is running low?", "text": "What supplies are running low?"}, {"label": "Busiest day", "text": "Which day was my busiest and what sold best that day?"}], blocked: ok ? '' : 'The assistant shows sales and stock, so it is only for the owner and the general manager.' });
+  });
+</script>
+</body>
+</html>
