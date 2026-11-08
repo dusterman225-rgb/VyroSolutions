@@ -24,6 +24,7 @@
     group('Money', money ? [['Invoices', 'invoices.html'], ['Expenses and bills', 'expenses.html'], ['Recurring bills', 'recurring.html'], role === 'owner' && ['Finances', 'finances.html'], role === 'owner' && ['Pay with Vyqil', 'paysettings.html']] : []);
     group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], ['Assistant', 'assistant.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
     group('Business', [['Business profile', 'profile.html'], ['Team', 'team.html'], role === 'owner' && ['Sign-in link', 'signinlink.html']]);
+    var al = el('button', 'mi', 'Phone alerts'); al.type = 'button'; al.addEventListener('click', function () { set(false); vutil.pushPanel('team', ctx); }); menu.appendChild(al);
     menu.appendChild(Object.assign(el('a', 'mi', 'Switch business'), { href: '/dashboard.html' }));
     var out = el('button', 'mi out', 'Sign out'); out.type = 'button';
     out.addEventListener('click', async function () { try { await vyro.signOut(); } catch (e) { /* ignore */ } location.href = vyro.loginUrl(); });

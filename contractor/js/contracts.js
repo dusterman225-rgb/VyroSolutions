@@ -9,7 +9,7 @@
   function first() { for (var i = 0; i < arguments.length; i++) { var v = arguments[i]; if (v !== undefined && v !== null && String(v).trim() !== '') return v; } return ''; }
   var ROLE_LABEL = { owner: 'Owner', gm: 'General manager', supervisor: 'Manager', employee: 'Team member' };
 
-  // Gathers everything Vyro already knows and returns the {{placeholder}} values. Nothing here is typed by hand.
+  // Gathers everything Vyqil already knows and returns the {{placeholder}} values. Nothing here is typed by hand.
   async function values(ctx, jobId) {
     var js = await ctx.bizRef.collection('jobs').doc(jobId).get();
     if (!js.exists) throw { code: 'vyro/no-job' };
@@ -71,7 +71,7 @@
     return { text: text, job: job, depositCents: v.depositCents, californiaCapCents: cap };
   }
 
-  // Fills any [blank] in an existing contract from current data. Anything Vyro does not know stays in brackets.
+  // Fills any [blank] in an existing contract from current data. Anything Vyqil does not know stays in brackets.
   async function refill(ctx, jobId, body) {
     var v = await values(ctx, jobId), n = 0;
     var text = String(body).replace(/\[([a-z][a-z ]*)\]/g, function (m, k) {
@@ -90,6 +90,7 @@
       needsApproval: /change order|subcontractor/i.test((c.title || '') + ' ' + (c.templateName || '')),
       returnMethods: Array.isArray(ctx.biz.returnMethods) ? ctx.biz.returnMethods : [], returnNote: ctx.biz.returnNote || ''
     });
+    if (window.vutil && vutil.pushNotify) vutil.pushNotify(c.jobId, 'document');
   }
   // After the contractor changes how documents are returned, update every document already shared with a customer.
   async function refreshReturn(ctx, methods, note) {

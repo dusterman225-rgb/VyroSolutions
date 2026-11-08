@@ -2,7 +2,7 @@
 //   estimate sent  -> appears in the portal (customer can Approve / Revise / Decline)
 //   estimate approved -> a contract is generated for the contractor to finish and share
 //   contract marked signed/received -> a draft invoice is generated from the estimate and contract
-// Vyro has no server on this plan, so the follow-on steps run the next time the contractor opens the dashboard
+// Vyqil has no server on this plan, so the follow-on steps run the next time the contractor opens the dashboard
 // (and right away when the contractor taps the button on the contract page).
 (function () {
   function first(a) { for (var i = 0; i < arguments.length; i++) { var v = arguments[i]; if (v !== undefined && v !== null && String(v).trim() !== '') return v; } return ''; }
@@ -73,6 +73,7 @@
         returnMethods: Array.isArray(ctx.biz.returnMethods) ? ctx.biz.returnMethods : [], returnNote: ctx.biz.returnNote || ''
       });
       await ctx.bizRef.collection('estimates').doc(e.id).update({ portalShared: true, portalSharedAt: vyro.stamp() });
+      if (window.vutil && vutil.pushNotify) vutil.pushNotify(e.id, 'estimate');
       return { ok: true };
     } catch (err) { return { ok: false, reason: 'error', message: String((err && err.message) || err) }; }
   }
@@ -87,6 +88,7 @@
       if (!js.exists) return { ok: false, reason: 'no-job' };
       var job = js.data(); job.id = jid; job.customerEmail = job.customerEmail || email;
       var r = await vportal.ensure(ctx, jid, job);
+      if (r && r.ok && window.vutil && vutil.pushNotify) vutil.pushNotify(jid, 'invoice');
       return r && r.ok ? { ok: true } : { ok: false, reason: (r && r.reason) || 'failed', message: r && r.message };
     } catch (err) { return { ok: false, reason: 'error', message: String((err && err.message) || err) }; }
   }
@@ -227,6 +229,7 @@
       if (!ps.exists) return { ok: false, reason: 'no-portal' };
       var text = String(item.msg.body || '').replace(/\n{3,}/g, '\n\n').slice(0, 1000);
       await pr.collection('messages').add({ from: 'contractor', text: text, by: myName(ctx), createdAt: vyro.stamp(), read: false });
+      if (window.vutil && vutil.pushNotify) vutil.pushNotify(item.portalId, 'message');
       return { ok: true };
     } catch (err) { return { ok: false, reason: 'error' }; }
   }
