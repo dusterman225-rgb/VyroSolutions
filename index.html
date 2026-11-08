@@ -1,170 +1,44 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>VyqilSolutions - Simple software for small businesses</title>
-<meta name="description" content="VyqilSolutions makes simple apps for contractors, restaurants, takeout and retail shops: point of sale, teams, scheduling, invoices, inventory and an AI assistant. One login, add apps as you grow.">
-<link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="/icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<style>
-  .hero{padding:26px 0 8px;text-align:center}
-  .hero h1{font-size:2rem;line-height:1.15;margin:10px 0}
-  .hero p{color:var(--dim);font-size:1.05rem;margin:6px auto 16px;max-width:30em}
-  .cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  .cta .btn{min-width:140px;text-decoration:none}
-  .nav{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .nav .brand{font-weight:800;letter-spacing:.06em;color:var(--text);text-decoration:none}
-  .nav .btn{min-height:38px;padding:0 14px;text-decoration:none}
-  section{margin:34px 0}
-  section>h2{font-size:1.35rem;margin:0 0 6px}
-  .lead{color:var(--dim);margin:0 0 12px}
-  .grid{display:grid;grid-template-columns:1fr;gap:12px}
-  @media(min-width:560px){.grid{grid-template-columns:1fr 1fr}}
-  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
-  .pcard h3{margin:0 0 2px;font-size:1.05rem;letter-spacing:0;text-transform:none;color:var(--text)}
-  .pcard .for{color:var(--dim);font-size:.88rem;margin-bottom:8px}
-  .pcard ul{margin:6px 0 10px;padding-left:18px;color:var(--text);font-size:.92rem}
-  .pcard li{margin:2px 0}
-  .price{font-size:1.25rem;font-weight:800;color:var(--blue)}
-  .price small{font-weight:400;color:var(--dim);font-size:.82rem}
-  .banner2{background:#0b2233;border:1px solid var(--blue);color:#cfe8f8;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:.93rem}
-  .ex{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:14px;margin:12px 0}
-  .ex b{color:var(--blue)}
-  .steps{counter-reset:s;display:grid;gap:10px}
-  .steps div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px 12px 48px;position:relative}
-  .steps div:before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:12px;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#05070A;font-weight:800;text-align:center;line-height:24px;font-size:.85rem}
-  .trust{display:grid;gap:8px;font-size:.93rem}
-  .trust div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
-  footer{border-top:1px solid var(--line);padding:18px 0;color:var(--dim);font-size:.85rem;text-align:center}
-  footer a{color:var(--dim)}
-</style>
-</head><body><div class="wrap">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070A">
+<title>VyqilAssistant</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="images/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <img src="images/logo.svg" alt="VyqilAssistant">
+  <div class="t"><b>VyqilAssistant</b><span id="hhName">Loading...</span></div>
+  <button class="ibtn" id="bellBtn" type="button" aria-label="Alerts" title="Alerts">&#128276;</button>
+  <button class="ibtn" id="menuBtn" type="button" aria-label="Menu">&#9776;</button>
+</header>
+<main id="view"><div class="empty">Loading your household...</div></main>
+<button class="fab" id="fab" type="button">+ Quick add</button>
+<nav class="tabs" id="tabs">
+  <button data-t="today"><i>&#127968;</i>Today</button>
+  <button data-t="calendar"><i>&#128197;</i>Calendar</button>
+  <button data-t="money"><i>&#128178;</i>Money</button>
+  <button data-t="house"><i>&#128106;</i>Household</button>
+  <button data-t="ask"><i>&#10024;</i>Ask</button>
+</nav>
+<div id="modalRoot"></div><div id="toastRoot"></div>
 
-<div class="nav"><a class="brand" href="/"><img src="icons/icon-192.png" alt="VyqilSolutions" style="height:38px;width:38px;border-radius:9px;display:block"></a>
-  <span><a class="btn ghost" id="navIn" href="login.html">Log in</a></span></div>
-
-<div class="hero">
-  <img src="images/vyqil-solutions.png" alt="VyqilSolutions - One Vision. Endless Possibilities." style="width:min(92vw,460px);height:auto;display:block;margin:0 auto 14px">
-  <h1>Run your whole business from your phone.</h1>
-  <p>VyqilSolutions makes simple, affordable apps for contractors, restaurants, takeout counters and retail shops. One login. Add an app when you need it.</p>
-  <div class="cta" id="cta">
-    <a class="btn" href="login.html?signup=1" id="ctaUp">Sign up</a>
-    <a class="btn ghost" href="login.html" id="ctaIn">Log in</a>
-  </div>
-  <div class="note" style="margin-top:10px">Free while we launch. No card needed.</div>
-</div>
-
-<section id="about">
-  <h2>About VyqilSolutions</h2>
-  <p class="lead">Small businesses should not need five different tools, a stack of logins and an IT person. VyqilSolutions builds one family of apps that work the same way, so what you learn in one carries to the next.</p>
-  <div class="trust">
-    <div><b>One account.</b> Sign in once and switch between your businesses from a list. Starting a restaurant besides your contracting company? Each business keeps its own name, team and records.</div>
-    <div><b>Built for phones.</b> Install it like an app. The checkout keeps working when the internet drops and catches up when it returns.</div>
-    <div><b>Your data is yours.</b> Download everything whenever you want. See who did what in the activity log.</div>
-    <div><b>Made for people who are not tech people.</b> Plain words, short steps and a setup checklist for every new business.</div>
-  </div>
-</section>
-
-<section id="apps">
-  <h2>The apps</h2>
-  <p class="lead">Pick the app that fits your business. Every app includes teams and roles, scheduling, an activity log and data download.</p>
-  <div class="grid" id="appGrid"></div>
-</section>
-
-<section id="pricing">
-  <h2>Packages and upgrades</h2>
-  <p class="lead">Each app is its own monthly subscription. Add another app any time and its price is added to your plan. There is no bundle to outgrow.</p>
-  <div class="banner2" id="launchBanner"><b>Launch offer:</b> every app is free while we launch, with no card on file. You will be told before any price starts, and you can leave and download your data first.</div>
-  <div class="ex" id="example"></div>
-  <div class="pcard" id="addons">
-    <h3>Upgrades</h3>
-    <ul>
-      <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>VyqilAssistant</b> is included in every Vyqil app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyqilContractor. It only reads your records, and you accept a notice before first use.</li>
-      <li><b>Bring your own AI</b> is included with the VyqilAssistant: already have your own AI account? Connect it at no extra charge.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="how">
-  <h2>How it works</h2>
-  <div class="steps">
-    <div><b>Create your account.</b> It takes a minute.</div>
-    <div><b>Create a business and pick its app.</b> A short checklist walks you through setup.</div>
-    <div><b>Invite your team.</b> Each person gets their own login and only sees what their role allows.</div>
-    <div><b>Add another app whenever you grow.</b> It is a separate business with its own name, in the same account.</div>
-  </div>
-</section>
-
-<section id="safe">
-  <h2>Careful with your information</h2>
-  <div class="trust">
-    <div><b>Separated by business.</b> One business cannot see another's records.</div>
-    <div><b>Roles.</b> Owners, managers and staff see only what they need. Money and finance pages are limited to managers.</div>
-    <div><b>Encrypted connection.</b> Everything travels over HTTPS.</div>
-    <div><b>AI you control.</b> The help bot never sees your business records. The VyqilAssistant does, only after you accept a notice, and you can use your own AI account instead.</div>
-  </div>
-</section>
-
-<section>
-  <div class="cta"><a class="btn" href="login.html?signup=1" id="ctaUp2">Sign up free</a><a class="btn ghost" href="login.html" id="ctaIn2">Log in</a></div>
-</section>
-
-<footer>
-  &copy; <span id="yr"></span> VyqilSolutions &middot; <a href="legal.html">Terms and privacy (draft)</a>
-</footer>
-
-</div>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="shared/firebase-config.js"></script>
-<script src="js/net-config.js"></script>
-<script>
-(function () {
-  var $ = function (i) { return document.getElementById(i); };
-  $('yr').textContent = new Date().getFullYear();
-  var P = window.VYRO_PRICES || {};
-  var APPS = [
-    { id: 'contractor', name: 'VyqilContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
-    { id: 'restaurant', name: 'VyqilRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
-    { id: 'takeout', name: 'VyqilTakeout', who: 'Takeout and fast food', items: ['Fast counter checkout and customer kiosk', 'Order board and kitchen screen', 'Same menu as your restaurant, or its own', 'Coupons and discounts with manager approval', 'Staff schedule and end of day close'] },
-    { id: 'retail', name: 'VyqilRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
-  ];
-  function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
-  var grid = $('appGrid');
-  APPS.forEach(function (a) {
-    var d = document.createElement('div'); d.className = 'pcard';
-    var h = document.createElement('h3'); h.textContent = a.name; d.appendChild(h);
-    var f = document.createElement('div'); f.className = 'for'; f.textContent = a.who; d.appendChild(f);
-    var ul = document.createElement('ul'); a.items.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); }); d.appendChild(ul);
-    var pr = document.createElement('div'); pr.className = 'price';
-    var v = P[a.id];
-    if (typeof v === 'number') { pr.textContent = money(v); var s = document.createElement('small'); s.textContent = ' per month, per business'; pr.appendChild(s); }
-    else { pr.textContent = 'Price announced at launch'; }
-    d.appendChild(pr); grid.appendChild(d);
-  });
-  // The worked example uses the real prices above, so it can never disagree with them.
-  var priced = APPS.filter(function (a) { return typeof P[a.id] === 'number'; });
-  var ex = $('example');
-  if (priced.length >= 2) {
-    var a1 = priced[0], a2 = priced[1];
-    ex.innerHTML = '';
-    var t = document.createElement('div'); t.innerHTML = '<b>Example:</b> '; 
-    t.appendChild(document.createTextNode('You start with ' + a1.name + ' at ' + money(P[a1.id]) + ' a month. Later you add ' + a2.name + ' for ' + money(P[a2.id]) + ' a month. Your plan is then ' + money(P[a1.id] + P[a2.id]) + ' a month. If you drop an app, its price drops off.'));
-    ex.appendChild(t);
-  } else { ex.style.display = 'none'; }
-  $('ppPrice').textContent = '(+$5 per month)';
-  // Signed-in visitors get a shortcut instead of the sign-up buttons.
-  try {
-    if (window.firebase && window.VYRO_FIREBASE_CONFIG) {
-      var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
-      firebase.auth().onAuthStateChanged(function (u) {
-        if (!u) return;
-        ['ctaUp', 'ctaUp2'].forEach(function (i) { var el = $(i); if (el) { el.textContent = 'Open your dashboard'; el.href = 'dashboard.html?go=1'; } });
-        ['ctaIn', 'ctaIn2'].forEach(function (i) { var el = $(i); if (el) el.style.display = 'none'; });
-        $('navIn').textContent = 'Dashboard'; $('navIn').href = 'dashboard.html?go=1';
-      });
-    }
-  } catch (e) { /* the buttons still work without it */ }
-})();
-</script>
-</body></html>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/forms.js"></script>
+<script src="js/views.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/push-config.js"></script>
+<script src="js/push.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
