@@ -3,7 +3,7 @@
 (function () {
   // ---- Vyqil's own fees (change these when pricing is decided) ----
   var VYRO_MONTHLY_FEE_CENTS = 500;   // Vyqil subscription. Free during launch, so $0 for now.
-  var VYRO_TX_FEE_PCT = 2;          // Pay with Vyqil fee, paid by the receiving business (not live yet).
+  var VYRO_TX_FEE_PCT = 1;          // Pay with Vyqil fee, paid by the receiving business (not live yet).
 
   // Suggested IRS Schedule C lines (sole proprietor / single-member LLC). Not tax advice.
   var SCHED_C = {

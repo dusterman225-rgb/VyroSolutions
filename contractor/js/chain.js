@@ -1,4 +1,4 @@
-// Solana helpers for Pay with Vyro: payment requests, QR text, and checking the blockchain for a payment.
+// Solana helpers for Pay with Vyqil: payment requests, QR text, and checking the blockchain for a payment.
 (function () {
   var CFG = window.VYRO_CHAIN;
   var ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -46,7 +46,7 @@
     return p;
   }
 
-  // Works out how much of the coin the customer must send for a US-dollar amount, and the 2% split.
+  // Works out how much of the coin the customer must send for a US-dollar amount, and the 1% split.
   async function quote(coin, usdCents) {
     var base, dec, price = null;
     if (coin === 'USDC') { dec = 6; base = usdCents * 10000; }
