@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Sign in - VyqilAssistant</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+<style>.wrap{max-width:420px;margin:0 auto;padding:22px 16px}.logo{display:block;margin:10px auto 6px;width:min(88%,360px)}.tag{text-align:center;color:var(--mut);margin:0 0 16px}.sw{display:flex;gap:6px;margin:10px 0}.sw button{flex:1}</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="images/vyqil-assistant.png" alt="VyqilAssistant - Your World. Simplified.">
+  <p class="tag">Appointments, bills, chores, meals and money, all in one place.</p>
+  <div id="signedIn" class="card" style="display:none"><div class="hint" id="siNote"></div><div class="btns"><button class="btn" id="siGo" type="button">Continue</button><button class="btn ghost" id="siOut" type="button">Use another account</button></div></div>
+  <form class="card" id="f">
+    <div class="sw"><button class="btn" type="button" id="swIn">Sign in</button><button class="btn ghost" type="button" id="swUp">Create account</button></div>
+    <div id="nameBox" style="display:none"><label class="f">Your first name</label><input id="nm" autocomplete="given-name" maxlength="40"></div>
+    <label class="f">Email</label><input id="em" type="email" autocomplete="email" inputmode="email" required>
+    <label class="f">Password</label><input id="pw" type="password" autocomplete="current-password" required minlength="6">
+    <div id="joinBox" style="display:none"><label class="f">Invite code from your partner or family (optional)</label><input id="jc" maxlength="12" autocapitalize="characters" placeholder="Leave empty to start your own"></div>
+    <div class="btns"><button class="btn" id="go" type="submit">Sign in</button></div>
+    <p class="hint" id="forgotRow" style="text-align:center;margin:12px 0 0"><a href="#" id="forgot">Forgot your password?</a></p>
+    <p class="hint" id="msg" style="margin-top:10px;text-align:center"></p>
+  </form>
+  <p class="hint" style="text-align:center">Your household data is private to the people you invite. VyqilAssistant is an organizer, not a doctor, lawyer or financial advisor.</p>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script>
+(function () {
+  var $ = function (i) { return document.getElementById(i); };
+  firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+  var auth = firebase.auth(), mode = 'in';
+  var q = new URLSearchParams(location.search), join = (q.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (join) { $('jc').value = join; mode = 'up'; }
+  function say(t, bad) { $('msg').textContent = t; $('msg').style.color = bad ? '#ff8a8a' : '#8a9bb0'; }
+  function paint() {
+    var up = mode === 'up';
+    $('nameBox').style.display = up ? '' : 'none'; $('joinBox').style.display = up ? '' : 'none'; $('forgotRow').style.display = up ? 'none' : '';
+    $('go').textContent = up ? 'Create my account' : 'Sign in'; $('pw').autocomplete = up ? 'new-password' : 'current-password';
+    $('swIn').className = 'btn' + (up ? ' ghost' : ''); $('swUp').className = 'btn' + (up ? '' : ' ghost');
+  }
+  $('swIn').onclick = function () { mode = 'in'; paint(); say(''); }; $('swUp').onclick = function () { mode = 'up'; paint(); say(''); };
+  paint();
+  function go() { location.href = 'index.html'; }
+  auth.onAuthStateChanged(function (u) {
+    if (u && !u.isAnonymous) { $('signedIn').style.display = ''; $('siNote').textContent = 'You are signed in as ' + (u.email || 'this account') + '.'; }
+  });
+  $('siGo').onclick = go; $('siOut').onclick = function () { auth.signOut().then(function () { $('signedIn').style.display = 'none'; }); };
+  function nice(e) {
+    var c = e && e.code || '';
+    if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') return 'That email and password do not match. If you are new, tap Create account.';
+    if (c === 'auth/email-already-in-use') return 'That email already has an account. Tap Sign in.';
+    if (c === 'auth/weak-password') return 'Pick a password with at least 6 characters.';
+    if (c === 'auth/invalid-email') return 'That email address does not look right.';
+    if (c === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes and try again.';
+    return 'Could not finish (' + (c || (e && e.message) || 'unknown') + ').';
+  }
+  $('f').onsubmit = function (ev) {
+    ev.preventDefault(); $('go').disabled = true; say('One moment...');
+    var em = $('em').value.trim(), pw = $('pw').value;
+    var p;
+    if (mode === 'up') {
+      var nm = $('nm').value.trim();
+      if (!nm) { say('Please add your first name.', true); $('go').disabled = false; return; }
+      try { sessionStorage.setItem('va_join', $('jc').value.trim().toUpperCase()); sessionStorage.setItem('va_name', nm); } catch (e) { /* ignore */ }
+      p = auth.createUserWithEmailAndPassword(em, pw).then(function (c) { return c.user.updateProfile({ displayName: nm }); });
+    } else p = auth.signInWithEmailAndPassword(em, pw);
+    p.then(go).catch(function (e) { say(nice(e), true); $('go').disabled = false; });
+  };
+  $('forgot').onclick = function (ev) {
+    ev.preventDefault(); var em = $('em').value.trim(); if (!em) { say('Type your email above first.', true); return; }
+    auth.sendPasswordResetEmail(em).then(function () { say('Check your email for a reset link.'); }).catch(function (e) { say(nice(e), true); });
+  };
+})();
+</script>
+</body>
+</html>
