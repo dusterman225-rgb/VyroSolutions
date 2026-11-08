@@ -114,6 +114,7 @@
         this.disabled = true; $('rMsg').textContent = 'Sending...'; $('rMsg').className = 'note';
         try {
           await pref.collection('messages').add({ from: 'contractor', text: t, by: who, createdAt: vyro.stamp(), read: true });
+          if (window.vutil && vutil.pushNotify) vutil.pushNotify(pref.id, 'message');
           $('rText').value = ''; $('rMsg').textContent = 'Sent.'; await load();
         } catch (e) { $('rMsg').textContent = vyro.friendly(e); $('rMsg').className = 'note err'; }
         this.disabled = false;

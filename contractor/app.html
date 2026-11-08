@@ -57,6 +57,7 @@
           <a class="mi" href="team.html">Team</a>
           <a class="mi" id="miLink" href="signinlink.html" style="display:none">Sign-in link</a>
         </details>
+        <a class="mi" href="#" id="miAlerts">Phone alerts</a>
         <a class="mi" href="/dashboard.html">Switch business</a>
         <button class="mi out" id="out" type="button">Sign out</button>
       </div>
@@ -141,6 +142,8 @@
         }).catch(function () { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); });
       } catch (e) { if (tries < 3) setTimeout(function () { loadTiles(tries + 1); }, 2500); }
     })(0);
+    $('miAlerts').addEventListener('click', function (e) { e.preventDefault(); setMenu(false); vutil.pushPanel('team', ctx); });
+    try { vutil.pushSync(ctx); } catch (e) { /* alerts are optional */ }
     if (ctx.role === 'owner') $('miLink').style.display = '';
     $('mWho').textContent = ctx.role + ' \u00b7 ' + ctx.user.email;
     if (ctx.role === 'owner') { $('miFin').style.display = 'block'; $('miPay').style.display = 'block'; }

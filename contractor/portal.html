@@ -80,6 +80,7 @@
     <p class="note">Own or work for a business on Vyqil? Use the business sign in instead. The same email works for both.</p>
   </div>
 
+  <button class="link" id="alertsBtn" type="button">Phone alerts</button>
   <button class="link" id="out" type="button">Sign out</button>
   <div class="note err" id="err"></div>
 </div>
@@ -96,6 +97,7 @@
   function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clean(p) { return (p || '').replace(/[^0-9+]/g, ''); }
   function cls(s) { return (s || '').replace(/ /g, ''); }
+  $('alertsBtn').addEventListener('click', function () { vutil.pushPanel('customer'); });
   $('out').addEventListener('click', function () { try { sessionStorage.removeItem('vyroHelp'); } catch (e) { /* ignore */ } auth.signOut().then(function () { location.replace('portal-login.html'); }); });
 
 
@@ -225,6 +227,7 @@
         b.set(ref.collection('messages').doc(), { from: 'customer', text: t, by: p.customerName || 'Customer', createdAt: st, read: false });
         b.update(ref, { unreadCount: cur + 1, lastMessageAt: st, lastMessageText: t.slice(0, 80) });
         await b.commit();
+        if (window.vutil && vutil.pushNotify) vutil.pushNotify(id, 'cmessage');
         $('mText').value = ''; $('mMsg').textContent = 'Sent. Your contractor will see it when they next open their app.';
         loadMessages();
       } catch (e) { $('mMsg').textContent = 'Could not send. Please try again, or call your contractor.'; $('mMsg').className = 'note err'; }

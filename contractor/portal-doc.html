@@ -60,6 +60,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
 <script>
   firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
   var auth = firebase.auth(), db = firebase.firestore();
@@ -95,13 +96,14 @@
         }
       }
       // Tells the contractor in their message inbox (and bumps the unread count on the dashboard).
-      async function tell(text) {
+      async function tell(text, kind) {
         var cur = (await pref.get()).data() || {};
         var st = firebase.firestore.FieldValue.serverTimestamp(), who = cur.customerName || 'Customer';
         var b = db.batch();
         b.set(pref.collection('messages').doc(), { from: 'customer', text: text.slice(0, 1000), by: who, createdAt: st, read: false });
         b.update(pref, { unreadCount: (cur.unreadCount || 0) + 1, lastMessageAt: st, lastMessageText: text.slice(0, 80) });
         await b.commit();
+        if (window.vutil && vutil.pushNotify) vutil.pushNotify(p, kind || 'cmessage');
       }
       if (x.needsApproval) {
         $('apCard').style.display = 'block';
@@ -113,7 +115,7 @@
           this.disabled = true; msg('Saving...');
           try {
             await ref.update({ approvedBy: nm, approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            try { await tell('I approve online: ' + (x.title || 'the document') + '. I will return the signed copy.'); } catch (e2) { /* the approval itself is saved */ }
+            try { await tell('I approve online: ' + (x.title || 'the document') + '. I will return the signed copy.', 'capprove'); } catch (e2) { /* the approval itself is saved */ }
             var again = await ref.get(); paintState(again.data()); msg('');
           } catch (e) { msg('Could not save your approval. Please try again, or tell your contractor.', true); this.disabled = false; }
         });
@@ -133,7 +135,7 @@
           this.disabled = true; msg('Sending...');
           try {
             await ref.update({ response: mode, responseReason: why, respondedBy: nm, respondedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            try { await tell((mode === 'revise' ? 'I would like changes to ' : 'I decline ') + (x.title || 'the document') + '. Reason: ' + why); } catch (e2) { /* saved on the document */ }
+            try { await tell((mode === 'revise' ? 'I would like changes to ' : 'I decline ') + (x.title || 'the document') + '. Reason: ' + why, mode === 'revise' ? 'crevise' : 'cdecline'); } catch (e2) { /* saved on the document */ }
             var again = await ref.get(); paintState(again.data()); $('rsBox').style.display = 'none'; $('rsText').value = ''; msg('Sent. Your contractor has been told.');
           } catch (e) { msg('Could not send. Please try again, or contact your contractor.', true); }
           this.disabled = false;

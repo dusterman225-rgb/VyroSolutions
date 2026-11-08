@@ -477,7 +477,7 @@
       this.disabled = true;
       try {
         await jref.collection('updates').add({ text: t, by: who, kind: 'note', createdAt: vyro.stamp() });
-        if ($('uShare').checked) { try { await vportal.shareUpdate(id, t); } catch (e) { umsg('Saved, but could not share with the customer: ' + vyro.friendly(e), 'err'); } }
+        if ($('uShare').checked) { try { await vportal.shareUpdate(id, t); if (window.vutil && vutil.pushNotify) vutil.pushNotify(id, 'update'); } catch (e) { umsg('Saved, but could not share with the customer: ' + vyro.friendly(e), 'err'); } }
         $('uShare').checked = false;
         $('uText').value = ''; umsg(''); this.disabled = false; loadUpdates();
       } catch (e) { umsg(vyro.friendly(e), 'err'); this.disabled = false; }
