@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>VyqilSolutions - Simple software for small businesses</title>
-<meta name="description" content="VyqilSolutions makes simple apps for contractors, restaurants, takeout and retail shops: point of sale, teams, scheduling, invoices, inventory and an AI assistant. One login, add apps as you grow.">
+<title>VyqilSolutions - Simple apps for your business and your home</title>
+<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, with more for other businesses and for your family on the way. One login, add apps as you grow.">
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -34,6 +34,13 @@
   .steps div:before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:12px;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#05070A;font-weight:800;text-align:center;line-height:24px;font-size:.85rem}
   .trust{display:grid;gap:8px;font-size:.93rem}
   .trust div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  .pcard.soon{opacity:.92;border-style:dashed}
+  .pcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .badge-soon{flex:0 0 auto;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#05070A;background:#f5c542;border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .pcard .about{color:var(--text);font-size:.93rem;margin:6px 0 8px}
+  .pcard h4{margin:10px 0 2px;font-size:.82rem;letter-spacing:.05em;text-transform:uppercase;color:var(--blue)}
+  .pcard.wide{grid-column:1/-1}
+  .soon-note{color:var(--dim);font-size:.88rem;margin-top:8px}
   footer{border-top:1px solid var(--line);padding:18px 0;color:var(--dim);font-size:.85rem;text-align:center}
   footer a{color:var(--dim)}
 </style>
@@ -44,8 +51,8 @@
 
 <div class="hero">
   <img src="images/vyqil-solutions.png" alt="VyqilSolutions - One Vision. Endless Possibilities." style="width:min(92vw,460px);height:auto;display:block;margin:0 auto 14px">
-  <h1>Run your whole business from your phone.</h1>
-  <p>VyqilSolutions makes simple, affordable apps for contractors, restaurants, takeout counters and retail shops. One login. Add an app when you need it.</p>
+  <h1>Run your business and your home from your phone.</h1>
+  <p>VyqilSolutions makes simple, affordable apps for small businesses, and soon for you and your family. One login. Add an app when you need it.</p>
   <div class="cta" id="cta">
     <a class="btn" href="login.html?signup=1" id="ctaUp">Sign up</a>
     <a class="btn ghost" href="login.html" id="ctaIn">Log in</a>
@@ -65,9 +72,18 @@
 </section>
 
 <section id="apps">
-  <h2>The apps</h2>
+  <h2>Apps for your business</h2>
   <p class="lead">Pick the app that fits your business. Every app includes teams and roles, scheduling, an activity log and data download.</p>
   <div class="grid" id="appGrid"></div>
+  <h3 style="margin:22px 0 4px;font-size:1.05rem">More business apps, coming soon</h3>
+  <p class="lead">Built the same way, so what you learn in one carries to the next. These are not open for sign-up yet.</p>
+  <div class="grid" id="soonGrid"></div>
+</section>
+
+<section id="personal">
+  <h2>Apps for you and your family</h2>
+  <p class="lead">Personal apps for everyday life. They use the same account as your business apps, but your family information is kept separate from your business records.</p>
+  <div class="grid" id="personalGrid"></div>
 </section>
 
 <section id="pricing">
@@ -75,13 +91,12 @@
   <p class="lead">Each app is its own monthly subscription. Add another app any time and its price is added to your plan. There is no bundle to outgrow.</p>
   <div class="banner2" id="launchBanner"><b>Launch offer:</b> every app is free while we launch, with no card on file. You will be told before any price starts, and you can leave and download your data first.</div>
   <div class="ex" id="example"></div>
-  <div class="ex" id="personalApp"><b>For your home, not your business:</b> <a href="assistant/login.html">VyqilAssistant</a> is a personal and family life manager. It keeps appointments, bills, tasks, meals, spending and home care in one shared household, with an AI helper you can ask or talk to.</div>
   <div class="pcard" id="addons">
     <h3>Upgrades</h3>
     <ul>
       <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>VyqilAssistant</b> is included in every Vyqil app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyqilContractor. It only reads your records, and you accept a notice before first use.</li>
-      <li><b>Bring your own AI</b> is included with the VyqilAssistant: already have your own AI account? Connect it at no extra charge.</li>
+      <li><b>The built-in AI assistant</b> is included in every Vyqil business app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyqilContractor. It only reads your records, and you accept a notice before first use.</li>
+      <li><b>Bring your own AI</b> is included with the built-in assistant: already have your own AI account? Connect it at no extra charge.</li>
     </ul>
   </div>
 </section>
@@ -102,7 +117,7 @@
     <div><b>Separated by business.</b> One business cannot see another's records.</div>
     <div><b>Roles.</b> Owners, managers and staff see only what they need. Money and finance pages are limited to managers.</div>
     <div><b>Encrypted connection.</b> Everything travels over HTTPS.</div>
-    <div><b>AI you control.</b> The help bot never sees your business records. The VyqilAssistant does, only after you accept a notice, and you can use your own AI account instead.</div>
+    <div><b>AI you control.</b> The help bot never sees your business records. The built-in assistant does, only after you accept a notice, and you can use your own AI account instead.</div>
   </div>
 </section>
 
@@ -131,18 +146,50 @@
     { id: 'retail', name: 'VyqilRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
   ];
   function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
+  var SOON = [
+    { name: 'VyqilRealtor', who: 'Real estate agents', items: ['Buyer and seller pipeline from first contact to closing', 'Listings, showings and open house sign-in', 'Deal checklist with inspection, financing and closing deadline alerts', 'Commission tracking for every deal', 'Past-client follow-ups: birthdays and home anniversaries'] },
+    { name: 'VyqilLandlord', who: 'Landlords and property managers', items: ['Properties, units and tenants', 'Rent tracking with late reminders', 'Maintenance requests with status updates', 'Lease dates and renewal reminders', 'Tenant portal for messages and requests'] },
+    { name: 'VyqilSalon', who: 'Salons, barbers and trainers', items: ['Appointments with rebooking reminders', 'Client notes and visit history', 'Services, prices and packages', 'Daily schedule for you and your team', 'Client portal'] },
+    { name: 'VyqilServices', who: 'Cleaning, lawn and pool services', items: ['Recurring jobs and weekly routes', 'Quotes and invoices', 'Customer notes for every address', 'Crew schedule', 'Customer portal and reminders'] },
+    { name: 'VyqilAuto', who: 'Auto shops and detailers', items: ['Estimates and repair orders', 'Vehicle history for every customer', 'Service due reminders', 'Parts and invoices', 'Customer portal for approvals'] },
+    { name: 'VyqilPhoto', who: 'Photographers and event vendors', items: ['Inquiry to quote to contract', 'Deposit and balance payment schedule', 'Shoot and event calendar', 'Checklists for every booking', 'Client portal'] },
+    { name: 'VyqilLessons', who: 'Tutors, lessons and small daycares', items: ['Class schedule and attendance', 'Billing and payment reminders', 'Messages to parents', 'Progress notes', 'Waitlist'] }
+  ];
+  var PERSONAL = [
+    { name: 'VyqilAssistant', who: 'Your personal and family life manager', about: 'One shared place for everything your household has to remember, with an AI helper you can ask or talk to. Add your partner or family with a code, and everyone sees the same plan.', wide: true,
+      groups: [
+        ['Time', ['Appointments, activities and birthdays on one calendar, with repeats', 'A Today screen with what needs you now and what is coming this week', 'Phone alerts before things happen, even when the app is closed', 'Send your calendar to your phone as a file']],
+        ['Money', ['Bills with reminders: tap Paid and it logs the expense and moves the next due date', 'Spending by category with monthly budgets', 'Import your bank transactions from a file, with duplicates caught', 'Debt payoff planner, subscriptions and free trials, savings goals']],
+        ['Home and family', ['Tasks with take-turns rotation between family members', 'Shared lists, and a meal planner that builds your grocery list', 'Home care reminders: filters, smoke alarms, seasonal jobs', 'People, pets and a babysitter sheet, plus a searchable records vault for warranties, insurance and school forms', 'Trips: day-by-day plans, packing lists and costs']],
+        ['AI helper', ['Ask things like "what is due this week?" or "where is my money going?"', 'Type or speak a sentence and it becomes a bill, event or task you check before saving', 'It only reads what you chose to put in, and you accept a notice before first use. It can be wrong, so check what matters.']]
+      ], note: 'Your family information stays separate from your business records.' },
+    { name: 'VyqilSplit', who: 'Shared expenses for roommates, couples, trips and friends', about: 'Keep track of who paid and who owes whom, without the awkward math.', items: ['Groups for a home, a trip or a night out', 'Split equally, by exact amounts, by percent or by shares', 'Clear list of who pays whom to settle up', 'Invite friends with a code, even before they have an account', 'It keeps score only. It does not move money: settle with cash, your bank or VyqilPay'] }
+  ];
+  function card(a, soon) {
+    var d = document.createElement('div'); d.className = 'pcard' + (soon ? ' soon' : '') + (a.wide ? ' wide' : '');
+    var top = document.createElement('div'); top.className = 'top';
+    var h = document.createElement('h3'); h.textContent = a.name; top.appendChild(h);
+    if (soon) { var b = document.createElement('span'); b.className = 'badge-soon'; b.textContent = 'Coming soon'; top.appendChild(b); }
+    d.appendChild(top);
+    var f = document.createElement('div'); f.className = 'for'; f.textContent = a.who; d.appendChild(f);
+    if (a.about) { var ab = document.createElement('div'); ab.className = 'about'; ab.textContent = a.about; d.appendChild(ab); }
+    function list(items) { var ul = document.createElement('ul'); items.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); }); d.appendChild(ul); }
+    if (a.groups) a.groups.forEach(function (g) { var h4 = document.createElement('h4'); h4.textContent = g[0]; d.appendChild(h4); list(g[1]); });
+    else list(a.items);
+    if (a.note) { var n = document.createElement('div'); n.className = 'soon-note'; n.textContent = a.note; d.appendChild(n); }
+    return d;
+  }
   var grid = $('appGrid');
   APPS.forEach(function (a) {
-    var d = document.createElement('div'); d.className = 'pcard';
-    var h = document.createElement('h3'); h.textContent = a.name; d.appendChild(h);
-    var f = document.createElement('div'); f.className = 'for'; f.textContent = a.who; d.appendChild(f);
-    var ul = document.createElement('ul'); a.items.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); }); d.appendChild(ul);
+    var d = card(a, false);
     var pr = document.createElement('div'); pr.className = 'price';
     var v = P[a.id];
     if (typeof v === 'number') { pr.textContent = money(v); var s = document.createElement('small'); s.textContent = ' per month, per business'; pr.appendChild(s); }
     else { pr.textContent = 'Price announced at launch'; }
     d.appendChild(pr); grid.appendChild(d);
   });
+  SOON.forEach(function (a) { $('soonGrid').appendChild(card(a, true)); });
+  PERSONAL.forEach(function (a) { var d = card(a, true); var n = document.createElement('div'); n.className = 'soon-note'; n.textContent = 'Not open for sign-up yet.'; d.appendChild(n); $('personalGrid').appendChild(d); });
   // The worked example uses the real prices above, so it can never disagree with them.
   var priced = APPS.filter(function (a) { return typeof P[a.id] === 'number'; });
   var ex = $('example');
