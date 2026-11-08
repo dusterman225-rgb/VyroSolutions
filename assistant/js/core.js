@@ -55,7 +55,7 @@
     VA.S.unsubs.forEach(function (u) { try { u(); } catch (e) { /* ignore */ } }); VA.S.unsubs = [];
     COLS.forEach(function (c) {
       VA.S.unsubs.push(VA.col(c).onSnapshot(function (snap) {
-        VA.S.data[c] = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); VA.changed();
+        VA.S.data[c] = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); (VA.S.loaded = VA.S.loaded || {})[c] = 1; VA.changed();
       }, function (e) { VA.toast('Could not load ' + c + ' (' + (e && e.code || 'error') + '). Check that the latest firestore.rules were published.'); }));
     });
   };

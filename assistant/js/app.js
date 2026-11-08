@@ -69,6 +69,7 @@
     var tm = VA.addDays(t, 1); VA.occ(tm, tm).forEach(function (o) { if (o.kind === 'event' && +o.ref.remind >= 1440 && now.getHours() >= 17) note('Tomorrow: ' + o.title, o.time ? VA.fmtTime(o.time) : 'All day', 'va_n_' + o.ref.id + tm); if (o.kind === 'bill' && o.first && now.getHours() >= 17) note('Bill due tomorrow', o.title, 'va_n_' + o.ref.id + tm); });
   }
   $('bellBtn').onclick = function () {
+    if (VA.push && VA.push.supported()) { VA.push.panel(); return; }
     if (!window.Notification) { VA.toast('This browser cannot show alerts. Use the calendar file under Calendar instead.'); return; }
     if (Notification.permission === 'granted') { VA.toast('Alerts are on while VyqilAssistant is open. For alerts when it is closed, add the calendar file (Calendar tab) to your phone.'); return; }
     Notification.requestPermission().then(function (p) { VA.toast(p === 'granted' ? 'Alerts turned on while the app is open.' : 'Alerts are off. You can allow them in your browser settings.'); alerts(); });
@@ -81,12 +82,14 @@
       '<label class="f">Members</label><div class="card" style="margin:0">' + Object.keys(names).map(function (k) { return '<div class="row"><span class="av">' + esc((names[k] || '?').charAt(0).toUpperCase()) + '</span><div class="m"><b>' + esc(names[k]) + (k === S.user.uid ? ' (you)' : '') + '</b></div></div>'; }).join('') + '</div>' +
       '<div class="btns"><button class="btn" id="mSave" type="button">Save name</button><button class="btn ghost" id="mInv" type="button">Invite my partner or family</button></div><p class="hint" id="mInfo"></p>' +
       '<div class="btns"><button class="btn ghost" id="mIcs" type="button">Calendar file</button><button class="btn ghost" id="mCsv" type="button">Money file</button></div>' +
+      '<div class="btns"><button class="btn ghost" id="mPush" type="button">Phone alerts</button></div>' +
       '<div class="btns"><button class="btn ghost" id="mOut" type="button">Sign out</button><button class="btn ghost" id="mX" type="button">Close</button></div>' +
       '<p class="hint">' + esc(S.user.email || '') + '</p>', function (s, close) {
       s.querySelector('#mX').onclick = close;
       s.querySelector('#mSave').onclick = function () { var v = s.querySelector('#mName').value.trim(); if (v) VA.db().collection('households').doc(S.hid).set({ name: v }, { merge: true }).then(function () { VA.toast('Saved'); }); };
+      s.querySelector('#mPush').onclick = function () { close(); VA.push.panel(); };
       s.querySelector('#mIcs').onclick = function () { VA.act.ics(); }; s.querySelector('#mCsv').onclick = function () { VA.act.csv(); };
-      s.querySelector('#mOut').onclick = function () { firebase.auth().signOut().then(function () { location.replace('login.html'); }); };
+      s.querySelector('#mOut').onclick = function () { (VA.push && VA.push.on() ? VA.push.disable().catch(function () { /* ignore */ }) : Promise.resolve()).then(function () { return firebase.auth().signOut(); }).then(function () { location.replace('login.html'); }); };
       s.querySelector('#mInv').onclick = function () {
         var c = code(), link = location.origin + location.pathname.replace(/index\.html$/, '') + 'login.html?join=' + c;
         VA.db().collection('householdInvites').doc(c).set({ hid: S.hid, by: S.user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function () {
