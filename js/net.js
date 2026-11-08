@@ -14,8 +14,7 @@
     { id: 'restaurant', name: 'VyqilRestaurant', desc: 'Tables, point of sale, kitchen, team, Pay with Vyqil.', live: true },
     { id: 'takeout', name: 'VyqilTakeout', desc: 'Takeout and fast food only. No tables or table QR codes. Costs less.', live: true },
     { id: 'contractor', name: 'VyqilContractor', desc: 'Estimates, jobs, invoices, customer portal.', live: true },
-    { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true },
-    { id: 'crm', name: 'VyqilCRM', desc: 'Shared customer relationships.', live: false }
+    { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true }
   ];
   // Defaults are names. The real power comes from the rules, not these labels.
   var ROLE_LABEL = { owner: 'Owner', gm: 'Administrator', supervisor: 'Manager', employee: 'Employee', cook: 'Employee (cook)', server: 'Employee (server)', host: 'Employee (host)', kiosk: 'Device' };
