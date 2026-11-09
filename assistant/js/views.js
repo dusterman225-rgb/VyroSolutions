@@ -1,8 +1,8 @@
 // VyqilAssistant screens: Today, Calendar, Money, Household.
 (function () {
   var VA = window.VA, esc = VA.esc, S = VA.S, D = function () { return S.data; };
-  var COLORS = { event: '#62B6F5', bill: '#f0c36d', task: '#7fe3b0', bday: '#b48cff', home: '#ff9f6b', note: '#8a9bb0', trial: '#f0c36d' };
-  var ICON = { event: '\u{1F4C5}', bill: '\u{1F4B2}', task: '\u2705', bday: '\u{1F382}', home: '\u{1F527}', note: '\u{1F4C4}', trial: '\u23F0' };
+  var COLORS = { event: '#62B6F5', bill: '#f0c36d', task: '#7fe3b0', bday: '#b48cff', home: '#ff9f6b', note: '#8a9bb0', trial: '#f0c36d', trip: '#62B6F5' };
+  var ICON = { event: '\u{1F4C5}', bill: '\u{1F4B2}', task: '\u2705', bday: '\u{1F382}', home: '\u{1F527}', note: '\u{1F4C4}', trial: '\u23F0', trip: '\u2708\uFE0F' };
   VA.COLORS = COLORS;
   S.cal = S.cal || { y: new Date().getFullYear(), m: new Date().getMonth() };
   S.mon = S.mon || { y: new Date().getFullYear(), m: new Date().getMonth() };
@@ -41,6 +41,7 @@
     });
     d.home.forEach(function (h) { var n = VA.homeNext(h); if (n && n >= from && n <= to) out.push(mk('home', n, h, { title: h.name })); });
     d.notes.forEach(function (n) { if (n.expires && n.expires >= from && n.expires <= to) out.push(mk('note', n.expires, n, { title: n.title + ' expires' })); });
+    if (VA.trips) out = out.concat(VA.trips.occ(from, to));
     out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.time || '99') < (b.time || '99') ? -1 : 1; });
     return out;
   };
@@ -53,7 +54,7 @@
     out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     return out;
   };
-  function openRef(o) { var m = { event: 'event', bill: 'bill', task: 'task', bday: 'person', home: 'home', note: 'note', trial: 'bill' }[o.kind]; VA.openForm(m, o.ref); }
+  function openRef(o) { var m = { event: 'event', bill: 'bill', task: 'task', bday: 'person', home: 'home', note: 'note', trial: 'bill', trip: 'trip' }[o.kind]; if (o.kind === 'trip' && VA.trips) { VA.trips.open(o.ref.id); return; } VA.openForm(m, o.ref); }
   function whoPill(w) { return w ? '<span class="pill">' + esc(w) + '</span>' : ''; }
   function when(o) {
     var n = VA.diff(VA.today(), o.date), s = n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n < 0 ? Math.abs(n) + ' day' + (n === -1 ? '' : 's') + ' late' : VA.fmtDate(o.date);
@@ -129,7 +130,7 @@
       o = o || {};
       L.push('BEGIN:VEVENT', 'UID:' + uid + '@vyqil', 'DTSTAMP:' + stamp, 'SUMMARY:' + icsEsc(summary));
       if (o.time) { var e = o.end || (function () { var m = /^(\d+):(\d+)/.exec(o.time), h = (+m[1] + 1) % 24; return (h < 10 ? '0' : '') + h + ':' + m[2]; })(); L.push('DTSTART:' + dt(date) + 'T' + o.time.replace(':', '') + '00', 'DTEND:' + dt(date) + 'T' + e.replace(':', '') + '00'); }
-      else L.push('DTSTART;VALUE=DATE:' + dt(date), 'DTEND;VALUE=DATE:' + dt(VA.addDays(date, 1)));
+      else L.push('DTSTART;VALUE=DATE:' + dt(date), 'DTEND;VALUE=DATE:' + dt(VA.addDays(o.endDate || date, 1)));
       if (o.rrule) L.push('RRULE:' + o.rrule);
       if (o.place) L.push('LOCATION:' + icsEsc(o.place));
       if (o.notes) L.push('DESCRIPTION:' + icsEsc(o.notes));
@@ -142,6 +143,7 @@
     d.people.forEach(function (p) { if (/^\d{4}-\d{2}-\d{2}$/.test(p.birthday || '')) ev('b' + p.id, p.name + "'s birthday", p.birthday, { rrule: 'FREQ=YEARLY', alarm: 1440 }); });
     d.tasks.forEach(function (t) { if (!t.done && t.due) ev(t.id, 'Task: ' + t.title + (t.who ? ' (' + t.who + ')' : ''), t.due, {}); });
     d.home.forEach(function (h) { var n = VA.homeNext(h); if (n) ev(h.id, 'Home care: ' + h.name, n, { rrule: h.everyDays % 365 === 0 ? 'FREQ=YEARLY;INTERVAL=' + (h.everyDays / 365) : h.everyDays % 7 === 0 ? 'FREQ=WEEKLY;INTERVAL=' + (h.everyDays / 7) : 'FREQ=DAILY;INTERVAL=' + h.everyDays }); });
+    (d.trips || []).forEach(function (t) { if (t.start) ev('trip' + t.id, 'Trip: ' + t.name, t.start, { endDate: t.end || t.start, place: t.dest, notes: t.notes }); });
     L.push('END:VCALENDAR'); return L.join('\r\n');
   };
   VA.views.calendar = function (root) {
@@ -172,7 +174,7 @@
   function monthly(b) { var a = b.amount || 0; return b.repeat === 'weekly' ? a * 52 / 12 : b.repeat === 'yearly' ? a / 12 : b.repeat === 'once' ? 0 : a; }
   VA.views.money = function (root) {
     LAST = []; var sub = S.sub.money || 'bills', d = D(), t = VA.today();
-    var h = '<div class="subs">' + [['bills', 'Bills'], ['spend', 'Spending'], ['goals', 'Goals']].map(function (x) { return '<button data-a="sub" data-id="money:' + x[0] + '" class="' + (sub === x[0] ? 'on' : '') + '" type="button">' + x[1] + '</button>'; }).join('') + '</div>';
+    var h = '<div class="subs">' + [['bills', 'Bills'], ['spend', 'Spending'], ['goals', 'Goals'], ['debts', 'Debts'], ['subs', 'Subscriptions']].map(function (x) { return '<button data-a="sub" data-id="money:' + x[0] + '" class="' + (sub === x[0] ? 'on' : '') + '" type="button">' + x[1] + '</button>'; }).join('') + '</div>';
     if (sub === 'bills') {
       var open = d.bills.filter(function (b) { return !b.paid; }).sort(function (a, b) { return (a.dueDate || '') < (b.dueDate || '') ? -1 : 1; });
       var mon = 0; open.forEach(function (b) { mon += monthly(b); });
@@ -192,17 +194,22 @@
       var budgets = (S.hh && S.hh.budgets) || {};
       h += '<div class="row" style="border:0"><button class="ibtn" data-a="monPrev" type="button">&lsaquo;</button><div class="m" style="text-align:center"><b>' + VA.MON[m.m] + ' ' + m.y + '</b></div><button class="ibtn" data-a="monNext" type="button">&rsaquo;</button></div>';
       h += '<div class="stat"><div><b>' + VA.money(spent) + '</b><span>spent</span></div><div><b>' + VA.money(earned) + '</b><span>received</span></div><div><b>' + VA.money(earned - spent) + '</b><span>left over</span></div></div>';
-      h += '<div class="btns"><button class="btn" data-a="addTxn" type="button">+ Add</button><button class="btn ghost" data-a="budgets" type="button">Set budgets</button><button class="btn ghost" data-a="csv" type="button">Export</button></div>';
+      h += '<div class="btns"><button class="btn" data-a="addTxn" type="button">+ Add</button><button class="btn ghost" data-a="budgets" type="button">Set budgets</button><button class="btn ghost" data-a="importCsv" type="button">Import bank file</button><button class="btn ghost" data-a="csv" type="button">Export</button></div>';
+      h += VA.mx.compareHtml(ym);
       var cl = Object.keys(bycat).sort(function (a, b) { return bycat[b] - bycat[a]; });
       if (cl.length) h += '<div class="card">' + cl.map(function (c) { var bu = (budgets[c] || 0), pct = bu ? Math.min(100, Math.round(bycat[c] * 100 / bu)) : Math.round(bycat[c] * 100 / Math.max(1, spent)); return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between"><span>' + esc(c) + '</span><span><b>' + VA.money(bycat[c]) + '</b>' + (bu ? ' <span class="hint">of ' + VA.money(bu) + '</span>' : '') + '</span></div><div class="bar' + (bu && bycat[c] > bu ? ' over' : '') + '"><i style="width:' + pct + '%"></i></div></div>'; }).join('') + '</div>';
       h += '<div class="card">' + (tx.length ? tx.map(function (x) { return '<div class="row" data-a="editTxn" data-id="' + esc(x.id) + '" style="cursor:pointer"><div class="m"><b>' + esc(x.note || x.category || 'Entry') + '</b><span>' + esc(VA.fmtShort(x.date)) + ' \u00B7 ' + esc(x.category || '') + '</span></div><span class="amt" style="color:' + (x.type === 'income' ? '#7fe3b0' : '#fff') + '">' + (x.type === 'income' ? '+' : '') + VA.money(x.amount) + '</span></div>'; }).join('') : '<div class="empty">Nothing recorded this month. Paying a bill with the Paid button adds it here automatically.</div>') + '</div>';
+    } else if (sub === 'debts') {
+      h += VA.mx.debtHtml();
+    } else if (sub === 'subs') {
+      h += VA.mx.subsHtml();
     } else {
       h += '<div class="btns"><button class="btn" data-a="addGoal" type="button">+ Savings goal</button></div><div class="card">' + (d.goals.length ? d.goals.map(function (g) {
         var pct = g.target ? Math.min(100, Math.round((g.saved || 0) * 100 / g.target)) : 0;
         return '<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;gap:8px"><b data-a="editGoal" data-id="' + esc(g.id) + '" style="cursor:pointer">' + esc(g.name) + '</b><span>' + VA.money(g.saved) + ' <span class="hint">of ' + VA.money(g.target) + '</span></span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span class="hint">' + pct + '%' + (g.by ? ' \u00B7 by ' + esc(VA.fmtShort(g.by)) : '') + '</span><button class="btn sm ghost" data-a="addSaved" data-id="' + esc(g.id) + '" type="button">+ Add money</button></div></div>';
       }).join('') : '<div class="empty">Set a goal like an emergency fund or a trip, and add money as you save.</div>') + '</div>';
     }
-    root.innerHTML = h; wire(root);
+    root.innerHTML = h; wire(root); if (VA.mx && VA.mx.afterRender) VA.mx.afterRender(root);
   };
   VA.act.sub = function (t, id) { var p = id.split(':'); S.sub[p[0]] = p[1]; VA.render(); };
   VA.act.addBill = function () { VA.openForm('bill'); };
@@ -237,7 +244,7 @@
   var HOMEIDEAS = [['Change air filter', 'Home', 90], ['Test smoke and CO alarms', 'Home', 180], ['Clean dryer vent', 'Appliance', 365], ['Flush water heater', 'Appliance', 365], ['Oil change', 'Auto', 180], ['Rotate tires', 'Auto', 180], ['Renew car registration', 'Auto', 365], ['Flea and tick treatment', 'Pet', 30], ['Dentist checkups', 'Health', 180], ['Check fire extinguisher', 'Home', 365]];
   VA.views.house = function (root) {
     LAST = []; var sub = S.sub.house || 'tasks', d = D(), t = VA.today();
-    var tabs = [['tasks', 'Tasks'], ['lists', 'Lists'], ['meals', 'Meals'], ['home', 'Home care'], ['people', 'People'], ['vault', 'Records']];
+    var tabs = [['tasks', 'Tasks'], ['lists', 'Lists'], ['meals', 'Meals'], ['home', 'Home care'], ['people', 'People'], ['trips', 'Trips'], ['vault', 'Records']];
     var h = '<div class="subs">' + tabs.map(function (x) { return '<button data-a="sub" data-id="house:' + x[0] + '" class="' + (sub === x[0] ? 'on' : '') + '" type="button">' + x[1] + '</button>'; }).join('') + '</div>';
     if (sub === 'tasks') {
       var wf = S.taskWho || 'All', who = ['All'].concat(VA.who());
@@ -249,6 +256,8 @@
         return '<div class="row"><input type="checkbox" data-a="task" data-id="' + esc(x.id) + '" aria-label="Done"><div class="m" data-a="editTask" data-id="' + esc(x.id) + '" style="cursor:pointer"><b>' + esc(x.title) + '</b><span style="' + (n !== null && n < 0 ? 'color:#ff8a8a' : '') + '">' + (x.due ? (n < 0 ? Math.abs(n) + ' day' + (n === -1 ? '' : 's') + ' late' : VA.fmtDate(x.due)) : 'No due date') + (x.repeat && x.repeat !== 'none' ? ' <span class="pill">' + esc(x.repeat) + '</span>' : '') + (x.rotate ? '<span class="pill">turns</span>' : '') + whoPill(x.who) + '</span></div></div>';
       }).join('') : '<div class="empty">No open tasks. Add chores, errands and forms to sign.</div>') + '</div>';
       if (done.length) h += section('Done recently', '<a href="#" data-a="clearDone">Clear</a>', '<div class="card">' + done.map(function (x) { return '<div class="row"><input type="checkbox" checked data-a="undoTask" data-id="' + esc(x.id) + '" aria-label="Undo"><div class="m"><b style="text-decoration:line-through;opacity:.7">' + esc(x.title) + '</b><span>' + esc(VA.fmtShort(x.doneAt)) + whoPill(x.who) + '</span></div></div>'; }).join('') + '</div>');
+    } else if (sub === 'trips') {
+      h += VA.trips.html();
     } else if (sub === 'lists') {
       var ln = S.listName || 'Grocery', it = d.items.filter(function (x) { return x.list === ln; }).sort(function (a, b) { return (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.text || '').localeCompare(b.text || ''); });
       h += '<div class="subs">' + VA.LISTS.map(function (n) { var c = d.items.filter(function (x) { return x.list === n && !x.done; }).length; return '<button data-a="listName" data-id="' + esc(n) + '" class="' + (ln === n ? 'on' : '') + '" type="button">' + esc(n) + (c ? ' (' + c + ')' : '') + '</button>'; }).join('') + '</div>';

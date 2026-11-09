@@ -33,6 +33,7 @@
       } else if (o.kind === 'trial') add(id + '|e', eve, 'Free trial ends tomorrow', r.name || o.title);
       else if (o.kind === 'task') add(id + '|m', morning, 'Task due today', o.title);
       else if (o.kind === 'home') add(id + '|m', morning, 'Home care due today', o.title);
+      else if (o.kind === 'trip') { if (o.pack) add(id + '|m', morning, 'Time to finish packing', o.title); else { add(id + '|e', eve, 'Trip tomorrow', o.title); add(id + '|m', morning, 'Trip starts today', o.title); } }
       else if (o.kind === 'bday') add(id + '|m', morning, 'Birthday today', o.title);
     });
     return out;

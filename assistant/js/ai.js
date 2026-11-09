@@ -30,6 +30,8 @@
     d.goals.forEach(function (g) { L.push('GOAL ' + g.name + ': saved ' + m(g.saved) + ' of ' + m(g.target) + (g.by ? ' by ' + g.by : '')); });
     var hc = d.home.map(function (h) { return { h: h, n: VA.homeNext(h) }; }).filter(function (x) { return x.n && x.n <= VA.addDays(t, 45); }); if (hc.length) { L.push('HOME CARE DUE SOON:'); hc.forEach(function (x) { L.push('- ' + x.h.name + ' next ' + x.n); }); }
     var ex = d.notes.filter(function (n) { return n.expires && n.expires <= VA.addDays(t, 60); }); if (ex.length) { L.push('RECORDS EXPIRING:'); ex.forEach(function (n) { L.push('- ' + n.title + ' ' + n.expires); }); }
+    (d.trips || []).filter(function (x) { return (x.end || x.start || '') >= t; }).slice(0, 6).forEach(function (x) { L.push('TRIP ' + x.name + (x.dest ? ' to ' + x.dest : '') + ' ' + x.start + (x.end && x.end !== x.start ? ' to ' + x.end : '') + (x.who ? ' with ' + x.who : '') + (x.budget ? ', budget ' + m(x.budget) : '') + ', costs so far ' + m(VA.trips.total(x)) + ', ' + VA.trips.packLeft(x) + ' packing items left'); });
+    var dbt = (d.debts || []); if (dbt.length) { L.push('DEBTS (' + dbt.length + '):'); dbt.slice(0, 12).forEach(function (x) { L.push('- ' + x.name + ' owes ' + m(x.balance) + ', ' + x.apr + '% yearly interest, minimum ' + m(x.minPay)); }); }
     var txt = L.join('\n'); return txt.length > 8800 ? txt.slice(0, 8800) + '\n(summary shortened)' : txt;
   };
 
