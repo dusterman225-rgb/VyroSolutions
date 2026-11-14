@@ -14,12 +14,26 @@
     { id: 'restaurant', name: 'VyqilRestaurant', desc: 'Tables, point of sale, kitchen, team, Pay with Vyqil.', live: true },
     { id: 'takeout', name: 'VyqilTakeout', desc: 'Takeout and fast food only. No tables or table QR codes. Costs less.', live: true },
     { id: 'contractor', name: 'VyqilContractor', desc: 'Estimates, jobs, invoices, customer portal.', live: true },
-    { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true }
+    { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true },
+    { id: 'landlord', name: 'VyqilLandlord', desc: 'Properties, tenants, rent, repairs and a tenant portal.', live: true },
+    { id: 'realtor', name: 'VyqilRealtor', desc: 'Clients, listings, deals and showings.', live: true },
+    { id: 'services', name: 'VyqilServices', desc: 'Cleaning, landscaping and home services: customers, visits and invoices.', live: true },
+    { id: 'salon', name: 'VyqilSalon', desc: 'Clients, appointments and services for salons and barbers.', live: true },
+    { id: 'auto', name: 'VyqilAuto', desc: 'Customers, vehicles and repair orders for auto shops.', live: true },
+    { id: 'photo', name: 'VyqilPhoto', desc: 'Clients and bookings for photographers.', live: true },
+    { id: 'lessons', name: 'VyqilLessons', desc: 'Students, lessons and billing for teachers and tutors.', live: true }
+  ];
+  // Where each app opens when the owner has not set an address in js/net-config.js.
+  var DEFAULT_URLS = { landlord: 'landlord/index.html', realtor: 'realtor/index.html', services: 'services/index.html', salon: 'salon/index.html', auto: 'auto/index.html', photo: 'photo/index.html', lessons: 'lessons/index.html' };
+  // What the owner picks when making a business. The first app comes with it.
+  var CATEGORIES = [
+    ['Restaurant or cafe', 'restaurant'], ['Takeout or fast food', 'takeout'], ['Contractor or trades', 'contractor'], ['Retail shop', 'retail'], ['Landlord or property manager', 'landlord'],
+    ['Realtor', 'realtor'], ['Cleaning, landscaping or home services', 'services'], ['Salon or barber', 'salon'], ['Auto shop', 'auto'], ['Photographer', 'photo'], ['Lessons or tutoring', 'lessons'], ['Other', 'contractor']
   ];
   // Defaults are names. The real power comes from the rules, not these labels.
   var ROLE_LABEL = { owner: 'Owner', gm: 'Administrator', supervisor: 'Manager', employee: 'Employee', cook: 'Employee (cook)', server: 'Employee (server)', host: 'Employee (host)', kiosk: 'Device' };
   var INVITE_ROLES = { owner: ['employee', 'cook', 'server', 'host', 'supervisor', 'gm'], gm: ['employee', 'cook', 'server', 'host', 'supervisor'], supervisor: ['employee', 'cook', 'server', 'host'] };
-  var BUSINESS_TYPES = ['Restaurant or cafe', 'Contractor or trades', 'Retail shop', 'Services', 'Other'];
+  var BUSINESS_TYPES = CATEGORIES.map(function (c) { return c[0]; });
   var CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'MXN'];
   var TIMEZONES = ['America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu', 'America/Toronto', 'Europe/London', 'Europe/Paris', 'Australia/Sydney'];
   var STORAGE_INCLUDED = 1073741824; // planned allowance shown to owners: 1 GB. Not enforced until file storage is connected.
@@ -87,7 +101,7 @@
   }
   function isOwnerLevel(role) { return role === 'owner' || role === 'gm'; }
   async function setActive(user, bizId) { await db.collection('users').doc(user.uid).set({ bizId: bizId }, { merge: true }); }
-  function appUrl(appId, bizId) { return URLS[appId] || '#'; }
+  function appUrl(appId, bizId) { var u = URLS[appId] || DEFAULT_URLS[appId]; return u ? new URL(u, location.href).href : '#'; }
   async function launch(user, ws, appId) { await setActive(user, ws.id); location.href = appUrl(appId, ws.id); }
 
   async function updateBusiness(ws, patch, action, detail) { await ws.ref.update(patch); await audit(ws.id, action, detail); }
@@ -98,6 +112,29 @@
     ws.biz.apps = ws.biz.apps || {}; ws.biz.apps[appId] = !!on;
   }
   async function closeWorkspace(ws) { await ws.ref.update({ status: 'closed', closedAt: stamp() }); await audit(ws.id, 'workspace.close', ws.biz.name); }
+  // Permanent delete. Firestore has no cascade, so this removes the business's data one collection at a time, then the business itself.
+  // Anything the rules do not let it remove is left behind unreachable: once the business and its members are gone, nobody can open it.
+  var DELETE_ORDER = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'quotePrices', 'settings', 'subs', 'timelog', 'documents', 'audit'];
+  async function wipe(q) { for (var guard = 0; guard < 200; guard++) { var s = await q.limit(400).get(); if (s.empty) return; var b = db.batch(); s.forEach(function (d) { b.delete(d.ref); }); await b.commit(); if (s.size < 400) return; } }
+  async function deleteWorkspace(ws, user) {
+    if (ws.role !== 'owner') throw { message: 'Only the owner can delete a business.' };
+    var id = ws.id, left = [];
+    async function tryDo(label, fn) { try { await fn(); } catch (e) { left.push(label); } }
+    await tryDo('requests', async function () { var s = await db.collection('communityLeads').where('fromBiz', '==', id).get(); for (var i = 0; i < s.docs.length; i++) await s.docs[i].ref.delete(); });
+    await tryDo('listing', function () { return db.collection('directory').doc(id).delete(); });
+    await tryDo('tenant portals', async function () { var s = await db.collection('tenantPortals').where('bizId', '==', id).get(); for (var i = 0; i < s.docs.length; i++) await s.docs[i].ref.delete(); });
+    for (var i = 0; i < DELETE_ORDER.length; i++) { var nm = DELETE_ORDER[i]; await tryDo(nm, function () { return wipe(ws.ref.collection(nm)); }); }
+    await tryDo('invitations', async function () { var s = await db.collection('invites').where('bizId', '==', id).get(); for (var i2 = 0; i2 < s.docs.length; i2++) await s.docs[i2].ref.delete(); });
+    await tryDo('team', async function () { var s = await ws.ref.collection('members').get(); for (var i3 = 0; i3 < s.docs.length; i3++) if (s.docs[i3].id !== user.uid) await s.docs[i3].ref.delete(); });
+    await tryDo('plan', function () { return ws.ref.collection('network').doc('subscription').delete(); });
+    await tryDo('storage', function () { return ws.ref.collection('network').doc('storage').delete(); });
+    await ws.ref.delete();   // this one must work, or the business is not deleted
+    await tryDo('your membership', function () { return ws.ref.collection('members').doc(user.uid).delete(); });
+    var ur = db.collection('users').doc(user.uid), ud = await ur.get(), patch = { bizIds: FV.arrayRemove(id) };
+    if (ud.exists && ud.data().bizId === id) patch.bizId = FV.delete();
+    await ur.set(patch, { merge: true });
+    return left;
+  }
   async function reopenWorkspace(ws) { await ws.ref.update({ status: 'active' }); await audit(ws.id, 'workspace.reopen', ws.biz.name); }
 
   // ---- team ----
@@ -143,7 +180,7 @@
 
   window.vnet = { auth: auth, db: db, el: el, friendly: friendly, APPS: APPS, ROLE_LABEL: ROLE_LABEL, INVITE_ROLES: INVITE_ROLES, BUSINESS_TYPES: BUSINESS_TYPES, CURRENCIES: CURRENCIES, TIMEZONES: TIMEZONES,
     signUp: signUp, signIn: signIn, resetPassword: resetPassword, signOut: signOut, requireAuth: requireAuth, me: me, workspaces: workspaces, createWorkspace: createWorkspace, getWorkspace: getWorkspace,
-    isOwnerLevel: isOwnerLevel, setActive: setActive, appUrl: appUrl, launch: launch, updateBusiness: updateBusiness, setApp: setApp, closeWorkspace: closeWorkspace, reopenWorkspace: reopenWorkspace,
+    isOwnerLevel: isOwnerLevel, setActive: setActive, appUrl: appUrl, launch: launch, updateBusiness: updateBusiness, setApp: setApp, closeWorkspace: closeWorkspace, deleteWorkspace: deleteWorkspace, CATEGORIES: CATEGORIES, reopenWorkspace: reopenWorkspace,
     members: members, invitesFor: invitesFor, invite: invite, cancelInvite: cancelInvite, myInvites: myInvites, acceptInvite: acceptInvite, declineInvite: declineInvite, setRole: setRole, removeMember: removeMember,
     subscription: subscription, storage: storage, activity: activity, audit: audit, exportData: exportData, fmtBytes: fmtBytes };
 })();
