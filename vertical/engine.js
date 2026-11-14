@@ -3,7 +3,7 @@
 // checklists and reminders. Records live in businesses/{id}/records, so one business never sees another's data.
 (function () {
   'use strict';
-  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' } };
+  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [] };
   var S = Q.S;
 
   // ---------- small helpers ----------
@@ -49,6 +49,7 @@
   var auth = firebase.auth(), db = firebase.firestore(), FV = firebase.firestore.FieldValue;
   try { db.enablePersistence({ synchronizeTabs: true }).catch(function () { /* optional */ }); } catch (e) { /* optional */ }
   function recs() { return db.collection('businesses').doc(S.biz.id).collection('records'); }
+  Q.db = db; Q.recs = recs; Q.FV = FV; Q.modal = modal; Q.toast = toast; Q.ask = ask; Q.friendly = friendly;
 
   // ---------- sign in / create account ----------
   var root = $('app');
@@ -63,14 +64,14 @@
       var seg = el('div', 'subs'), a = el('button', mode === 'in' ? 'on' : '', 'Sign in'), b = el('button', mode === 'up' ? 'on' : '', 'Create account'); a.type = b.type = 'button';
       a.onclick = function () { mode = 'in'; paint(); }; b.onclick = function () { mode = 'up'; paint(); }; seg.appendChild(a); seg.appendChild(b); f.appendChild(seg);
       function field(l, type, ph, ac) { var lab = el('label', 'f', l), i = el('input'); i.type = type; i.placeholder = ph || ''; i.autocomplete = ac || 'off'; f.appendChild(lab); f.appendChild(i); return i; }
-      var biz = mode === 'up' ? field('Business name', 'text', 'Your business name', 'organization') : null;
+      var biz = mode === 'up' ? field('Business name (leave blank if a team invited you)', 'text', 'Your business name', 'organization') : null;
       var em = field('Email', 'email', 'you@example.com', 'email'), pw = field('Password' + (mode === 'up' ? ' (at least 10 characters)' : ''), 'password', '', mode === 'up' ? 'new-password' : 'current-password');
       var msg = el('div', 'note err'); f.appendChild(msg);
       var btns = el('div', 'btns'), go = el('button', 'btn', mode === 'up' ? 'Create account' : 'Sign in'); go.type = 'button'; btns.appendChild(go); f.appendChild(btns);
       go.onclick = async function () {
         msg.textContent = ''; var e = em.value.trim().toLowerCase(), p = pw.value;
         if (!e || !p) { msg.textContent = 'Enter your email and password.'; return; }
-        if (mode === 'up') { if (p.length < 10) { msg.textContent = 'Choose a password of at least 10 characters.'; return; } if (!biz.value.trim()) { msg.textContent = 'Enter your business name.'; return; } }
+        if (mode === 'up') { if (p.length < 10) { msg.textContent = 'Choose a password of at least 10 characters.'; return; } }
         go.disabled = true;
         try {
           if (mode === 'up') { S.pendingName = biz.value.trim().slice(0, 80); await auth.createUserWithEmailAndPassword(e, p); }
@@ -91,11 +92,38 @@
         var b = await db.collection('businesses').doc(ids[i]).get();
         if (b.exists && b.data().product === C.id) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: b.data().name, role: m.data().role }; }
       }
-      if (!found) found = await createBiz(user);
+      if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
       S.biz = found; startApp();
     } catch (e) { root.textContent = ''; var w = el('div', 'auth'); w.appendChild(el('p', 'err', friendly(e))); var o = el('button', 'btn ghost', 'Sign out'); o.onclick = function () { auth.signOut(); }; w.appendChild(o); root.appendChild(w); }
   }
+  async function pendingInvites(user) {
+    var out = []; try { var q = await db.collection('invites').where('email', '==', (user.email || '').toLowerCase()).get(); q.forEach(function (d) { var x = d.data(); x.id = d.id; if (x.product === C.id) out.push(x); }); } catch (e) { /* none */ }
+    return out;
+  }
+  function roleLabel(r) { return r === 'owner' ? 'Owner' : r === 'gm' ? 'Manager' : 'Staff'; }
+  function inviteScreen(list, user) {
+    return new Promise(function (resolve) {
+      root.textContent = ''; var w = el('div', 'auth'); w.appendChild(el('h1', '', 'You have been invited')); w.appendChild(el('p', 'sub', C.name));
+      var msg = el('div', 'note err');
+      list.forEach(function (inv) {
+        var c = el('div', 'card'); c.appendChild(el('div', 'hint', (inv.bizName || 'A business') + ' invited you to join as ' + roleLabel(inv.role) + '.'));
+        var b = el('div', 'btns'), a = el('button', 'btn', 'Accept'), d = el('button', 'btn ghost', 'Decline'); a.type = d.type = 'button'; b.appendChild(a); b.appendChild(d); c.appendChild(b); w.appendChild(c);
+        a.onclick = async function () { a.disabled = true; try {
+          var md = { role: inv.role, email: (user.email || '').toLowerCase(), name: inv.name || '', addedBy: inv.addedBy, inviteId: inv.id, createdAt: FV.serverTimestamp() };
+          await db.collection('businesses').doc(inv.bizId).collection('members').doc(user.uid).set(md);
+          await db.collection('users').doc(user.uid).set({ email: (user.email || '').toLowerCase(), bizId: inv.bizId, bizIds: FV.arrayUnion(inv.bizId) }, { merge: true });
+          try { await db.collection('invites').doc(inv.id).delete(); } catch (e) { /* ignore */ }
+          resolve({ id: inv.bizId, name: inv.bizName || '', role: inv.role });
+        } catch (e) { msg.textContent = friendly(e); a.disabled = false; } };
+        d.onclick = async function () { try { await db.collection('invites').doc(inv.id).delete(); } catch (e) { /* ignore */ } c.remove(); if (!w.querySelector('.card')) createBiz(user).then(resolve); };
+      });
+      w.appendChild(msg); var own = el('button', 'btn ghost sm', 'Start my own business instead'); own.type = 'button'; own.style.marginTop = '12px'; own.onclick = function () { createBiz(user).then(resolve); }; w.appendChild(own);
+      var out = el('button', 'btn ghost sm', 'Sign out'); out.type = 'button'; out.style.cssText = 'margin:12px 0 0 8px'; out.onclick = function () { auth.signOut(); resolve(null); }; w.appendChild(out);
+      root.appendChild(w);
+    });
+  }
+  function isAdmin() { return S.biz && (S.biz.role === 'owner' || S.biz.role === 'gm'); }
   function createBiz(user) {
     return new Promise(function (resolve, reject) {
       async function make(name) {
@@ -163,6 +191,7 @@
       S.recs = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); S.loaded = true; render(); if (Q.push) Q.push.soon();
     }, function (e) { root.textContent = ''; root.appendChild(el('p', 'err', friendly(e))); });
     shell();
+    Q.onStart.forEach(function (fn) { try { fn(); } catch (e) { console.error(e); } });
   }
   var tabsDef = function () {
     var t = [{ id: 'today', l: 'Today', i: '◎' }]; (C.tabKinds || kinds().slice(0, 3)).forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
@@ -184,6 +213,7 @@
     if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else listView(v, S.tab);
   }
 
+  Q.render = render;
   function quickAdd() {
     modal(function (s, close) {
       s.appendChild(el('h3', '', 'Add')); var ks = kinds();
@@ -302,12 +332,14 @@
         rel2.forEach(function (x) { var rw = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(x))); var sub = K(ok).sub ? K(ok).sub(x, S.recs) : ''; if (sub) m.appendChild(el('span', '', sub)); rw.appendChild(m); rw.onclick = function () { close(); openForm(ok, x); }; s.appendChild(rw); });
         var pr = {}; pr[lf.k] = rec.id; var nb = el('button', 'btn ghost sm', '+ Add ' + K(ok).label.toLowerCase()); nb.type = 'button'; nb.style.marginTop = '6px'; nb.onclick = function () { close(); openForm(ok, null, pr); }; s.appendChild(nb);
       });
+      if (!isNew && kd.actions) kd.actions.forEach(function (a) { if (a.show && !a.show(rec)) return; var ab = el('button', 'btn ghost', a.l); ab.type = 'button'; ab.style.cssText = 'display:block;width:100%;margin:8px 0'; ab.onclick = function () { close(); a.run(rec); }; s.appendChild(ab); });
+      if (!isNew && rec.by) s.appendChild(el('div', 'note', 'Last edited by ' + rec.by));
       var btns = el('div', 'btns'), save = el('button', 'btn', 'Save'), cancel = el('button', 'btn ghost', 'Cancel'); save.type = cancel.type = 'button'; btns.appendChild(save); btns.appendChild(cancel);
-      if (!isNew) { var del = el('button', 'btn danger', 'Delete'); del.type = 'button'; btns.appendChild(del); del.onclick = function () { ask('Delete this ' + kd.label.toLowerCase() + '? This cannot be undone.', 'Delete', async function () { var copy = JSON.parse(JSON.stringify(rec)); try { await recs().doc(rec.id).delete(); close(); toast('Deleted.', 'Undo', function () { var id = copy.id; delete copy.id; recs().doc(id).set(copy); }); } catch (e) { toast(friendly(e)); } }); }; }
+      if (!isNew && isAdmin()) { var del = el('button', 'btn danger', 'Delete'); del.type = 'button'; btns.appendChild(del); del.onclick = function () { ask('Delete this ' + kd.label.toLowerCase() + '? This cannot be undone.', 'Delete', async function () { var copy = JSON.parse(JSON.stringify(rec)); try { await recs().doc(rec.id).delete(); close(); toast('Deleted.', 'Undo', function () { var id = copy.id; delete copy.id; recs().doc(id).set(copy); }); } catch (e) { toast(friendly(e)); } }); }; }
       cancel.onclick = close; s.appendChild(btns);
       save.onclick = async function () {
         var c = collect(); if (c.bad) { msg.textContent = c.bad; return; } msg.textContent = '';
-        var data = Object.assign({}, c.o); if (kd.checklist) data.cl = cl || []; data.kind = k; data.updatedAt = FV.serverTimestamp(); if (isNew) data.createdAt = FV.serverTimestamp();
+        var data = Object.assign({}, c.o); if (kd.checklist) data.cl = cl || []; data.kind = k; data.by = (S.user.email || '').split('@')[0].slice(0, 30); data.updatedAt = FV.serverTimestamp(); if (isNew) data.createdAt = FV.serverTimestamp();
         Object.keys(data).forEach(function (key) { if (data[key] === undefined) delete data[key]; });
         save.disabled = true;
         try { if (isNew) { await recs().add(data); } else { await recs().doc(rec.id).update(data); } close(); toast('Saved.'); }
@@ -326,15 +358,49 @@
   function moreView(v) {
     var rest = kinds().filter(function (k) { return (C.tabKinds || kinds().slice(0, 3)).indexOf(k) < 0; });
     if (rest.length) { v.appendChild(el('h2', '', 'More lists')); var c = el('div', 'card'); rest.forEach(function (k) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', K(k).plural)); m.appendChild(el('span', '', byKind(k).length + ' total')); row.appendChild(m); row.onclick = function () { S.tab = k; render(); }; c.appendChild(row); }); v.appendChild(c); }
+    Q.extras.forEach(function (fn) { try { fn(v); } catch (e) { console.error(e); } });
     v.appendChild(el('h2', '', 'Your business'));
-    var card = el('div', 'card'); card.appendChild(el('div', 'hint', 'Signed in as ' + (S.user.email || ''))); v.appendChild(card);
+    var card = el('div', 'card'); card.appendChild(el('div', 'hint', 'Signed in as ' + (S.user.email || '') + ' (' + roleLabel(S.biz.role) + ')')); v.appendChild(card);
     function btn(label, fn, ghost) { var b = el('button', 'btn' + (ghost === false ? '' : ' ghost'), label); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0'; b.onclick = fn; card.appendChild(b); }
     btn('Phone alerts', function () { Q.push.panel(); });
-    btn('Rename business', function () { modal(function (s, close) { s.appendChild(el('h3', '', 'Business name')); var i = el('input'); i.value = S.biz.name; i.maxLength = 80; s.appendChild(i); var b = el('div', 'btns'), sv = el('button', 'btn', 'Save'); sv.type = 'button'; b.appendChild(sv); s.appendChild(b); sv.onclick = async function () { if (!i.value.trim()) return; try { await db.collection('businesses').doc(S.biz.id).update({ name: i.value.trim().slice(0, 80) }); S.biz.name = i.value.trim(); close(); shell(); render(); } catch (e) { toast(friendly(e)); } }; }); });
-    kinds().forEach(function (k) { btn('Download ' + K(k).plural.toLowerCase() + ' (CSV)', function () { download(C.id + '-' + k + '.csv', toCsv(k), 'text/csv'); }); });
-    btn('Download everything (backup)', function () { download(C.id + '-backup-' + today() + '.json', JSON.stringify(S.recs.map(function (r) { var o = Object.assign({}, r); delete o.createdAt; delete o.updatedAt; return o; }), null, 1), 'application/json'); });
+    if (isAdmin()) btn('Team', teamModal);
+    if (isAdmin()) btn('Rename business', function () { modal(function (s, close) { s.appendChild(el('h3', '', 'Business name')); var i = el('input'); i.value = S.biz.name; i.maxLength = 80; s.appendChild(i); var b = el('div', 'btns'), sv = el('button', 'btn', 'Save'); sv.type = 'button'; b.appendChild(sv); s.appendChild(b); sv.onclick = async function () { if (!i.value.trim()) return; try { await db.collection('businesses').doc(S.biz.id).update({ name: i.value.trim().slice(0, 80) }); S.biz.name = i.value.trim(); close(); shell(); render(); } catch (e) { toast(friendly(e)); } }; }); });
+    if (isAdmin()) kinds().forEach(function (k) { btn('Download ' + K(k).plural.toLowerCase() + ' (CSV)', function () { download(C.id + '-' + k + '.csv', toCsv(k), 'text/csv'); }); });
+    if (isAdmin()) btn('Download everything (backup)', function () { download(C.id + '-backup-' + today() + '.json', JSON.stringify(S.recs.map(function (r) { var o = Object.assign({}, r); delete o.createdAt; delete o.updatedAt; return o; }), null, 1), 'application/json'); });
     btn('Sign out', function () { var p = Q.push && Q.push.on() ? Q.push.disable().catch(function () { /* ignore */ }) : Promise.resolve(); p.then(function () { return auth.signOut(); }); });
-    var n = el('div', 'note'); n.textContent = 'This is a first version. It is built for one owner. It keeps your records and reminders; it does not send emails or take payments yet.'; v.appendChild(n);
+    var n = el('div', 'note'); n.textContent = 'This is a first version. It keeps your records and reminders for you and your team; it does not send emails, take payments or have a customer portal yet.'; v.appendChild(n);
+  }
+
+  // ---------- team ----------
+  function teamModal() {
+    modal(function (s, close) {
+      s.appendChild(el('h3', '', 'Your team')); var box = el('div'); s.appendChild(box); var isOwner = S.biz.role === 'owner'; var lastNote = '';
+      async function draw() {
+        box.textContent = 'Loading...';
+        try {
+          var ms = await db.collection('businesses').doc(S.biz.id).collection('members').get(), iv = await db.collection('invites').where('bizId', '==', S.biz.id).get(), h = el('div');
+          h.appendChild(el('div', 'sec', 'People with access')); var c = el('div', 'card'); h.appendChild(c);
+          ms.forEach(function (d) { var m = d.data(), r = el('div', 'row'), t = el('div', 'm'); t.appendChild(el('b', '', (m.name || (m.email || '').split('@')[0] || 'Member') + (d.id === S.user.uid ? ' (you)' : ''))); t.appendChild(el('span', '', (m.email || '') + ' \u00b7 ' + roleLabel(m.role))); r.appendChild(t);
+            if (d.id !== S.user.uid && m.role !== 'owner' && (isOwner || m.role !== 'gm')) {
+              if (isOwner) { var sw = el('button', 'btn ghost sm', m.role === 'gm' ? 'Make staff' : 'Make manager'); sw.type = 'button'; sw.onclick = async function () { try { await db.collection('businesses').doc(S.biz.id).collection('members').doc(d.id).update({ role: m.role === 'gm' ? 'employee' : 'gm' }); draw(); } catch (e) { toast(friendly(e)); } }; r.appendChild(sw); }
+              var rm = el('button', 'btn ghost sm', 'Remove'); rm.type = 'button'; rm.onclick = function () { ask('Remove ' + (m.name || m.email) + ' from the team? They lose access right away.', 'Remove', async function () { try { await db.collection('businesses').doc(S.biz.id).collection('members').doc(d.id).delete(); draw(); } catch (e) { toast(friendly(e)); } }); }; r.appendChild(rm); }
+            c.appendChild(r); });
+          var pend = []; iv.forEach(function (d) { var x = d.data(); x.id = d.id; pend.push(x); });
+          if (pend.length) { h.appendChild(el('div', 'sec', 'Waiting to accept')); var c2 = el('div', 'card'); h.appendChild(c2); pend.forEach(function (x) { var r = el('div', 'row'), t = el('div', 'm'); t.appendChild(el('b', '', x.email)); t.appendChild(el('span', '', roleLabel(x.role))); r.appendChild(t); var cx = el('button', 'btn ghost sm', 'Cancel'); cx.type = 'button'; cx.onclick = async function () { try { await db.collection('invites').doc(x.id).delete(); draw(); } catch (e) { toast(friendly(e)); } }; r.appendChild(cx); c2.appendChild(r); }); }
+          h.appendChild(el('div', 'sec', 'Invite someone')); var em = el('input'); em.type = 'email'; em.placeholder = 'their email address'; em.autocomplete = 'off'; h.appendChild(em);
+          var role = el('select'); [['employee', 'Staff: can add and edit records']].concat(isOwner ? [['gm', 'Manager: also manages the team and can delete']] : []).forEach(function (x) { var o = el('option', '', x[1]); o.value = x[0]; role.appendChild(o); }); role.style.marginTop = '8px'; h.appendChild(role);
+          var msg = el('div', 'note'); msg.textContent = lastNote; h.appendChild(msg); var b = el('div', 'btns'), go = el('button', 'btn', 'Send invite'); go.type = 'button'; b.appendChild(go); h.appendChild(b);
+          go.onclick = async function () {
+            var e = em.value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { msg.className = 'note err'; msg.textContent = 'Enter a valid email address.'; return; } go.disabled = true;
+            try { await db.collection('invites').doc(e + '__' + S.biz.id).set({ email: e, bizId: S.biz.id, bizName: S.biz.name, product: C.id, role: role.value, name: '', addedBy: S.user.uid, createdAt: FV.serverTimestamp() });
+              var link = location.origin + location.pathname.replace(/[^/]*$/, '') + 'index.html?signup=1';
+              lastNote = 'Invite saved. Tell them to open ' + link + ', create an account with exactly ' + e + ', and tap Accept. If they already have an account, they just sign in.'; draw(); } catch (x) { msg.className = 'note err'; msg.textContent = friendly(x); go.disabled = false; }
+          };
+          box.textContent = ''; box.appendChild(h);
+        } catch (e) { box.textContent = friendly(e); }
+      }
+      draw(); var b0 = el('div', 'btns'), x = el('button', 'btn ghost', 'Close'); x.type = 'button'; x.onclick = close; b0.appendChild(x); s.appendChild(b0);
+    });
   }
 
   // ---------- phone alerts (same alerts service as the other Vyqil apps) ----------
