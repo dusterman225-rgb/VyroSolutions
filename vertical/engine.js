@@ -3,7 +3,7 @@
 // checklists and reminders. Records live in businesses/{id}/records, so one business never sees another's data.
 (function () {
   'use strict';
-  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [] };
+  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {} };
   var S = Q.S;
 
   // ---------- small helpers ----------
@@ -48,7 +48,7 @@
   firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
   var auth = firebase.auth(), db = firebase.firestore(), FV = firebase.firestore.FieldValue;
   try { db.enablePersistence({ synchronizeTabs: true }).catch(function () { /* optional */ }); } catch (e) { /* optional */ }
-  function recs() { return db.collection('businesses').doc(S.biz.id).collection('records'); }
+  function recs() { return db.collection('businesses').doc(S.biz.id).collection(S.biz.col || 'records'); }
   Q.db = db; Q.recs = recs; Q.FV = FV; Q.modal = modal; Q.toast = toast; Q.ask = ask; Q.friendly = friendly;
 
   // ---------- sign in / create account ----------
@@ -87,10 +87,14 @@
   async function boot(user) {
     S.user = user; root.textContent = ''; root.appendChild(el('div', 'empty', 'Loading...'));
     try {
-      var ud = await db.collection('users').doc(user.uid).get(), ids = (ud.exists && ud.data().bizIds) || [], found = null;
+      var ud = await db.collection('users').doc(user.uid).get(), ids = ((ud.exists && ud.data().bizIds) || []).slice(), active = ud.exists ? ud.data().bizId : '', found = null;
+      if (active && ids.indexOf(active) > 0) { ids.splice(ids.indexOf(active), 1); ids.unshift(active); }
+      // The business the owner picked on the dashboard comes first. A business can run several apps; the first app keeps the original records, later apps get their own.
       for (var i = 0; i < ids.length && !found; i++) {
-        var b = await db.collection('businesses').doc(ids[i]).get();
-        if (b.exists && b.data().product === C.id) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: b.data().name, role: m.data().role }; }
+        var b = await db.collection('businesses').doc(ids[i]).get(), bd = b.exists ? b.data() : null;
+        if (!bd || bd.status === 'closed') continue;
+        var has = bd.apps && C.id in bd.apps ? !!bd.apps[C.id] : bd.product === C.id;
+        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id }; }
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
@@ -187,14 +191,17 @@
 
   // ---------- UI shell ----------
   function startApp() {
-    db.collection('businesses').doc(S.biz.id).collection('records').onSnapshot(function (snap) {
+    recs().onSnapshot(function (snap) {
       S.recs = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); S.loaded = true; render(); if (Q.push) Q.push.soon();
     }, function (e) { root.textContent = ''; root.appendChild(el('p', 'err', friendly(e))); });
     shell();
     Q.onStart.forEach(function (fn) { try { fn(); } catch (e) { console.error(e); } });
   }
+  // Five tabs fit on a phone: Today, Leads (when the app has the community), the main lists, More.
+  function shownKinds() { return (C.tabKinds || kinds().slice(0, 3)).slice(0, 3 - Q.tabsExtra.length); }
   var tabsDef = function () {
-    var t = [{ id: 'today', l: 'Today', i: '◎' }]; (C.tabKinds || kinds().slice(0, 3)).forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
+    var t = [{ id: 'today', l: 'Today', i: '◎' }]; Q.tabsExtra.forEach(function (x) { t.push(x); });
+    shownKinds().forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
     t.push({ id: 'more', l: 'More', i: '☰' }); return t;
   };
   function shell() {
@@ -209,8 +216,8 @@
   function render() {
     var v = $('view'); if (!v) return; v.textContent = '';
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === S.tab); });
-    var fab = $('fab'); if (fab) fab.style.display = S.tab === 'more' ? 'none' : '';
-    if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else listView(v, S.tab);
+    var fab = $('fab'); if (fab) fab.style.display = S.tab === 'more' || Q.views[S.tab] ? 'none' : '';
+    if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else if (Q.views[S.tab]) Q.views[S.tab](v); else listView(v, S.tab);
   }
 
   Q.render = render;
@@ -231,6 +238,7 @@
   }
   function todayView(v) {
     var t = today(), evs = events(addDays(t, -365), addDays(t, 14));
+    Q.banners.forEach(function (fn) { try { fn(v); } catch (x) { console.error(x); } });
     if (C.stats) { var st = el('div', 'stat'); C.stats.forEach(function (s) { var d = el('div'); d.appendChild(el('b', '', s.fn(S.recs, t))); d.appendChild(el('span', '', s.l)); st.appendChild(d); }); v.appendChild(st); }
     var over = evs.filter(function (e) { return e.over; }), td = evs.filter(function (e) { return e.date === t; }), wk = evs.filter(function (e) { return e.date > t && e.date <= addDays(t, 7); }), later = evs.filter(function (e) { return e.date > addDays(t, 7); });
     function sec(h, list, cls) {
@@ -333,17 +341,19 @@
         var pr = {}; pr[lf.k] = rec.id; var nb = el('button', 'btn ghost sm', '+ Add ' + K(ok).label.toLowerCase()); nb.type = 'button'; nb.style.marginTop = '6px'; nb.onclick = function () { close(); openForm(ok, null, pr); }; s.appendChild(nb);
       });
       if (!isNew && kd.actions) kd.actions.forEach(function (a) { if (a.show && !a.show(rec)) return; var ab = el('button', 'btn ghost', a.l); ab.type = 'button'; ab.style.cssText = 'display:block;width:100%;margin:8px 0'; ab.onclick = function () { close(); a.run(rec); }; s.appendChild(ab); });
+      var afterSave = null;
+      if (isNew && kd.actions) kd.actions.forEach(function (a) { if (!a.saveFirst) return; var sb = el('button', 'btn ghost', a.saveFirst === true ? 'Save and ' + a.l.charAt(0).toLowerCase() + a.l.slice(1) : a.saveFirst); sb.type = 'button'; sb.style.cssText = 'display:block;width:100%;margin:8px 0'; sb.onclick = function () { afterSave = a; save.click(); }; s.appendChild(sb); });
       if (!isNew && rec.by) s.appendChild(el('div', 'note', 'Last edited by ' + rec.by));
       var btns = el('div', 'btns'), save = el('button', 'btn', 'Save'), cancel = el('button', 'btn ghost', 'Cancel'); save.type = cancel.type = 'button'; btns.appendChild(save); btns.appendChild(cancel);
       if (!isNew && isAdmin()) { var del = el('button', 'btn danger', 'Delete'); del.type = 'button'; btns.appendChild(del); del.onclick = function () { ask('Delete this ' + kd.label.toLowerCase() + '? This cannot be undone.', 'Delete', async function () { var copy = JSON.parse(JSON.stringify(rec)); try { await recs().doc(rec.id).delete(); close(); toast('Deleted.', 'Undo', function () { var id = copy.id; delete copy.id; recs().doc(id).set(copy); }); } catch (e) { toast(friendly(e)); } }); }; }
       cancel.onclick = close; s.appendChild(btns);
       save.onclick = async function () {
-        var c = collect(); if (c.bad) { msg.textContent = c.bad; return; } msg.textContent = '';
+        var c = collect(); if (c.bad) { msg.textContent = c.bad; afterSave = null; return; } msg.textContent = '';
         var data = Object.assign({}, c.o); if (kd.checklist) data.cl = cl || []; data.kind = k; data.by = (S.user.email || '').split('@')[0].slice(0, 30); data.updatedAt = FV.serverTimestamp(); if (isNew) data.createdAt = FV.serverTimestamp();
         Object.keys(data).forEach(function (key) { if (data[key] === undefined) delete data[key]; });
         save.disabled = true;
-        try { if (isNew) { await recs().add(data); } else { await recs().doc(rec.id).update(data); } close(); toast('Saved.'); }
-        catch (e) { msg.textContent = friendly(e); save.disabled = false; }
+        try { var nref = null; if (isNew) { nref = await recs().add(data); } else { await recs().doc(rec.id).update(data); } close(); toast('Saved.'); if (afterSave && nref) { var act = afterSave, nr = Object.assign({}, data, { id: nref.id }); setTimeout(function () { act.run(nr); }, 60); } }
+        catch (e) { msg.textContent = friendly(e); save.disabled = false; afterSave = null; }
       };
     });
   }
@@ -356,7 +366,7 @@
     return rows.map(function (r) { return r.map(function (c) { var s = String(c); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
   }
   function moreView(v) {
-    var rest = kinds().filter(function (k) { return (C.tabKinds || kinds().slice(0, 3)).indexOf(k) < 0; });
+    var rest = kinds().filter(function (k) { return shownKinds().indexOf(k) < 0; });
     if (rest.length) { v.appendChild(el('h2', '', 'More lists')); var c = el('div', 'card'); rest.forEach(function (k) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', K(k).plural)); m.appendChild(el('span', '', byKind(k).length + ' total')); row.appendChild(m); row.onclick = function () { S.tab = k; render(); }; c.appendChild(row); }); v.appendChild(c); }
     Q.extras.forEach(function (fn) { try { fn(v); } catch (e) { console.error(e); } });
     v.appendChild(el('h2', '', 'Your business'));

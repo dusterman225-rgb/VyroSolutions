@@ -5,6 +5,7 @@
   'use strict';
   var Q = window.Q, C = window.VQ_APP, V = window.VQCommunity;
   if (!Q || !C || !C.community || !V) return;
+  Q.tabsExtra = Q.tabsExtra || []; Q.banners = Q.banners || []; Q.views = Q.views || {};
   var el = Q.u.el, S = Q.S, cfg = C.community, myLeads = [], offers = {}, watched = {}, firstLoad = true, replyCount = {};
   var dir = null, inLeads = [], inReplied = {}, inUnsub = null, inAsked = {};
 
@@ -18,7 +19,7 @@
   function block(b) { b.style.cssText = 'display:block;width:100%;margin:8px 0'; return b; }
   function cidKey(t) { return t === 'contractor' ? 'cid' : 'cid_' + t; }
     function ms(ts) { return ts && ts.toMillis ? ts.toMillis() : Date.now(); }
-  function refresh() { if (S.tab === 'more' && Q.render && !document.querySelector('.modal')) Q.render(); }
+  function refresh() { if ((S.tab === 'more' || S.tab === 'leads' || S.tab === 'today') && Q.render && !document.querySelector('.modal')) Q.render(); }
 
   // ---------- my own requests and the replies to them ----------
   function watchMine() {
@@ -137,6 +138,7 @@
 
   // ---------- my requests and replies ----------
   function requests(focusId) {
+    markRepliesSeen();
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', 'My requests and replies'));
       var body = el('div'); s.appendChild(body); btnRow(s).appendChild(mk('Close', 'ghost', close));
@@ -239,11 +241,7 @@
     });
   }
 
-  function inbox() {
-    var ic = cfg.inbound;
-    Q.modal(function (s, close) {
-      s.appendChild(el('h3', '', ic.inboxTitle || 'Requests near you'));
-      var won = el('div'); s.appendChild(won);
+  function loadWon(won) {
       db().collection('communityLeads').where('chosen', '==', S.biz.id).get().then(function (sn) {
         var ws = sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.status === 'assigned' || x.status === 'done'; }); if (!ws.length) return;
         won.appendChild(el('h4', '', 'Jobs you won'));
@@ -253,8 +251,9 @@
           btnRow(c).appendChild(mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, S.biz.id, S.user.uid, false, l.fromName); })); won.appendChild(c);
         });
       }, function () { /* ignore */ });
-      var body = el('div'); s.appendChild(body); btnRow(s).appendChild(mk('Close', 'ghost', close));
-      function draw() {
+  }
+  function drawInbound(body) {
+    var ic = cfg.inbound;
         body.textContent = '';
         if (!dir || dir.lat == null) { body.appendChild(el('div', 'empty', 'Set up your community listing first (More > Community).')); return; }
         if (!dir.listed) { body.appendChild(el('div', 'empty', 'You are hidden. Turn on your community listing to see requests.')); return; }
@@ -270,10 +269,41 @@
           if (ic.addKind || ic.addAs) { var ad = mk(ic.addLabel || 'Add to my records', 'ghost sm', null); ad.onclick = function () { ad.disabled = true; var o = ic.addAs ? ic.addAs(l) : makeRec(l); o.data.kind = o.kind; o.data.by = (S.user.email || '').split('@')[0].slice(0, 30); o.data.createdAt = Q.FV.serverTimestamp(); o.data.updatedAt = Q.FV.serverTimestamp(); Q.recs().add(o.data).then(function () { ad.textContent = 'Added'; }, function (e) { ad.disabled = false; Q.toast(Q.friendly(e)); }); }; r.appendChild(ad); }
           body.appendChild(card);
         });
-      }
-      draw(); var iv = setInterval(function () { if (!document.body.contains(s)) { clearInterval(iv); return; } draw(); }, 3000);
+        }
+  function inbox() {
+    var ic = cfg.inbound;
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', ic.inboxTitle || 'Requests near you'));
+      var won = el('div'); s.appendChild(won); loadWon(won);
+      var body = el('div'); s.appendChild(body); btnRow(s).appendChild(mk('Close', 'ghost', close));
+      drawInbound(body); var iv = setInterval(function () { if (!document.body.contains(s)) { clearInterval(iv); return; } drawInbound(body); }, 3000);
     });
   }
+  // ---------- Leads tab and the home-screen notices ----------
+  function leadsSeen() { return +lsGet('vq_leads_seen_' + S.biz.id) || 0; }
+  function newLeads() { var seen = leadsSeen(); return inLeads.filter(function (l) { return !inReplied[l.id] && ms(l.createdAt) > seen; }).length; }
+  function newReplies() { var n = 0; myLeads.forEach(function (l) { if (l.status !== 'open') return; var c = (offers[l.id] || []).length, s2 = +lsGet('vq_rep_seen_' + l.id) || 0; if (c > s2) n += c - s2; }); return n; }
+  function markRepliesSeen() { myLeads.forEach(function (l) { lsSet('vq_rep_seen_' + l.id, (offers[l.id] || []).length); }); }
+  Q.views.leads = function (v) {
+    lsSet('vq_leads_seen_' + S.biz.id, Date.now());
+    var ic = cfg.inbound; v.appendChild(el('h2', '', 'Leads'));
+    var top = el('div', 'card'); v.appendChild(top);
+    top.appendChild(el('div', 'hint', 'Requests from other Vyqil businesses near you show up here by themselves. Reply to win the job. Need someone yourself? Use Find a Vyqil.'));
+    top.appendChild(block(mk('Find a Vyqil...', '', function () { find(null, null); })));
+    var nr = newReplies(); top.appendChild(block(mk('My requests and replies' + (nr ? ' (' + nr + ' new)' : ''), nr ? '' : 'ghost', function () { requests(); })));
+    if (ic) {
+      var won = el('div'); v.appendChild(won); loadWon(won); v.appendChild(el('h2', '', ic.inboxTitle || 'Requests near you'));
+      var body = el('div'); v.appendChild(body); drawInbound(body);
+      if (!dir || dir.lat == null || !dir.listed) { top.appendChild(block(mk('Set up my community listing', '', listing))); }
+    }
+  };
+  Q.tabsExtra.push({ id: 'leads', l: 'Leads', i: '📥' });
+  Q.banners.push(function (v) {
+    var r = newReplies(), n = cfg.inbound ? newLeads() : 0;
+    function ban(text, bad, tab) { var b = el('button', 'btn' + (bad ? '' : ' ghost'), text); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0;text-align:left;' + (bad ? 'background:#c62828;border-color:#c62828;color:#fff' : ''); b.onclick = function () { if (tab === 'requests') { requests(); } else { S.tab = tab; Q.render(); } }; v.appendChild(b); }
+    if (r) ban('New reply: ' + r + (r === 1 ? ' business replied' : ' businesses replied') + ' to your requests. Tap to see.', true, 'requests');
+    if (n) ban('You have ' + n + ' new ' + (n === 1 ? 'lead' : 'leads') + '. Tap to see.', false, 'leads');
+  });
   // Builds a record of the app's own kind from a request: name, phone, address(town) and notes, plus the first option of any required list.
   function makeRec(l) {
     var ic = cfg.inbound, kd = C.kinds[ic.addKind], data = {};
