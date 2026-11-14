@@ -34,3 +34,12 @@ window.VQ_APP = {
   watch: [{ l: 'Clients with no follow-up set', fn: function (rs) { return rs.filter(function (r) { return r.kind === 'client' && !r.nextContact && (r.stage === 'Lead' || r.stage === 'Active'); }); }, sub: function (r) { return r.stage; } }]
 };
 function money(c) { return Q.u.money(c); }
+
+// Community: look for rental space for a client, get listing photos or repairs done, and receive requests from landlords.
+(function () {
+  var A = window.VQ_APP;
+  A.community = { product: 'realtor', place: function (r) { return r && r.address ? r : null; }, placeText: function (r) { return r.address; },
+    inbound: { addKind: 'client', addDefaults: { stage: 'Lead' }, addLabel: 'Add as client', inboxTitle: 'Requests from landlords and others', listTitle: 'My realtor listing', catLabel: 'What you help with' } };
+  A.kinds.client.actions = [{ l: 'Find rental space for this client', run: function (r) { Q.community.find(r, { target: 'landlord', cat: 'Apartment', title: 'Rental for a client', details: r.budget ? 'Budget about ' + Q.u.money(r.budget) + ' a month.' : '' }); } }];
+  A.kinds.listing.actions = [{ l: 'Find a photographer, cleaner or contractor', run: function (r) { Q.community.find(r, { target: 'photo', cat: 'Real estate photos', title: 'Photos for a listing' }); } }];
+})();
