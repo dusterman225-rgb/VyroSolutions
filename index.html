@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
 <title>VyqilSolutions - Simple apps for your business and your home</title>
-<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, with more for other businesses and for your family. One login, add apps as you grow.">
+<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, with more for other businesses. One login, add apps as you grow.">
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -63,7 +63,7 @@
 <div class="hero">
   <img src="images/vyqil-solutions.png" alt="VyqilSolutions - One Vision. Endless Possibilities." style="width:min(92vw,460px);height:auto;display:block;margin:0 auto 14px">
   <h1>Run your business and your home from your phone.</h1>
-  <p>VyqilSolutions makes simple, affordable apps for small businesses, and for you and your family. One login. Add an app when you need it.</p>
+  <p>VyqilSolutions makes simple, affordable apps for small businesses. One login. Add an app when you need it.</p>
   <div class="cta" id="cta">
     <a class="btn" href="login.html?signup=1" id="ctaUp">Sign up</a>
     <a class="btn ghost" href="login.html" id="ctaIn">Log in</a>
@@ -84,7 +84,7 @@
 
 <section id="apps">
   <h2>Pick your apps</h2>
-  <p class="lead">Tap a heading to see every app and what it does. One account works for all of them.</p>
+  <p class="lead">Tap the heading to see every app and what it does. One account works for all of them.</p>
   <details class="dd" id="ddBiz">
     <summary><span><b>For your business</b><small id="bizCount"></small></span><i aria-hidden="true"></i></summary>
     <div class="ddbody">
@@ -92,13 +92,6 @@
       <div class="grid" id="appGrid"></div>
       <h3 class="sub">Newer business apps (first version)</h3>
       <div class="grid" id="newGrid"></div>
-    </div>
-  </details>
-  <details class="dd" id="ddPers">
-    <summary><span><b>For you and your family</b><small id="persCount"></small></span><i aria-hidden="true"></i></summary>
-    <div class="ddbody">
-      <p class="lead">Personal apps for everyday life. They use the same account as your business apps, but your family information is kept separate from your business records.</p>
-      <div class="grid" id="personalGrid"></div>
     </div>
   </details>
 </section>
@@ -165,26 +158,17 @@
   function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
   var FIRST = 'First version: built for one owner. Team logins and customer portals are not included yet.';
   var NEWAPPS = [
-    { name: 'VyqilRealtor', href: 'realtor/index.html?signup=1', who: 'Real estate agents', items: ['Client list with stages from lead to closed', 'Follow-up dates with phone alerts', 'Deals with a contract-to-close checklist and deadline alerts', 'Commission estimate for every deal', 'Listings with open house dates', 'Birthday and home anniversary reminders for past clients'] },
-    { name: 'VyqilLandlord', href: 'landlord/index.html?signup=1', who: 'Landlords and property managers', items: ['Properties, units and tenants', 'Rent ledger with automatic rent-due reminders', 'Repair requests with status and visit dates', 'Lease end and insurance renewal reminders', 'Rent roll and vacancies at a glance'] },
-    { name: 'VyqilSalon', href: 'salon/index.html?signup=1', who: 'Salons, barbers and spas', items: ['Appointments with a reminder an hour before', 'Client notes, formulas and allergies', 'Services and prices', 'A list of clients due to rebook', 'Today’s bookings and revenue this month'] },
-    { name: 'VyqilServices', href: 'services/index.html?signup=1', who: 'Cleaning, lawn and pool services', items: ['Recurring customers with plan, price and gate notes', 'Scheduled visits with morning reminders', 'Invoices with due dates and an unpaid total', 'Flags recurring customers with nothing scheduled'] },
-    { name: 'VyqilAuto', href: 'auto/index.html?signup=1', who: 'Auto shops and detailers', items: ['Customers and vehicles with service-due reminders', 'Repair orders from estimate to pickup', 'Parts, labor and totals', 'Promised-by date alerts', 'Ready for pickup and unpaid lists'] },
-    { name: 'VyqilPhoto', href: 'photo/index.html?signup=1', who: 'Photographers and videographers', items: ['Bookings from inquiry to delivered', 'Deposit and balance tracking', 'A shoot checklist with dated steps', 'Shoot-day and gallery-due alerts', 'Client list'] },
-    { name: 'VyqilLessons', href: 'lessons/index.html?signup=1', who: 'Tutors, music teachers and small daycares', items: ['Students with parent or guardian contact details', 'Lesson schedule with reminders', 'Attendance marking', 'Billing with due dates and an unpaid total', 'Birthdays'] }
-  ];
-  var PERSONAL = [
-    { name: 'VyqilAssistant', href: 'assistant/login.html?signup=1', who: 'Your personal and family life manager', about: 'One shared place for everything your household has to remember, with an AI helper you can ask or talk to. Add your partner or family with a code, and everyone sees the same plan.', wide: true,
-      groups: [
-        ['Time', ['Appointments, activities and birthdays on one calendar, with repeats', 'A Today screen with what needs you now and what is coming this week', 'Phone alerts before things happen, even when the app is closed', 'Send your calendar to your phone as a file']],
-        ['Money', ['Bills with reminders: tap Paid and it logs the expense and moves the next due date', 'Spending by category with monthly budgets', 'Import your bank transactions from a file, with duplicates caught', 'Debt payoff planner, subscriptions and free trials, savings goals']],
-        ['Home and family', ['Tasks with take-turns rotation between family members', 'Shared lists, and a meal planner that builds your grocery list', 'Home care reminders: filters, smoke alarms, seasonal jobs', 'People, pets and a babysitter sheet, plus a searchable records vault for warranties, insurance and school forms', 'Trips: day-by-day plans, packing lists and costs']],
-        ['AI helper', ['Ask things like "what is due this week?" or "where is my money going?"', 'Type or speak a sentence and it becomes a bill, event or task you check before saving', 'It only reads what you chose to put in, and you accept a notice before first use. It can be wrong, so check what matters.']]
-      ], note: 'Your family information stays separate from your business records.' },
-    { name: 'VyqilSplit', href: 'split/index.html?signup=1', who: 'Shared expenses for roommates, couples, trips and friends', about: 'Keep track of who paid and who owes whom, without the awkward math.', items: ['Groups for a home, a trip or a night out', 'Split equally, by exact amounts, by percent or by shares', 'Clear list of who pays whom to settle up', 'Invite friends with a link; they create a free account to join', 'It keeps score only. It does not move money: settle with cash, your bank or VyqilPay'] }
+    { name: 'VyqilRealtor', href: 'realtor/index.html?signup=1', logo: 'realtor/images/logo.png', who: 'Real estate agents', items: ['Client list with stages from lead to closed', 'Follow-up dates with phone alerts', 'Deals with a contract-to-close checklist and deadline alerts', 'Commission estimate for every deal', 'Listings with open house dates', 'Birthday and home anniversary reminders for past clients'] },
+    { name: 'VyqilLandlord', href: 'landlord/index.html?signup=1', logo: 'landlord/images/logo.png', who: 'Landlords and property managers', items: ['Properties, units and tenants', 'Rent ledger with automatic rent-due reminders', 'Repair requests with status and visit dates', 'Lease end and insurance renewal reminders', 'Rent roll and vacancies at a glance'] },
+    { name: 'VyqilSalon', href: 'salon/index.html?signup=1', logo: 'salon/images/logo.png', who: 'Salons, barbers and spas', items: ['Appointments with a reminder an hour before', 'Client notes, formulas and allergies', 'Services and prices', 'A list of clients due to rebook', 'Today’s bookings and revenue this month'] },
+    { name: 'VyqilServices', href: 'services/index.html?signup=1', logo: 'services/images/logo.png', who: 'Cleaning, lawn and pool services', items: ['Recurring customers with plan, price and gate notes', 'Scheduled visits with morning reminders', 'Invoices with due dates and an unpaid total', 'Flags recurring customers with nothing scheduled'] },
+    { name: 'VyqilAuto', href: 'auto/index.html?signup=1', logo: 'auto/images/logo.png', who: 'Auto shops and detailers', items: ['Customers and vehicles with service-due reminders', 'Repair orders from estimate to pickup', 'Parts, labor and totals', 'Promised-by date alerts', 'Ready for pickup and unpaid lists'] },
+    { name: 'VyqilPhoto', href: 'photo/index.html?signup=1', logo: 'photo/images/logo.png', who: 'Photographers and videographers', items: ['Bookings from inquiry to delivered', 'Deposit and balance tracking', 'A shoot checklist with dated steps', 'Shoot-day and gallery-due alerts', 'Client list'] },
+    { name: 'VyqilLessons', href: 'lessons/index.html?signup=1', logo: 'lessons/images/logo.png', who: 'Tutors, music teachers and small daycares', items: ['Students with parent or guardian contact details', 'Lesson schedule with reminders', 'Attendance marking', 'Billing with due dates and an unpaid total', 'Birthdays'] }
   ];
   function card(a, beta) {
     var d = document.createElement('div'); d.className = 'pcard' + (a.wide ? ' wide' : '');
+    if (a.logo) { var lg = document.createElement('img'); lg.src = a.logo; lg.alt = ''; lg.loading = 'lazy'; lg.style.cssText = 'display:block;width:100%;max-width:300px;height:auto;margin:0 0 8px;mix-blend-mode:screen'; d.appendChild(lg); }
     var top = document.createElement('div'); top.className = 'top';
     var h = document.createElement('h3'); h.textContent = a.name; top.appendChild(h);
     if (beta) { var b = document.createElement('span'); b.className = 'badge-new'; b.textContent = 'First version'; top.appendChild(b); }
@@ -209,11 +193,9 @@
     d.appendChild(pr); openLink(d, 'login.html?signup=1', 'Sign up'); grid.appendChild(d);
   });
   NEWAPPS.forEach(function (a) { var d = card(a, true); openLink(d, a.href, 'Open ' + a.name); $('newGrid').appendChild(d); });
-  PERSONAL.forEach(function (a) { var d = card(a, false); openLink(d, a.href, 'Open ' + a.name); $('personalGrid').appendChild(d); });
   $('bizCount').textContent = (APPS.length + NEWAPPS.length) + ' apps: ' + APPS.map(function (a) { return a.name.replace('Vyqil', ''); }).concat(NEWAPPS.map(function (a) { return a.name.replace('Vyqil', ''); })).join(', ');
-  $('persCount').textContent = PERSONAL.length + ' apps: ' + PERSONAL.map(function (a) { return a.name.replace('Vyqil', ''); }).join(', ');
-  // A link such as /#personal opens the matching dropdown.
-  function openFromHash() { var h = location.hash; if (h === '#personal') $('ddPers').open = true; else if (h === '#apps' || h === '#business') $('ddBiz').open = true; }
+  // A link such as /#business opens the dropdown.
+  function openFromHash() { var h = location.hash; if (h === '#apps' || h === '#business') $('ddBiz').open = true; }
   openFromHash(); window.addEventListener('hashchange', openFromHash);
   // The worked example uses the real prices above, so it can never disagree with them.
   var priced = APPS.filter(function (a) { return typeof P[a.id] === 'number'; });
