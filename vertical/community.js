@@ -89,6 +89,7 @@
       function allLabel() { var t = sel().target; all.textContent = 'Send to every ' + (t ? V.NAMES[t] : 'matching business') + ' within ' + rad.value + ' miles'; } allLabel();
       var info = el('div', 'hint'); s.appendChild(info);
       var lh = el('h4', '', 'Businesses near you'); lh.style.marginTop = '14px'; s.appendChild(lh);
+      var tl = el('a', 'hint', 'How sharing works and what to avoid posting'); tl.href = '../community-terms.html'; tl.target = '_blank'; tl.style.display = 'block'; tl.style.margin = '8px 0'; s.appendChild(tl);
       var list = el('div', 'card'); s.appendChild(list); btnRow(s).appendChild(mk('Close', 'ghost', close));
       function build(to, toName) {
         var c = sel(); if (!c.target) { msg.textContent = 'Choose what you need.'; return null; }
@@ -99,9 +100,9 @@
           city: String(place.city || '').slice(0, 60), lat: V.r2(place.lat), lng: V.r2(place.lng), cell: V.cellOf(V.r2(place.lat), V.r2(place.lng)), to: to || '', toName: (toName || '').slice(0, 80), radius: +rad.value, status: 'open', phone: shp.checked ? ph.value.trim().slice(0, 30) : '', recId: rec && rec.id ? rec.id : '', createdAt: Q.FV.serverTimestamp() };
       }
       function post(to, toName, btn) {
-        var d = build(to, toName); if (!d) return; msg.textContent = ''; btn.disabled = true;
+        var d = build(to, toName); if (!d) return; var cw = V.canPost(); if (cw) { msg.textContent = cw; return; } msg.textContent = ''; btn.disabled = true;
         db().collection('communityLeads').add(d).then(function (ref) {
-          V.notify('lead', ref.id);
+          V.notePost(); V.notify('lead', ref.id);
           if (rec && rec.id) { var up = { updatedAt: Q.FV.serverTimestamp() }; up[cidKey(d.target)] = ref.id; Q.recs().doc(rec.id).update(up).catch(function () { /* request is still sent */ }); }
           close(); Q.toast(to ? 'Request sent to ' + toName + '.' : 'Request sent to ' + V.NOUNS[d.target] + ' near you. Replies show in More > Community.');
         }, function (e) { btn.disabled = false; msg.textContent = Q.friendly(e); });
@@ -123,6 +124,7 @@
           res.forEach(function (c2) {
             var row = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', c2.name)); m.appendChild(el('span', '', Math.round(c2.miles) + ' mi · ' + (c2.city || '') + ' · ' + (c2.trades || []).slice(0, 3).join(', ')));
             var bd = V.badge(o.st[c2.id], c2.perk); if (bd) { var bs = el('span', '', bd); bs.style.color = '#2FBF8B'; m.appendChild(bs); }
+            var tr = V.trust(c2); if (tr) { var ts = el('span', '', tr); ts.style.opacity = '.8'; m.appendChild(ts); }
             if (c2.phone) { var a = el('a', '', c2.phone); a.href = V.phoneHref(c2.phone); a.style.display = 'block'; m.appendChild(a); }
             row.appendChild(m); var ask = mk('Ask this one', 'sm', null); ask.onclick = function () { post(c2.id, c2.name, ask); }; row.appendChild(ask); list.appendChild(row);
           });
@@ -150,10 +152,12 @@
           if (!os.length && l.status === 'open') card.appendChild(el('div', 'hint', 'No replies yet. A notice appears here when one arrives.'));
           os.forEach(function (o) {
             var r = el('div', 'row'), mm = el('div', 'm'); mm.appendChild(el('b', '', o.bizName + (l.chosen === o.bizId ? ' (chosen)' : '')));
+            (function (box) { V.trustFor(db(), o.bizId).then(function (t) { if (t) { var ts = el('span', '', t); ts.style.opacity = '.8'; box.insertBefore(ts, box.children[1] || null); } }); })(mm);
             if (o.priceNote) mm.appendChild(el('span', '', 'Price: ' + o.priceNote)); if (o.message) mm.appendChild(el('span', '', o.message));
             var th = V.phoneHref(o.phone); if (th) { var a = el('a', '', 'Call ' + o.phone); a.href = th; a.style.display = 'block'; mm.appendChild(a); }
             if (o.email) { var e = el('a', '', o.email); e.href = 'mailto:' + encodeURIComponent(o.email); e.style.display = 'block'; mm.appendChild(e); }
             r.appendChild(mm);
+            var mb = mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, o.bizId, S.user.uid, true, o.bizName); }); r.appendChild(mb);
             if (l.status === 'open') { var ch = mk('Choose', 'sm', null); ch.onclick = function () { choose(l, o, ch); }; r.appendChild(ch); }
             card.appendChild(r);
           });
@@ -217,7 +221,10 @@
       var sp = el('input'), sw = el('div', 'chk'); sp.type = 'checkbox'; sp.id = 'cm_sp2'; sp.checked = !!(dir && dir.phone); var sl = el('label', '', 'Show my business phone to others who look me up'); sl.htmlFor = sp.id; sw.appendChild(sp); sw.appendChild(sl); s.appendChild(sw);
       var phIn = el('input'); phIn.type = 'tel'; phIn.maxLength = 30; phIn.placeholder = 'Business phone'; phIn.value = (dir && dir.phone) || lsGet('vq_phone') || ''; s.appendChild(phIn);
       var perk = el('input'); perk.maxLength = 80; perk.placeholder = '10% off for Vyqil businesses'; perk.value = (dir && dir.perk) || ''; field(s, 'Member perk for other Vyqil businesses (optional)', perk); s.appendChild(el('div', 'hint', 'Shown next to your name when other businesses look for someone like you. You set it and you honor it.'));
+      var lic = el('input'); lic.maxLength = 40; lic.placeholder = 'License number (optional)'; lic.value = (dir && dir.license) || ''; field(s, 'License (optional)', lic);
+      var iw = el('div', 'chk'), ins = el('input'); ins.type = 'checkbox'; ins.id = 'cm_ins'; ins.checked = !!(dir && dir.insured); var il = el('label', '', 'I carry business insurance'); il.htmlFor = ins.id; iw.appendChild(ins); iw.appendChild(il); s.appendChild(iw); s.appendChild(el('div', 'hint', 'Shown to others as self-reported. Vyqil does not check licenses or insurance.'));
       var lw = el('div', 'chk'), li = el('input'); li.type = 'checkbox'; li.id = 'cm_ls'; li.checked = !!(dir && dir.listed); var ll = el('label', '', ic.listLabel || 'List me in the Vyqil community (untick to hide)'); ll.htmlFor = li.id; lw.appendChild(li); lw.appendChild(ll); s.appendChild(lw);
+      var tl = el('a', 'hint', 'How sharing works and what to avoid posting'); tl.href = '../community-terms.html'; tl.target = '_blank'; tl.style.display = 'block'; tl.style.margin = '8px 0'; s.appendChild(tl);
       var msg = el('div', 'note err'); s.appendChild(msg);
       var b2 = btnRow(s), save = mk('Save', '', null), x = mk('Cancel', 'ghost', close); b2.appendChild(save); b2.appendChild(x);
       save.onclick = function () {
@@ -225,7 +232,7 @@
         var picked = cats.filter(function (c) { return boxes[c].checked; }); if (li.checked && !picked.length) { msg.textContent = 'Tick at least one.'; return; }
         if (sp.checked && String(phIn.value).replace(/\D/g, '').length < 7) { msg.textContent = 'Type a phone number, or untick the box.'; return; }
         if (sp.checked) lsSet('vq_phone', phIn.value.trim());
-        var d = { bizId: S.biz.id, ownerUid: S.user.uid, product: cfg.product, name: String(S.biz.name || '').slice(0, 80), trades: picked, radius: +rad.value, lat: V.r2(me.lat), lng: V.r2(me.lng), cell: V.cellOf(V.r2(me.lat), V.r2(me.lng)), city: String(me.city || '').slice(0, 60), listed: !!li.checked, phone: sp.checked ? phIn.value.trim().slice(0, 30) : '', perk: perk.value.trim().slice(0, 80), updatedAt: Q.FV.serverTimestamp() };
+        var d = { bizId: S.biz.id, ownerUid: S.user.uid, product: cfg.product, name: String(S.biz.name || '').slice(0, 80), trades: picked, radius: +rad.value, lat: V.r2(me.lat), lng: V.r2(me.lng), cell: V.cellOf(V.r2(me.lat), V.r2(me.lng)), city: String(me.city || '').slice(0, 60), listed: !!li.checked, phone: sp.checked ? phIn.value.trim().slice(0, 30) : '', perk: perk.value.trim().slice(0, 80), license: lic.value.trim().slice(0, 40), insured: !!ins.checked, updatedAt: Q.FV.serverTimestamp() };
         save.disabled = true;
         db().collection('directory').doc(S.biz.id).set(d).then(function () { dir = d; inAsked = {}; inReplied = {}; watchInbox(); close(); Q.toast('Saved.'); }, function (e) { save.disabled = false; msg.textContent = Q.friendly(e); });
       };
@@ -236,6 +243,16 @@
     var ic = cfg.inbound;
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', ic.inboxTitle || 'Requests near you'));
+      var won = el('div'); s.appendChild(won);
+      db().collection('communityLeads').where('chosen', '==', S.biz.id).get().then(function (sn) {
+        var ws = sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.status === 'assigned' || x.status === 'done'; }); if (!ws.length) return;
+        won.appendChild(el('h4', '', 'Jobs you won'));
+        ws.forEach(function (l) {
+          var c = el('div', 'card'), m = el('div', 'm'); m.appendChild(el('b', '', l.title)); m.appendChild(el('span', '', 'From ' + l.fromName + ' · ' + l.city + ' · ' + (l.status === 'done' ? 'Done' : 'Chosen'))); if (l.details) m.appendChild(el('span', '', l.details)); c.appendChild(m);
+          var th = V.phoneHref(l.phone); if (th) { var a = el('a', '', 'Call ' + l.phone); a.href = th; a.style.cssText = 'display:block;margin:6px 0'; c.appendChild(a); }
+          btnRow(c).appendChild(mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, S.biz.id, S.user.uid, false, l.fromName); })); won.appendChild(c);
+        });
+      }, function () { /* ignore */ });
       var body = el('div'); s.appendChild(body); btnRow(s).appendChild(mk('Close', 'ghost', close));
       function draw() {
         body.textContent = '';
@@ -248,6 +265,8 @@
           m.appendChild(el('span', '', 'From ' + l.fromName + ' (' + (V.NAMES[l.fromProduct] || 'Vyqil') + ')')); if (l.details) m.appendChild(el('span', '', l.details)); h.appendChild(m); card.appendChild(h);
           var th = V.phoneHref(l.phone); if (th) { var a = el('a', '', 'Call ' + l.phone); a.href = th; a.style.cssText = 'display:block;margin:6px 0'; card.appendChild(a); }
           var r = btnRow(card), rp = mk(inReplied[l.id] ? 'Update my reply' : 'Reply with my details', 'sm', function () { reply(l); }); r.appendChild(rp);
+          if (inReplied[l.id]) r.appendChild(mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, S.biz.id, S.user.uid, false, l.fromName); }));
+          r.appendChild(mk('Report', 'ghost sm', function () { V.report(db(), l, S.user.uid, S.biz.id).then(function (ok) { if (ok) Q.toast('Reported. Thank you.'); }, function (e) { Q.toast(Q.friendly(e)); }); }));
           if (ic.addKind || ic.addAs) { var ad = mk(ic.addLabel || 'Add to my records', 'ghost sm', null); ad.onclick = function () { ad.disabled = true; var o = ic.addAs ? ic.addAs(l) : makeRec(l); o.data.kind = o.kind; o.data.by = (S.user.email || '').split('@')[0].slice(0, 30); o.data.createdAt = Q.FV.serverTimestamp(); o.data.updatedAt = Q.FV.serverTimestamp(); Q.recs().add(o.data).then(function () { ad.textContent = 'Added'; }, function (e) { ad.disabled = false; Q.toast(Q.friendly(e)); }); }; r.appendChild(ad); }
           body.appendChild(card);
         });
