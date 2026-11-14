@@ -1,4 +1,5 @@
 window.VQ_APP = {
+  community: { product: 'services', inbound: { addKind: 'customer', addDefaults: { plan: 'One-time' }, addLabel: 'Add as customer', inboxTitle: 'Service requests near you', listTitle: 'My services in the community', catLabel: 'Services you offer' } },
   id: 'services', name: 'VyqilServices', who: 'For cleaning, lawn and pool services', tag: 'Recurring customers, routes and invoices.', alertText: 'visits and unpaid invoices',
   tabKinds: ['visit', 'customer', 'invoice'],
   kinds: {
