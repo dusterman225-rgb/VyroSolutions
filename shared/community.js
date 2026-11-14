@@ -91,6 +91,47 @@
     var t = []; if (st && st.n) t.push(st.n + (st.n === 1 ? ' Vyqil job' : ' Vyqil jobs') + (st.avg ? ' · ' + st.avg.toFixed(1) + ' stars' : ''));
     if (st && st.n >= 5 && st.avg >= 4.5) t.unshift('Top community neighbor'); if (perk) t.push('Perk: ' + perk); return t.join(' · ');
   }
+  // Self-reported license and insurance text. Vyqil does not check it, and it always says so.
+  function trust(c) { var t = []; if (c && c.license) t.push('License: ' + String(c.license).slice(0, 40)); if (c && c.insured) t.push('Says insured'); return t.length ? t.join(' \u00b7 ') + ' (self-reported, not verified)' : ''; }
+  var tcache = {};
+  function trustFor(db, id) { if (!tcache[id]) tcache[id] = db.collection('directory').doc(id).get().then(function (d) { return d.exists ? trust(d.data()) : ''; }, function () { return ''; }); return tcache[id]; }
+  // Posting limits (this device only) so one account cannot flood the neighborhood by accident.
+  function canPost() { try { var a = JSON.parse(localStorage.getItem('vq_post_log') || '[]').filter(function (t) { return Date.now() - t < 864e5; }); if (a.length && Date.now() - a[a.length - 1] < 60000) return 'Please wait a minute before posting again.'; if (a.length >= 10) return 'You have posted 10 requests today. Try again tomorrow.'; } catch (e) { /* no limit if storage is blocked */ } return ''; }
+  function notePost() { try { var a = JSON.parse(localStorage.getItem('vq_post_log') || '[]').filter(function (t) { return Date.now() - t < 864e5; }); a.push(Date.now()); localStorage.setItem('vq_post_log', JSON.stringify(a)); } catch (e) { /* optional */ } }
+  // Tells the Vyqil team a request is spam or abusive. Only the team can read reports.
+  function report(db, l, uid, bizId) {
+    var r = window.prompt('What is wrong with this request? (spam, fake, abusive, wrong place...)'); if (!r || !r.trim()) return Promise.resolve(false);
+    return db.collection('communityReports').add({ leadId: l.id, reporterUid: uid, reporterBiz: bizId, reason: r.trim().slice(0, 200), createdAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function () { return true; });
+  }
+  // A short message thread between the person who posted and one business that replied. asker=true when I posted the request.
+  function openThread(db, leadId, offerId, uid, asker, title) {
+    var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:70;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center';
+    var sh = document.createElement('div'); sh.style.cssText = 'background:#0a0f15;border:1px solid #1f2e3f;border-radius:18px 18px 0 0;width:100%;max-width:560px;height:80vh;display:flex;flex-direction:column;padding:14px;box-sizing:border-box;color:#eef3f8;font-family:Arial,sans-serif';
+    var h = document.createElement('h3'); h.textContent = 'Messages with ' + (title || 'them'); h.style.margin = '0 0 6px';
+    var tip = document.createElement('div'); tip.textContent = 'Share only what the job needs. Keep street addresses until you have picked someone.'; tip.style.cssText = 'color:#9fb0c4;font-size:.78rem;margin-bottom:8px';
+    var list = document.createElement('div'); list.style.cssText = 'flex:1;overflow-y:auto;border-top:1px solid #1f2e3f;border-bottom:1px solid #1f2e3f;padding:8px 0';
+    var note = document.createElement('div'); note.style.cssText = 'color:#ff8a8a;font-size:.8rem;min-height:1em;margin-top:6px';
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;margin-top:8px';
+    var inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 300; inp.placeholder = 'Type a message'; inp.style.cssText = 'flex:1;min-width:0;background:#14202e;border:1px solid #27405c;color:#eef3f8;border-radius:10px;padding:10px;font:16px Arial,sans-serif';
+    var send = document.createElement('button'); send.type = 'button'; send.textContent = 'Send'; send.style.cssText = 'background:#2f7cf6;color:#fff;border:0;border-radius:10px;padding:0 16px;font-weight:700';
+    var close = document.createElement('button'); close.type = 'button'; close.textContent = 'Close'; close.style.cssText = 'background:none;color:#9fb0c4;border:1px solid #1f2e3f;border-radius:10px;padding:8px;margin-top:8px';
+    row.appendChild(inp); row.appendChild(send); [h, tip, list, note, row, close].forEach(function (n) { sh.appendChild(n); }); ov.appendChild(sh); document.body.appendChild(ov);
+    var col = db.collection('communityLeads').doc(leadId).collection('offers').doc(offerId).collection('msgs'), unsub = null;
+    function ms(m) { var c = m.createdAt; return c && c.toMillis ? c.toMillis() : Date.now(); }
+    unsub = col.onSnapshot(function (snap) {
+      var a = snap.docs.map(function (d) { return d.data(); }).sort(function (x, y) { return ms(x) - ms(y); }); list.textContent = '';
+      if (!a.length) { var e = document.createElement('div'); e.textContent = 'No messages yet.'; e.style.cssText = 'color:#9fb0c4;text-align:center;padding:14px'; list.appendChild(e); }
+      a.forEach(function (m) { var mine = m.uid === uid, b = document.createElement('div'); b.textContent = m.text; b.style.cssText = 'max-width:80%;margin:5px 0;padding:8px 10px;border-radius:12px;word-wrap:break-word;' + (mine ? 'margin-left:auto;background:#1b4a8a' : 'background:#16212d'); list.appendChild(b); });
+      list.scrollTop = list.scrollHeight;
+    }, function (e) { note.textContent = (e && e.message) || 'Could not load messages.'; });
+    function shut() { if (unsub) unsub(); ov.remove(); }
+    close.onclick = shut; ov.addEventListener('click', function (e) { if (e.target === ov) shut(); });
+    function go() {
+      var t = inp.value.trim(); if (!t) return; send.disabled = true; note.textContent = '';
+      col.add({ uid: uid, from: asker ? 'asker' : 'provider', text: t.slice(0, 300), createdAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function () { inp.value = ''; send.disabled = false; notify('msg', leadId, offerId); }, function (e) { send.disabled = false; note.textContent = (e && e.message) || 'Could not send.'; });
+    }
+    send.onclick = go; inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  }
   // Asks the Vyqil alerts service to send a phone alert. Silent if alerts are not set up: the in-app lists still work.
   function notify(kind, leadId, bizId) {
     try {
@@ -100,5 +141,5 @@
       }).catch(function () { /* alerts are optional */ });
     } catch (e) { return Promise.resolve(); }
   }
-  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, badge: badge, notify: notify, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
+  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, badge: badge, trust: trust, trustFor: trustFor, canPost: canPost, notePost: notePost, report: report, openThread: openThread, notify: notify, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
 })();
