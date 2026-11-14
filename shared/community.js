@@ -42,16 +42,29 @@
     return (town + (town && st ? ', ' : '') + st).slice(0, 60);
   }
   // Street address or ZIP code to a place. Rejects with a plain message.
+  function nominatim(params) {
+    return fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&' + params, { headers: { 'Accept': 'application/json' } }).then(function (r) { if (!r.ok) throw 0; return r.json(); });
+  }
+  // A 5-digit US ZIP is looked up in a ZIP table first (exact town), then by Nominatim's postal code search. Anything else is a free-text place search.
   function geocode(text) {
     text = String(text || '').trim();
     if (text.length < 3) return Promise.reject(new Error('Type a street address, a town or a ZIP code.'));
-    return fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=' + encodeURIComponent(text), { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
-      .then(function (j) {
-        if (!j || !j.length) throw new Error('That place was not found. Try a ZIP code or the town and state.');
-        var lat = parseFloat(j[0].lat), lng = parseFloat(j[0].lon);
-        return { lat: r2(lat), lng: r2(lng), city: label(j[0].address) || String(j[0].display_name || '').split(',').slice(0, 2).join(',').slice(0, 60) };
-      }, function () { throw new Error('The place search is not answering. Try again, or use "Use my location".'); });
+    var zip = /^(\d{5})(-\d{4})?$/.exec(text), notFound = new Error('That place was not found. Try a ZIP code or the town and state.'), down = new Error('The place search is not answering. Try again, or use "Use my location".');
+    if (zip) {
+      return fetch('https://api.zippopotam.us/us/' + zip[1]).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+        var p = j && j.places && j.places[0]; if (!p) throw 0;
+        return { lat: r2(parseFloat(p.latitude)), lng: r2(parseFloat(p.longitude)), city: (p['place name'] + ', ' + (p['state abbreviation'] || p.state) + ' ' + zip[1]).slice(0, 60) };
+      }).catch(function () {
+        return nominatim('postalcode=' + zip[1] + '&countrycodes=us').then(function (j) {
+          if (!j || !j.length) throw notFound; var a = j[0].address || {}, town = a.city || a.town || a.village || a.hamlet || '';
+          return { lat: r2(parseFloat(j[0].lat)), lng: r2(parseFloat(j[0].lon)), city: ((town || (a.county || '')) + (a.state ? ', ' + a.state : '') + ' ' + zip[1]).trim().slice(0, 60) };
+        }, function () { throw down; });
+      });
+    }
+    return nominatim('q=' + encodeURIComponent(text)).then(function (j) {
+      if (!j || !j.length) throw notFound;
+      return { lat: r2(parseFloat(j[0].lat)), lng: r2(parseFloat(j[0].lon)), city: label(j[0].address) || String(j[0].display_name || '').split(',').slice(0, 2).join(',').slice(0, 60) };
+    }, function () { throw down; });
   }
   function here() {
     return new Promise(function (ok, no) {
