@@ -114,7 +114,9 @@
 <script src="js/calendar.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/public.js"></script>
+<script src="../shared/community.js"></script>
 <script src="js/flow.js"></script>
+<script src="js/commnudge.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
   var PRODUCT_NAMES = { contractor: 'VyqilContractor', restaurant: 'VyqilRestaurant', retail: 'VyqilRetail' };
@@ -145,6 +147,7 @@
     })(0);
     $('miAlerts').addEventListener('click', function (e) { e.preventDefault(); setMenu(false); vutil.pushPanel('team', ctx); });
     try { vutil.pushSync(ctx); } catch (e) { /* alerts are optional */ }
+    try { if (window.vcommnudge) vcommnudge.mount(ctx); } catch (e) { /* optional */ }
     if (ctx.role === 'owner') $('miLink').style.display = '';
     $('mWho').textContent = ctx.role + ' \u00b7 ' + ctx.user.email;
     if (ctx.role === 'owner') { $('miFin').style.display = 'block'; $('miPay').style.display = 'block'; }

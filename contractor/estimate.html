@@ -126,6 +126,25 @@
   var $ = function (id) { return document.getElementById(id); };
   function pct(v) { return Math.min(100, Math.max(0, parseFloat(v) || 0)); }
 
+  // Starting points for jobs that come from the Vyqil community. Scope only: you set the prices.
+  var STARTERS = {
+    'Plumbing': [['Labor', 'Diagnose the leak or clog and repair', 2], ['Materials', 'Fittings, pipe and supplies', 1]],
+    'Electrical': [['Labor', 'Diagnose and repair the electrical fault', 2], ['Materials', 'Wire, outlets, switches and breakers', 1]],
+    'HVAC (heating and cooling)': [['Labor', 'Service call and system check', 1.5], ['Materials', 'Parts and refrigerant or filters', 1]],
+    'Roofing': [['Labor', 'Roof inspection and repair', 4], ['Materials', 'Shingles, flashing and sealant', 1]],
+    'Painting': [['Labor', 'Prep, prime and paint', 8], ['Materials', 'Paint, primer and supplies', 1]],
+    'Flooring': [['Labor', 'Remove old flooring and install new', 8], ['Materials', 'Flooring and underlayment', 1]],
+    'Carpentry': [['Labor', 'Carpentry and repair work', 4], ['Materials', 'Lumber and hardware', 1]],
+    'Appliance repair': [['Labor', 'Diagnose and repair the appliance', 1.5], ['Materials', 'Replacement parts', 1]],
+    'Handyman / general repair': [['Labor', 'General repair work', 3], ['Materials', 'Materials and supplies', 1]],
+    'Locksmith': [['Labor', 'Lock repair, rekey or replacement', 1], ['Materials', 'Locks and hardware', 1]],
+    'Pest control': [['Labor', 'Inspection and treatment', 2], ['Materials', 'Treatment products', 1]],
+    'Landscaping and trees': [['Labor', 'Landscaping or tree work', 4], ['Materials', 'Plants, mulch or disposal fees', 1]],
+    'Cleaning and turnover': [['Labor', 'Cleaning', 4], ['Materials', 'Supplies', 1]],
+    'Windows and doors': [['Labor', 'Remove and install', 3], ['Materials', 'Window or door and trim', 1]],
+    'Other': [['Labor', 'Labor', 2], ['Materials', 'Materials', 1]]
+  };
+  function priceKey(t) { return String(t || '').replace(/\W+/g, '_').slice(0, 60); }
   vyro.start(async function (ctx) {
     var params = new URLSearchParams(location.search);
     var id = params.get('id');
@@ -287,6 +306,15 @@
             $('cname').value = l.name || ''; $('cemail').value = l.email || ''; $('cphone').value = l.phone || '';
             $('caddr').value = l.address || ''; $('title').value = (l.jobDetails || '').slice(0, 80);
             if (l.customerId && customers[l.customerId]) $('cust').value = l.customerId;
+            var tp = STARTERS[params.get('tpl') || ''];
+            if (tp) {
+              $('lines').textContent = '';
+              var kept = null;
+              try { var ps = await ctx.bizRef.collection('quotePrices').doc(priceKey(params.get('tpl'))).get(); if (ps.exists && ps.data().items && ps.data().items.length) kept = ps.data().items; } catch (e0) { /* no remembered prices yet */ }
+              if (kept) kept.forEach(function (x) { addRow({ type: x.type, description: x.description, qty: x.qty, unitCents: x.unitCents, laborMode: x.laborMode }); });
+              else tp.forEach(function (x) { addRow(x[0] === 'Labor' ? { type: 'Labor', description: x[1], qty: x[2], unitCents: 0, laborMode: 'hourly' } : { type: x[0], description: x[1], qty: x[2], unitCents: 0 }); });
+              $('title').value = (params.get('tpl') + ': ' + ((l.jobDetails || '').split(':').slice(1).join(':').replace(/\s*\(Vyqil community request\)\s*$/, '').trim() || 'job')).slice(0, 80);
+            }
           }
         } catch (e) { /* ignore */ }
       }
@@ -387,6 +415,13 @@
             tx.set(ref, data);
           });
           savedId = ref.id;
+        }
+        // remember these prices for the next job of the same trade (best effort)
+        if (leadId && data.lineItems && data.lineItems.some(function (x) { return x.unitCents > 0; })) {
+          try {
+            var ls2 = await ctx.bizRef.collection('leads').doc(leadId).get(), tr = ls2.exists ? String(ls2.data().jobDetails || '').split(':')[0] : '';
+            if (STARTERS[tr]) await ctx.bizRef.collection('quotePrices').doc(priceKey(tr)).set({ trade: tr, items: data.lineItems.slice(0, 12).map(function (x) { var o = { type: x.type, description: String(x.description || '').slice(0, 200), qty: x.qty, unitCents: x.unitCents }; if (x.laborMode) o.laborMode = x.laborMode; return o; }), updatedAt: vyro.stamp() });
+          } catch (e1) { /* the estimate is saved either way */ }
         }
         // online accept link: publish when sending, close it when voided, rejected or approved by hand
         if (openSend) {

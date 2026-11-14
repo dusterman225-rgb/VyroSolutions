@@ -34,12 +34,15 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
 
   <div class="card">
     <h2>Nearby requests</h2>
+    <p class="note"><a href="../community-terms.html" target="_blank">How sharing works and what to avoid posting</a></p>
     <p>Landlords and other Vyqil businesses near you post jobs here. Reply with your details, or add the job straight to your Leads.</p>
     <div id="needSetup" class="note" style="display:none">Set your location and trades below first. Requests within your range then show here.</div>
     <div id="filters" style="margin:10px 0"></div>
     <div id="reqs"></div>
     <div class="note" id="reqMsg"></div>
   </div>
+
+  <div class="card" id="wonCard" style="display:none"><h2>Jobs you won</h2><p>People who chose you. Message them, then make your estimate.</p><div id="won"></div></div>
 
   <div class="card"><h2>Need something yourself?</h2><div id="out"></div></div>
 
@@ -54,12 +57,16 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       <div class="field"><span>Trades you do</span><div id="trades"></div></div>
       <label class="field"><span>How far will you travel?</span><select id="radius"><option value="25">Up to 25 miles</option><option value="50">Up to 50 miles</option><option value="100" selected>Up to 100 miles</option></select></label>
       <label class="field"><span>Member perk for other Vyqil businesses (optional)</span><input id="perk" type="text" maxlength="80" placeholder="10% off for Vyqil businesses"></label>
+      <label class="field"><span>License number (optional)</span><input id="lic" type="text" maxlength="40" placeholder="Shown as self-reported, not verified"></label>
+      <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="ins" style="width:auto"><span>I carry business insurance (shown as self-reported)</span></label>
       <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="showPhone" style="width:auto"><span>Show my business phone to landlords who look me up</span></label>
       <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="listed" style="width:auto"><span>List me in the Vyqil community (turn off to hide)</span></label>
       <button class="btn" id="save" type="button">Save</button>
       <div class="note" id="msg"></div>
     </div>
   </details>
+
+  <details class="sec" id="profSec"><summary>What other businesses see about you</summary><div class="in" id="profBox"></div></details>
 
   <a class="back" href="app.html">Back to dashboard</a>
   <div class="note err" id="err"></div>
@@ -75,7 +82,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
   var $ = function (id) { return document.getElementById(id); }, V = window.VQCommunity, el = vyro.el;
   vyro.start(function (ctx) {
     var db = vyro.db, canEdit = ctx.role === 'owner' || ctx.role === 'gm', dirRef = db.collection('directory').doc(ctx.bizId);
-    var me = { lat: null, lng: null, city: '', trades: [], radius: 100, listed: false }, filterTrade = '', leads = [], mine = {}, added = {}, unsub = null;
+    var me = { lat: null, lng: null, city: '', trades: [], radius: 100, listed: false }, filterTrade = '', leads = [], mine = {}, added = {}, unsub = null, wonList = [];
 
     V.TRADES.forEach(function (t) {
       var l = el('label'); l.style.cssText = 'display:flex;align-items:center;gap:10px;margin:6px 0;min-height:34px';
@@ -85,16 +92,16 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     function setPlace(p) { me.lat = p.lat; me.lng = p.lng; me.city = p.city || me.city || 'Your area'; $('placeMsg').className = 'note ok'; $('placeMsg').textContent = 'Using ' + me.city + '.'; }
     $('findPlace').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Looking...'; V.geocode($('place').value).then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
     $('myLoc').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Getting your location...'; V.here().then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
-    if (!canEdit) { ['place', 'findPlace', 'myLoc', 'radius', 'showPhone', 'listed', 'save', 'perk'].forEach(function (i) { $(i).disabled = true; }); $('msg').textContent = 'Only the owner or manager can change the community listing.'; }
+    if (!canEdit) { ['place', 'findPlace', 'myLoc', 'radius', 'showPhone', 'listed', 'save', 'perk', 'lic', 'ins'].forEach(function (i) { $(i).disabled = true; }); $('msg').textContent = 'Only the owner or manager can change the community listing.'; }
 
     $('save').onclick = async function () {
       var msg = $('msg'); msg.className = 'note';
       if (me.lat == null) { msg.className = 'note err'; msg.textContent = 'Set your place first (type an address or ZIP and tap Find this place).'; return; }
       var trades = ticked(); if ($('listed').checked && !trades.length) { msg.className = 'note err'; msg.textContent = 'Tick at least one trade.'; return; }
-      var data = { bizId: ctx.bizId, ownerUid: ctx.user.uid, product: 'contractor', perk: $('perk').value.trim().slice(0, 80), name: String(ctx.biz.name || 'Contractor').slice(0, 80), trades: trades, radius: +$('radius').value, lat: V.r2(me.lat), lng: V.r2(me.lng), cell: V.cellOf(V.r2(me.lat), V.r2(me.lng)),
+      var data = { bizId: ctx.bizId, ownerUid: ctx.user.uid, product: 'contractor', perk: $('perk').value.trim().slice(0, 80), license: $('lic').value.trim().slice(0, 40), insured: !!$('ins').checked, name: String(ctx.biz.name || 'Contractor').slice(0, 80), trades: trades, radius: +$('radius').value, lat: V.r2(me.lat), lng: V.r2(me.lng), cell: V.cellOf(V.r2(me.lat), V.r2(me.lng)),
         city: String(me.city || '').slice(0, 60), listed: !!$('listed').checked, phone: $('showPhone').checked ? String(ctx.biz.phone || '').slice(0, 30) : '', updatedAt: vyro.stamp() };
       this.disabled = true; msg.textContent = 'Saving...';
-      try { await dirRef.set(data); me = { lat: data.lat, lng: data.lng, city: data.city, trades: trades, radius: data.radius, listed: data.listed }; msg.className = 'note ok'; msg.textContent = 'Saved.'; sum(); watch(); }
+      try { await dirRef.set(data); me = { lat: data.lat, lng: data.lng, city: data.city, trades: trades, radius: data.radius, listed: data.listed }; dirData = data; drawProf(); msg.className = 'note ok'; msg.textContent = 'Saved.'; sum(); watch(); }
       catch (e) { msg.className = 'note err'; msg.textContent = vyro.friendly(e); }
       this.disabled = false;
     };
@@ -121,10 +128,35 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
         function info(a, b) { if (!b) return; var r = el('div', 'row'); r.appendChild(el('span', '', a)); r.appendChild(el('b', '', b)); inn.appendChild(r); }
         info('From', l.fromName); info('Posted', V.ago(l.createdAt)); info('Details', l.details); info('Where', l.city + ' (about ' + Math.round(l._mi) + ' miles away)'); info('Their phone', l.phone);
         var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call'); call.href = th; inn.appendChild(call); }
+        var rpt = el('button', 'btn ghost', 'Report this request'); rpt.type = 'button'; rpt.onclick = function () { V.report(db, l, ctx.user.uid, ctx.bizId).then(function (ok) { if (ok) { rpt.textContent = 'Reported. Thank you.'; rpt.disabled = true; } }, function (e) { $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }); };
+        if (mine[l.id]) { var mg = el('button', 'btn ghost', 'Messages'); mg.type = 'button'; mg.onclick = function () { V.openThread(db, l.id, ctx.bizId, ctx.user.uid, false, l.fromName); }; inn.appendChild(mg); }
         var rb = el('button', 'btn', mine[l.id] ? 'Update my reply' : 'Reply with my details'); rb.type = 'button'; rb.onclick = function () { reply(l); }; inn.appendChild(rb);
-        if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id]; inn.appendChild(ce); inn.appendChild(el('div', 'note ok', 'In your Leads.')); }
+        if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id] + '&tpl=' + encodeURIComponent(l.trade || ''); inn.appendChild(ce); inn.appendChild(el('div', 'note ok', 'In your Leads.')); }
         else { var ab = el('button', 'btn ghost', 'Add to my Leads'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; inn.appendChild(ab); }
-        d.appendChild(inn); box.appendChild(d);
+        inn.appendChild(rpt); d.appendChild(inn); box.appendChild(d);
+      });
+    }
+    function drawWon() {
+      var box = $('won'); box.textContent = ''; $('wonCard').style.display = wonList.length ? 'block' : 'none';
+      wonList.forEach(function (l) {
+        var r = el('div', 'sec'); r.style.cssText = 'padding:10px;margin:8px 0;border:1px solid var(--cm-line);border-radius:12px';
+        r.appendChild(el('b', '', l.title)); r.appendChild(el('div', 'note', l.trade + ' · ' + l.city + ' · from ' + l.fromName + ' · ' + (l.status === 'done' ? 'Done' : 'Chosen'))); if (l.details) r.appendChild(el('div', 'note', l.details));
+        var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call ' + l.phone); call.href = th; r.appendChild(call); }
+        var mg = el('button', 'btn ghost', 'Messages'); mg.type = 'button'; mg.onclick = function () { V.openThread(db, l.id, ctx.bizId, ctx.user.uid, false, l.fromName); }; r.appendChild(mg);
+        if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id] + '&tpl=' + encodeURIComponent(l.trade || ''); r.appendChild(ce); }
+        else { var ab = el('button', 'btn', 'Add to my Leads and quote'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; r.appendChild(ab); }
+        box.appendChild(r);
+      });
+    }
+    function loadWon() { db.collection('communityLeads').where('chosen', '==', ctx.bizId).get().then(function (s) { wonList = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.status === 'assigned' || x.status === 'done'; }); drawWon(); }, function () { /* optional */ }); }
+    var dirData = null;
+    function drawProf() {
+      var b = $('profBox'); b.textContent = ''; if (!dirData) { b.appendChild(el('div', 'note', 'Set up your listing first.')); return; }
+      V.stats(db, [ctx.bizId]).then(function (st) {
+        b.textContent = ''; var x = dirData;
+        b.appendChild(el('b', '', x.name)); b.appendChild(el('div', 'note', (x.trades || []).join(', ') + ' · ' + (x.city || '') + ' · up to ' + x.radius + ' mi' + (x.listed ? '' : ' · currently hidden')));
+        var bd = V.badge(st[ctx.bizId], x.perk); b.appendChild(el('div', 'note ok', bd || 'No finished Vyqil jobs yet. Jobs that people mark done build your record.'));
+        var tr = V.trust(x); if (tr) b.appendChild(el('div', 'note', tr)); if (x.phone) b.appendChild(el('div', 'note', 'Phone shown: ' + x.phone));
       });
     }
     function watch() {
@@ -161,7 +193,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       btn.disabled = true;
       try {
         var ref = await ctx.bizRef.collection('leads').add({ communityLeadId: l.id, name: l.fromName, phone: l.phone || '', email: '', address: l.city, source: 'Vyqil Community', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
-        added[l.id] = ref.id; draw();
+        added[l.id] = ref.id; draw(); drawWon();
       } catch (e) { btn.disabled = false; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }
     }
 
@@ -178,13 +210,14 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       sc.onload = function () { Q.onStart.forEach(function (fn) { fn(); }); Q.render(); }; document.body.appendChild(sc);
     })();
 
-    ctx.bizRef.collection('leads').get().then(function (s) { s.docs.forEach(function (d) { var x = d.data(); if (x.communityLeadId) added[x.communityLeadId] = d.id; }); draw(); }, function () { /* ignore */ });
+    ctx.bizRef.collection('leads').get().then(function (s) { s.docs.forEach(function (d) { var x = d.data(); if (x.communityLeadId) added[x.communityLeadId] = d.id; }); draw(); drawWon(); }, function () { /* ignore */ });
     dirRef.get().then(function (d) {
-      if (d.exists) { var x = d.data(); me = { lat: x.lat, lng: x.lng, city: x.city || '', trades: x.trades || [], radius: x.radius || 100, listed: !!x.listed };
-        $('place').value = me.city; $('radius').value = String(me.radius); $('listed').checked = me.listed; $('showPhone').checked = !!x.phone; $('perk').value = x.perk || '';
+      if (d.exists) { var x = d.data(); dirData = x; me = { lat: x.lat, lng: x.lng, city: x.city || '', trades: x.trades || [], radius: x.radius || 100, listed: !!x.listed };
+        $('place').value = me.city; $('radius').value = String(me.radius); $('listed').checked = me.listed; $('showPhone').checked = !!x.phone; $('perk').value = x.perk || ''; $('lic').value = x.license || ''; $('ins').checked = !!x.insured;
         Array.prototype.forEach.call(document.querySelectorAll('#trades input'), function (c) { c.checked = me.trades.indexOf(c.value) > -1; }); $('placeMsg').textContent = me.city ? 'Using ' + me.city + '.' : '';
         $('setupSec').open = false; }
-      sum(); watch();
+      sum(); watch(); loadWon(); drawProf();
+      try { localStorage.setItem('vq_comm_seen_' + ctx.bizId, String(Date.now())); } catch (e2) { /* optional */ }
     }, function (e) { $('err').textContent = vyro.friendly(e); });
   });
 </script>
