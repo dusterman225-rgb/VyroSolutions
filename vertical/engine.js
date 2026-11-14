@@ -55,8 +55,8 @@
   var root = $('app');
   function authView() {
     root.textContent = ''; var w = el('div', 'auth');
-    var logo = el('img', 'logo'); logo.src = C.logo || '/icons/icon-192.png'; logo.alt = C.name; w.appendChild(logo);
-    w.appendChild(el('h1', '', C.name)); w.appendChild(el('p', 'sub', C.who + '. ' + (C.tag || '')));
+    var logo = el('img', 'logo' + (C.logoWide ? ' wide' : '')); logo.src = C.logoWide || C.logo || '/icons/icon-192.png'; logo.alt = C.name; w.appendChild(logo);
+    if (!C.logoWide) w.appendChild(el('h1', '', C.name)); w.appendChild(el('p', 'sub', C.who + '. ' + (C.tag || '')));
     var mode = /signup/.test(location.search) ? 'up' : 'in';
     var f = el('div'); w.appendChild(f);
     function paint() {
@@ -445,7 +445,7 @@
         s.appendChild(el('h3', '', 'Phone alerts'));
         if (!supported()) { s.appendChild(el('p', 'hint', 'This browser cannot receive alerts while it is closed. Try Chrome on Android, or on iPhone open this page in Safari and add it to your Home Screen.')); var c0 = el('button', 'btn ghost', 'Close'); c0.onclick = close; s.appendChild(c0); return; }
         s.appendChild(el('p', '', on ? 'On for this phone.' : 'Off.')).style.fontWeight = '700';
-        s.appendChild(el('p', 'hint', 'Get a notification for the dates in this app (' + (C.alertText || 'follow-ups, deadlines and appointments') + '), even when the app is closed. Short titles and times for the next 14 days are held by the Vyqil alerts service until they are delivered.'));
+        s.appendChild(el('p', 'hint', 'Get a notification for the dates in this app (' + (C.alertText || 'follow-ups, deadlines and appointments') + '), even when the app is closed. Short titles and times for the next 14 days are held by the Vyqil alerts service until they are delivered. You also get an alert when a nearby business posts a request for you, when someone replies to yours, and when you are chosen.'));
         if (iosNeedsInstall()) s.appendChild(el('p', 'hint', 'iPhone: open this page in Safari, tap Share, then Add to Home Screen. Open it from your Home Screen and turn alerts on there.'));
         var msg = el('p', 'hint'); s.appendChild(msg); var b = el('div', 'btns'); s.appendChild(b);
         function mk(l, ghost, fn) { var x = el('button', 'btn' + (ghost ? ' ghost' : ''), l); x.type = 'button'; x.onclick = fn; b.appendChild(x); return x; }

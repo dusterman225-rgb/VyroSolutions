@@ -96,11 +96,12 @@
         if (shp.checked && String(ph.value).replace(/\D/g, '').length < 7) { msg.textContent = 'Type a phone number, or untick the box.'; return null; }
         if (shp.checked) lsSet('vq_phone', ph.value.trim());
         return { fromBiz: S.biz.id, fromUid: S.user.uid, fromProduct: cfg.product, target: c.target, fromName: String(S.biz.name || '').slice(0, 80), trade: c.cat, title: title.value.trim().slice(0, 100), details: det.value.trim().slice(0, 600), urgent: !!urg.checked,
-          city: String(place.city || '').slice(0, 60), lat: V.r2(place.lat), lng: V.r2(place.lng), cell: V.cellOf(V.r2(place.lat), V.r2(place.lng)), to: to || '', toName: (toName || '').slice(0, 80), status: 'open', phone: shp.checked ? ph.value.trim().slice(0, 30) : '', recId: rec && rec.id ? rec.id : '', createdAt: Q.FV.serverTimestamp() };
+          city: String(place.city || '').slice(0, 60), lat: V.r2(place.lat), lng: V.r2(place.lng), cell: V.cellOf(V.r2(place.lat), V.r2(place.lng)), to: to || '', toName: (toName || '').slice(0, 80), radius: +rad.value, status: 'open', phone: shp.checked ? ph.value.trim().slice(0, 30) : '', recId: rec && rec.id ? rec.id : '', createdAt: Q.FV.serverTimestamp() };
       }
       function post(to, toName, btn) {
         var d = build(to, toName); if (!d) return; msg.textContent = ''; btn.disabled = true;
         db().collection('communityLeads').add(d).then(function (ref) {
+          V.notify('lead', ref.id);
           if (rec && rec.id) { var up = { updatedAt: Q.FV.serverTimestamp() }; up[cidKey(d.target)] = ref.id; Q.recs().doc(rec.id).update(up).catch(function () { /* request is still sent */ }); }
           close(); Q.toast(to ? 'Request sent to ' + toName + '.' : 'Request sent to ' + V.NOUNS[d.target] + ' near you. Replies show in More > Community.');
         }, function (e) { btn.disabled = false; msg.textContent = Q.friendly(e); });
@@ -170,7 +171,7 @@
         db().collection('communityLeads').doc(l.id).update({ status: 'assigned', chosen: o.bizId, chosenName: o.bizName, closedAt: Q.FV.serverTimestamp() }).then(function () {
           var rec = l.recId ? Q.get(l.recId) : null, fn = cfg.chosen && cfg.chosen[l.target || 'contractor'];
           if (rec && fn) { var up = fn(rec, o, l); if (up) { up.updatedAt = Q.FV.serverTimestamp(); Q.recs().doc(rec.id).update(up).catch(function () { /* ignore */ }); } }
-          Q.toast(o.bizName + ' chosen. Contact them with the details shown.');
+          V.notify('chosen', l.id); Q.toast(o.bizName + ' chosen. Contact them with the details shown.');
         }, function (e) { btn.disabled = false; Q.toast(Q.friendly(e)); });
       }
       draw();
@@ -186,7 +187,7 @@
   function inView(l) {
     if (!dir || dir.lat == null) return false;
     if ((l.target || 'contractor') !== cfg.product || l.fromBiz === S.biz.id) return false; if (l.to && l.to !== S.biz.id) return false;
-    if (V.miles(dir.lat, dir.lng, l.lat, l.lng) > (dir.radius || 100)) return false;
+    if (V.miles(dir.lat, dir.lng, l.lat, l.lng) > Math.min(dir.radius || 100, l.radius || 100)) return false;
     return l.to === S.biz.id || l.trade === 'Other' || !(dir.trades || []).length || dir.trades.indexOf(l.trade) > -1;
   }
   function watchInbox() {
@@ -279,7 +280,7 @@
         go.disabled = true; note.className = 'note'; note.textContent = 'Sending...';
         if (ph.value.trim()) lsSet('vq_phone', ph.value.trim());
         db().collection('communityLeads').doc(l.id).collection('offers').doc(S.biz.id).set({ bizId: S.biz.id, ownerUid: S.user.uid, bizName: String(S.biz.name || '').slice(0, 80), priceNote: price.value.trim().slice(0, 60), message: msg.value.trim().slice(0, 300), phone: ph.value.trim().slice(0, 30), email: em.value.trim().slice(0, 80), createdAt: Q.FV.serverTimestamp() })
-          .then(function () { inReplied[l.id] = true; close(); Q.toast('Reply sent.'); }, function (e) { go.disabled = false; note.className = 'note err'; note.textContent = Q.friendly(e); });
+          .then(function () { inReplied[l.id] = true; V.notify('reply', l.id, S.biz.id); close(); Q.toast('Reply sent.'); }, function (e) { go.disabled = false; note.className = 'note err'; note.textContent = Q.friendly(e); });
       };
     });
   }

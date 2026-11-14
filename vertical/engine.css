@@ -58,6 +58,7 @@ textarea{min-height:80px;resize:vertical}input[type=checkbox]{width:22px;height:
 @media print{body *{visibility:hidden}.sheet,.sheet *{visibility:visible}.sheet{position:absolute;left:0;top:0;width:100%;max-height:none;background:#fff;color:#000;border:0}.btns{display:none}}
 .auth{max-width:420px;margin:0 auto;padding:22px 16px}.auth h1{font-size:1.4rem;margin:12px 0 4px}.auth .sub{color:var(--mut);margin:0 0 14px}
 .auth .logo{display:block;margin:0 auto 6px;height:64px;width:64px;border-radius:14px}
+.auth .logo.wide{height:auto;width:min(88vw,380px);border-radius:0;margin:0 auto 10px;mix-blend-mode:screen}
 .hdr{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
 .sec{margin:14px 0 4px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);font-weight:800}
 .ck{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.ck:last-child{border-bottom:0}.ck .m{flex:1;min-width:0}.ck .m span{display:block;color:var(--mut);font-size:.75rem}
