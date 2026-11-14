@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Community - Vyqil Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<style>
+:root{--cm-mut:#9fb0c4;--cm-line:#1f2e3f}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#0a0f15;border:1px solid var(--cm-line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:16px 14px 24px;color:#eef3f8}
+.sheet h3{margin:0 0 10px}.sheet input,.sheet select,.sheet textarea{width:100%;background:#14202e;border:1px solid #27405c;color:#eef3f8;border-radius:10px;padding:10px;font:16px Arial,sans-serif;min-height:42px;box-sizing:border-box}
+label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font-weight:700}
+.chk{display:flex;align-items:center;gap:10px;margin:10px 0}.chk input{width:22px;min-height:22px;flex:none}.chk label{margin:0}
+.btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.btns .btn{flex:1}
+.sheet .row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--cm-line)}.sheet .row .m{flex:1;min-width:0}.sheet .row .m b{display:block}.sheet .row .m>span{display:block;color:var(--cm-mut);font-size:.78rem}
+.sheet .card{margin:8px 0}.hint{color:var(--cm-mut);font-size:.8rem}.empty{color:var(--cm-mut);text-align:center;padding:14px 8px;font-size:.88rem}
+.pill{display:inline-block;border:1px solid var(--cm-line);border-radius:999px;padding:1px 8px;font-size:.7rem;color:var(--cm-mut);white-space:nowrap}.pill.ok{color:#2fbf8b;border-color:#2b5a45}
+.btn.sm{min-height:34px;padding:0 10px;font-size:.78rem}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:60;background:#11283d;border:1px solid #2f7cf6;color:#fff;padding:10px 14px;border-radius:12px;max-width:90vw}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Community</div>
+  </div>
+
+  <div class="card">
+    <h2>Nearby requests</h2>
+    <p>Landlords and other Vyqil businesses near you post jobs here. Reply with your details, or add the job straight to your Leads.</p>
+    <div id="needSetup" class="note" style="display:none">Set your location and trades below first. Requests within your range then show here.</div>
+    <div id="filters" style="margin:10px 0"></div>
+    <div id="reqs"></div>
+    <div class="note" id="reqMsg"></div>
+  </div>
+
+  <div class="card"><h2>Need something yourself?</h2><div id="out"></div></div>
+
+  <details class="sec" id="setupSec" open>
+    <summary>Your community listing <small id="setupSum"></small></summary>
+    <div class="in">
+      <p>Vyqil uses the place you set here, not live tracking, to show you requests within your range. Landlords near you can also find you in their "Find VyqilContractor" list. Only the town and an approximate point are saved, never your street address.</p>
+      <label class="field"><span>Where do you work from? (address or ZIP)</span><input id="place" type="text" maxlength="120" placeholder="62701 or Springfield, IL"></label>
+      <button class="btn ghost" id="findPlace" type="button">Find this place</button>
+      <button class="btn ghost" id="myLoc" type="button">Use my location</button>
+      <div class="note" id="placeMsg"></div>
+      <div class="field"><span>Trades you do</span><div id="trades"></div></div>
+      <label class="field"><span>How far will you travel?</span><select id="radius"><option value="25">Up to 25 miles</option><option value="50">Up to 50 miles</option><option value="100" selected>Up to 100 miles</option></select></label>
+      <label class="field"><span>Member perk for other Vyqil businesses (optional)</span><input id="perk" type="text" maxlength="80" placeholder="10% off for Vyqil businesses"></label>
+      <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="showPhone" style="width:auto"><span>Show my business phone to landlords who look me up</span></label>
+      <label class="check" style="display:flex;gap:10px;align-items:center;margin:10px 0"><input type="checkbox" id="listed" style="width:auto"><span>List me in the Vyqil community (turn off to hide)</span></label>
+      <button class="btn" id="save" type="button">Save</button>
+      <div class="note" id="msg"></div>
+    </div>
+  </details>
+
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="../shared/community.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); }, V = window.VQCommunity, el = vyro.el;
+  vyro.start(function (ctx) {
+    var db = vyro.db, canEdit = ctx.role === 'owner' || ctx.role === 'gm', dirRef = db.collection('directory').doc(ctx.bizId);
+    var me = { lat: null, lng: null, city: '', trades: [], radius: 100, listed: false }, filterTrade = '', leads = [], mine = {}, unsub = null;
+
+    V.TRADES.forEach(function (t) {
+      var l = el('label'); l.style.cssText = 'display:flex;align-items:center;gap:10px;margin:6px 0;min-height:34px';
+      var c = el('input'); c.type = 'checkbox'; c.value = t; c.style.cssText = 'width:22px;height:22px;flex:none'; c.disabled = !canEdit; l.appendChild(c); l.appendChild(document.createTextNode(t)); $('trades').appendChild(l);
+    });
+    function ticked() { return Array.prototype.map.call(document.querySelectorAll('#trades input:checked'), function (c) { return c.value; }); }
+    function setPlace(p) { me.lat = p.lat; me.lng = p.lng; me.city = p.city || me.city || 'Your area'; $('placeMsg').className = 'note ok'; $('placeMsg').textContent = 'Using ' + me.city + '.'; }
+    $('findPlace').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Looking...'; V.geocode($('place').value).then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
+    $('myLoc').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Getting your location...'; V.here().then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
+    if (!canEdit) { ['place', 'findPlace', 'myLoc', 'radius', 'showPhone', 'listed', 'save', 'perk'].forEach(function (i) { $(i).disabled = true; }); $('msg').textContent = 'Only the owner or manager can change the community listing.'; }
+
+    $('save').onclick = async function () {
+      var msg = $('msg'); msg.className = 'note';
+      if (me.lat == null) { msg.className = 'note err'; msg.textContent = 'Set your place first (type an address or ZIP and tap Find this place).'; return; }
+      var trades = ticked(); if ($('listed').checked && !trades.length) { msg.className = 'note err'; msg.textContent = 'Tick at least one trade.'; return; }
+      var data = { bizId: ctx.bizId, ownerUid: ctx.user.uid, product: 'contractor', perk: $('perk').value.trim().slice(0, 80), name: String(ctx.biz.name || 'Contractor').slice(0, 80), trades: trades, radius: +$('radius').value, lat: V.r2(me.lat), lng: V.r2(me.lng), cell: V.cellOf(V.r2(me.lat), V.r2(me.lng)),
+        city: String(me.city || '').slice(0, 60), listed: !!$('listed').checked, phone: $('showPhone').checked ? String(ctx.biz.phone || '').slice(0, 30) : '', updatedAt: vyro.stamp() };
+      this.disabled = true; msg.textContent = 'Saving...';
+      try { await dirRef.set(data); me = { lat: data.lat, lng: data.lng, city: data.city, trades: trades, radius: data.radius, listed: data.listed }; msg.className = 'note ok'; msg.textContent = 'Saved.'; sum(); watch(); }
+      catch (e) { msg.className = 'note err'; msg.textContent = vyro.friendly(e); }
+      this.disabled = false;
+    };
+    function sum() { $('setupSum').textContent = me.lat == null ? '(not set up)' : (me.listed ? 'listed' : 'hidden') + ' · ' + me.city + ' · ' + me.radius + ' mi'; $('needSetup').style.display = me.lat == null ? 'block' : 'none'; }
+
+    // ---- nearby requests ----
+    function drawFilters() {
+      var box = $('filters'); box.textContent = ''; if (!me.trades.length) return;
+      [''].concat(me.trades).forEach(function (t) { var b = el('button', 'tab' + (filterTrade === t ? ' on' : ''), t || 'All my trades'); b.type = 'button'; b.onclick = function () { filterTrade = t; draw(); drawFilters(); }; box.appendChild(b); });
+    }
+    function inMyTrades(l) { return !me.trades.length || l.trade === 'Other' || me.trades.indexOf(l.trade) > -1; }
+    function draw() {
+      var box = $('reqs'); box.textContent = '';
+      var list = leads.filter(function (l) {
+        if ((l.target || 'contractor') !== 'contractor') return false; if (l.to && l.to !== ctx.bizId) return false; if (l.fromBiz === ctx.bizId) return false;
+        l._mi = V.miles(me.lat, me.lng, l.lat, l.lng); if (l._mi > me.radius) return false;
+        if (filterTrade ? l.trade !== filterTrade : !inMyTrades(l) && !l.to) return false; return true;
+      }).sort(function (a, b) { return (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a._mi - b._mi; });
+      $('reqMsg').textContent = list.length ? '' : (me.lat == null ? '' : 'No open requests within ' + me.radius + ' miles right now. New ones appear here by themselves.');
+      list.forEach(function (l) {
+        var d = el('details', 'sec'); d.style.marginTop = '8px'; var sm = el('summary', '', (l.urgent ? 'Urgent: ' : '') + l.title); var sub = el('small', '', ' ' + l.trade + ' · ' + Math.round(l._mi) + ' mi · ' + l.city); sm.appendChild(sub);
+        if (l.to) { var p = el('small', 'late', ' asked you'); sm.appendChild(p); } if (mine[l.id]) sm.appendChild(el('small', '', ' · you replied'));
+        d.appendChild(sm); var inn = el('div', 'in');
+        function info(a, b) { if (!b) return; var r = el('div', 'row'); r.appendChild(el('span', '', a)); r.appendChild(el('b', '', b)); inn.appendChild(r); }
+        info('From', l.fromName); info('Posted', V.ago(l.createdAt)); info('Details', l.details); info('Where', l.city + ' (about ' + Math.round(l._mi) + ' miles away)'); info('Their phone', l.phone);
+        var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call'); call.href = th; inn.appendChild(call); }
+        var rb = el('button', 'btn', mine[l.id] ? 'Update my reply' : 'Reply with my details'); rb.type = 'button'; rb.onclick = function () { reply(l); }; inn.appendChild(rb);
+        var ab = el('button', 'btn ghost', 'Add to my Leads'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; inn.appendChild(ab);
+        d.appendChild(inn); box.appendChild(d);
+      });
+    }
+    function watch() {
+      if (unsub) { unsub(); unsub = null; } if (me.lat == null) { $('reqs').textContent = ''; return; }
+      unsub = db.collection('communityLeads').where('cell', 'in', V.cellsAround(me.lat, me.lng, me.radius)).where('status', '==', 'open').limit(150).onSnapshot(function (s) {
+        leads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); drawFilters(); draw(); checkMine();
+      }, function (e) { $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); });
+    }
+    function checkMine() {
+      leads.forEach(function (l) { if (mine[l.id] !== undefined) return; mine[l.id] = false; db.collection('communityLeads').doc(l.id).collection('offers').doc(ctx.bizId).get().then(function (o) { if (o.exists) { mine[l.id] = true; draw(); } }, function () { /* ignore */ }); });
+    }
+    function reply(l) {
+      var m = el('div'); m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;display:flex;align-items:flex-end;justify-content:center;padding:12px';
+      var s = el('div', 'card'); s.style.cssText = 'width:100%;max-width:520px;max-height:90vh;overflow:auto'; m.appendChild(s);
+      s.appendChild(el('h2', '', 'Reply to ' + l.fromName));
+      function inp(label, node, v) { var w = el('label', 'field'); w.appendChild(el('span', '', label)); node.value = v || ''; w.appendChild(node); s.appendChild(w); return node; }
+      var price = inp('Your price or how you charge (optional)', Object.assign(el('input'), { maxLength: 60, placeholder: 'Free estimate, $95 call-out' }));
+      var msg = inp('Message', Object.assign(el('textarea'), { maxLength: 300, rows: 3, placeholder: 'I can come Thursday morning.' }));
+      var ph = inp('Phone they should call', Object.assign(el('input'), { type: 'tel', maxLength: 30 }), ctx.biz.phone);
+      var em = inp('Email (optional)', Object.assign(el('input'), { type: 'email', maxLength: 80 }), ctx.biz.email || ctx.user.email);
+      var note = el('div', 'note', 'The landlord sees your business name and what you type here. They decide who to choose.'); s.appendChild(note);
+      var go = el('button', 'btn', 'Send reply'); go.type = 'button'; var no = el('button', 'btn ghost', 'Cancel'); no.type = 'button'; s.appendChild(go); s.appendChild(no);
+      no.onclick = function () { m.remove(); };
+      go.onclick = async function () {
+        if (!ph.value.trim() && !em.value.trim()) { note.className = 'note err'; note.textContent = 'Add a phone number or an email so they can reach you.'; return; }
+        go.disabled = true; note.className = 'note'; note.textContent = 'Sending...';
+        try { await db.collection('communityLeads').doc(l.id).collection('offers').doc(ctx.bizId).set({ bizId: ctx.bizId, ownerUid: ctx.user.uid, bizName: String(ctx.biz.name || 'Contractor').slice(0, 80), priceNote: price.value.trim().slice(0, 60), message: msg.value.trim().slice(0, 300), phone: ph.value.trim().slice(0, 30), email: em.value.trim().slice(0, 80), createdAt: vyro.stamp() });
+          mine[l.id] = true; m.remove(); draw(); }
+        catch (e) { go.disabled = false; note.className = 'note err'; note.textContent = vyro.friendly(e); }
+      };
+      m.addEventListener('click', function (e) { if (e.target === m) m.remove(); }); document.body.appendChild(m);
+    }
+    async function addLead(l, btn) {
+      btn.disabled = true;
+      try {
+        await ctx.bizRef.collection('leads').add({ name: l.fromName, phone: l.phone || '', email: '', address: l.city, source: 'Other', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+        btn.textContent = 'Added to Leads';
+      } catch (e) { btn.disabled = false; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }
+    }
+
+    // "Find a Vyqil..." and "My requests" use the same module as the other Vyqil apps.
+    (function () {
+      var host = $('out');
+      function modal(build) { var m = el('div', 'modal'), sh = el('div', 'sheet'); m.appendChild(sh); function close() { if (m.parentNode) m.remove(); } m.addEventListener('click', function (e) { if (e.target === m) close(); }); build(sh, close); document.body.appendChild(m); return close; }
+      function toast(msg) { var t = el('div', 'toast', msg); document.body.appendChild(t); setTimeout(function () { t.remove(); }, 3600); }
+      var Q = window.Q = { S: { biz: { id: ctx.bizId, name: ctx.biz.name }, user: ctx.user, tab: 'more' }, u: { el: el }, db: db, FV: firebase.firestore.FieldValue, modal: modal, toast: toast, friendly: vyro.friendly,
+        recs: function () { return { doc: function () { return { update: function () { return Promise.resolve(); } }; } }; }, get: function () { return null; }, byKind: function () { return []; }, extras: [], onStart: [] };
+      Q.render = function () { host.textContent = ''; Q.extras.forEach(function (fn) { fn(host); }); };
+      window.VQ_APP = { community: { product: 'contractor', fallback: function () { return me.lat != null ? { lat: me.lat, lng: me.lng, city: me.city || 'Your area' } : null; }, intro: 'Need a cleaner, a realtor, a photographer or something else? Post it once and Vyqil businesses within the distance you choose see it as a lead.' }, kinds: {} };
+      var sc = document.createElement('script'); sc.src = '../vertical/community.js';
+      sc.onload = function () { Q.onStart.forEach(function (fn) { fn(); }); Q.render(); }; document.body.appendChild(sc);
+    })();
+
+    dirRef.get().then(function (d) {
+      if (d.exists) { var x = d.data(); me = { lat: x.lat, lng: x.lng, city: x.city || '', trades: x.trades || [], radius: x.radius || 100, listed: !!x.listed };
+        $('place').value = me.city; $('radius').value = String(me.radius); $('listed').checked = me.listed; $('showPhone').checked = !!x.phone; $('perk').value = x.perk || '';
+        Array.prototype.forEach.call(document.querySelectorAll('#trades input'), function (c) { c.checked = me.trades.indexOf(c.value) > -1; }); $('placeMsg').textContent = me.city ? 'Using ' + me.city + '.' : '';
+        $('setupSec').open = false; }
+      sum(); watch();
+    }, function (e) { $('err').textContent = vyro.friendly(e); });
+  });
+</script>
+</body>
+</html>
