@@ -1,4 +1,5 @@
 window.VQ_APP = {
+  community: { product: 'auto', inbound: { addKind: 'customer', addLabel: 'Add as customer', inboxTitle: 'Requests near you', listTitle: 'My shop in the community', catLabel: 'What you offer' } },
   id: 'auto', name: 'VyqilAuto', who: 'For auto repair and detailing shops', tag: 'Customers, vehicles, repair orders and service reminders.', alertText: 'pickups, promised dates and customers due for service',
   tabKinds: ['order', 'vehicle', 'customer'],
   kinds: {
