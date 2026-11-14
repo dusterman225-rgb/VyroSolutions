@@ -1,4 +1,5 @@
 window.VQ_APP = {
+  community: { product: 'lessons', inbound: { addKind: 'student', addDefaults: { status: 'Waitlist' }, addLabel: 'Add as student', inboxTitle: 'Requests near you', listTitle: 'My lessons in the community', catLabel: 'What you teach' } },
   id: 'lessons', name: 'VyqilLessons', who: 'For tutors, music teachers and small daycares', tag: 'Students, schedule, attendance and billing.', alertText: 'lessons and unpaid balances',
   tabKinds: ['lesson', 'student', 'bill'],
   kinds: {
