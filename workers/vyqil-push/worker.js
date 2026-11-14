@@ -126,6 +126,15 @@ async function ownerOf(env, biz, who) {
 }
 async function community(env, who, b, hub) {
   const kind = String(b.kind || ''), leadId = String(b.leadId || '');
+  if (kind === 'trepair') {
+    // A tenant sent a repair request: alert the landlord's business. Wording is fixed and the names come from the landlord's own portal record.
+    const rid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(rid)) return { status: 400, body: { error: 'bad-request' } };
+    const rq = await fsDoc(env, 'tenantRequests/' + rid, who.token); if (!rq || rq.tenantUid !== who.uid) return { status: 403, body: { error: 'not-allowed' } };
+    const age = Date.now() - Date.parse(rq.createdAt || 0); if (!(age > -60000 && age < 20 * 60000)) return { status: 403, body: { error: 'not-allowed' } };
+    const pt = await fsDoc(env, 'tenantPortals/' + String(rq.portalId || ''), who.token); if (!pt || pt.bizId !== rq.bizId) return { status: 403, body: { error: 'not-allowed' } };
+    const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: 'trepair:' + rid, win: 3600000, biz: [rq.bizId], title: 'Repair request from ' + String(pt.tenantName || 'a tenant').slice(0, 40), body: String(pt.unit || 'Your property').slice(0, 80), url: appUrl('landlord') }) });
+    return { status: r.status, body: await r.json() };
+  }
   if (!/^[A-Za-z0-9]{10,40}$/.test(leadId) || ['lead', 'reply', 'chosen', 'msg'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
   const lead = await fsDoc(env, 'communityLeads/' + leadId, who.token);
   if (!lead || PRODUCTS.indexOf(lead.target) < 0) return { status: 403, body: { error: 'not-allowed' } };
