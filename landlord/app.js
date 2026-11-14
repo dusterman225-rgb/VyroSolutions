@@ -14,8 +14,9 @@ window.VQ_APP = {
       fields: [{ k: 'tenant', l: 'Tenant', t: 'link', to: 'tenant' }, { k: 'date', l: 'Date received', t: 'date', req: 1, d: '' }, { k: 'amount', l: 'Amount', t: 'money', req: 1 }, { k: 'forMonth', l: 'For month', t: 'text', h: '2026-11' }, { k: 'method', l: 'Method', t: 'select', o: ['Cash', 'Check', 'Bank transfer', 'Card', 'Crypto', 'Other'] }, { k: 'notes', l: 'Notes', t: 'area' }],
       title: function (r) { return (r.tenant ? Q.title(Q.get(r.tenant)) : 'Payment') + ' · ' + (r.forMonth || ''); }, amount: function (r) { return r.amount || 0; }, sub: function (r) { return Q.u.fmtDate(r.date); } },
     repair: { label: 'Repair request', plural: 'Repairs', icon: '🔧', stage: 'status', closed: function (r) { return r.status === 'Done'; },
-      fields: [{ k: 'issue', l: 'What is wrong', t: 'text', req: 1 }, { k: 'unit', l: 'Unit', t: 'link', to: 'unit' }, { k: 'status', l: 'Status', t: 'select', o: ['New', 'Scheduled', 'Waiting on parts', 'Done'], req: 1 }, { k: 'urgent', l: 'Urgent', t: 'check' }, { k: 'visit', l: 'Visit date', t: 'date', cal: 1, alert: { hour: 8 }, lbl: 'Repair visit' }, { k: 'vendor', l: 'Who is fixing it', t: 'text' }, { k: 'cost', l: 'Cost', t: 'money' }, { k: 'notes', l: 'Notes', t: 'area' }],
-      title: function (r) { return (r.urgent ? '[Urgent] ' : '') + r.issue; }, sub: function (r) { return r.unit ? Q.title(Q.get(r.unit)) : ''; }, amount: function (r) { return r.cost || ''; } }
+      fields: [{ k: 'issue', l: 'What is wrong', t: 'text', req: 1 }, { k: 'unit', l: 'Unit', t: 'link', to: 'unit' }, { k: 'trade', l: 'Type of work', t: 'select', o: ['Plumbing', 'Electrical', 'HVAC (heating and cooling)', 'Roofing', 'Painting', 'Flooring', 'Carpentry', 'Appliance repair', 'Handyman / general repair', 'Locksmith', 'Pest control', 'Landscaping and trees', 'Cleaning and turnover', 'Windows and doors', 'Other'] }, { k: 'status', l: 'Status', t: 'select', o: ['New', 'Scheduled', 'Waiting on parts', 'Done'], req: 1 }, { k: 'urgent', l: 'Urgent', t: 'check' }, { k: 'visit', l: 'Visit date', t: 'date', cal: 1, alert: { hour: 8 }, lbl: 'Repair visit' }, { k: 'vendor', l: 'Who is fixing it', t: 'text' }, { k: 'cost', l: 'Cost', t: 'money' }, { k: 'notes', l: 'Notes', t: 'area' }],
+      title: function (r) { return (r.urgent ? '[Urgent] ' : '') + r.issue; }, sub: function (r) { return r.unit ? Q.title(Q.get(r.unit)) : ''; }, amount: function (r) { return r.cost || ''; },
+      actions: [{ l: 'Find VyqilContractor', run: function (r) { Q.community.find(r, { target: 'contractor', cat: r.trade, title: r.issue, details: r.notes, urgent: r.urgent }); } }, { l: 'See contractor replies', show: function (r) { return !!r.cid; }, run: function (r) { Q.community.requests(r.cid); } }] }
   },
   // Rent due dates are worked out each month from each current tenant's due day, minus payments logged for that month.
   events: function (rs, from, to) {
@@ -32,3 +33,21 @@ window.VQ_APP = {
     { l: 'Open repairs', fn: function (rs) { return rs.filter(function (r) { return r.kind === 'repair' && r.status !== 'Done'; }).length; } }],
   watch: [{ l: 'Vacant units', fn: function (rs) { return rs.filter(function (r) { return r.kind === 'unit' && r.status !== 'Occupied'; }); }, sub: function (r) { return r.status; } }]
 };
+
+// Community: find a contractor, cleaner or realtor from your records, and receive rental requests from realtors.
+(function () {
+  var A = window.VQ_APP;
+  function propOf(r) { if (!r) return null; if (r.kind === 'property') return r; var u = r.kind === 'unit' ? r : (r.unit ? Q.get(r.unit) : null); return u && u.property ? Q.get(u.property) : null; }
+  A.community = { product: 'landlord', place: propOf,
+    fallback: function () { var p = Q.byKind('property').filter(function (x) { return x.lat != null; })[0]; return p ? { lat: p.lat, lng: p.lng, city: p.loc || p.city || 'Your area' } : null; },
+    chosen: { contractor: function (rec, o) { if (rec.kind !== 'repair') return null; var up = { vendor: o.bizName }; if (rec.status === 'New') up.status = 'Scheduled'; return up; } },
+    inbound: { addKind: 'applicant', addLabel: 'Add as applicant', inboxTitle: 'Rental requests from realtors', listTitle: 'My rentals in the community', catLabel: 'Kinds of rentals you offer',
+      listHelp: 'Realtors and other Vyqil businesses near you can send you people who need a rental. Vyqil uses the place you set, not live tracking. Only the town and an approximate point are saved.' } };
+  A.kinds.applicant = { label: 'Applicant', plural: 'Applicants', icon: '📝', stage: 'status', closed: function (r) { return r.status === 'Declined' || r.status === 'Moved in'; },
+    fields: [{ k: 'name', l: 'Name', t: 'text', req: 1 }, { k: 'status', l: 'Status', t: 'select', o: ['New', 'Contacted', 'Viewing', 'Approved', 'Moved in', 'Declined'], req: 1 }, { k: 'phone', l: 'Phone', t: 'tel' }, { k: 'email', l: 'Email', t: 'email' },
+      { k: 'looking', l: 'Looking for', t: 'text' }, { k: 'budget', l: 'Monthly budget', t: 'money' }, { k: 'moveIn', l: 'Wants to move in', t: 'date', cal: 1, alert: { hour: 9 }, lbl: 'Applicant move-in', doneIf: function (r) { return r.status === 'Declined' || r.status === 'Moved in'; } }, { k: 'notes', l: 'Notes', t: 'area' }],
+    show: ['phone', 'looking'] };
+  A.kinds.unit.actions = [
+    { l: 'Find a cleaner for this unit', run: function (r) { Q.community.find(r, { target: 'services', cat: 'Move-out and turnover cleaning', title: 'Clean ' + (r.name || 'a unit') }); } },
+    { l: 'Find a realtor to rent it', show: function (r) { return r.status !== 'Occupied'; }, run: function (r) { Q.community.find(r, { target: 'realtor', cat: 'Lease a vacant unit', title: 'Find a tenant for ' + (r.name || 'a unit') }); } }];
+})();
