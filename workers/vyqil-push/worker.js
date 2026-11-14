@@ -56,7 +56,7 @@ export default {
       const who = await whoIs(req, env);
       if (!who) return reply(env, origin, { error: 'signin', detail: 'Please sign in again.' }, 401);
       let body; try { body = await req.json(); } catch (e) { return reply(env, origin, { error: 'bad-json' }, 400); }
-      if (['/sync', '/off', '/test', '/join', '/notify'].indexOf(path) < 0) return reply(env, origin, { error: 'not-found' }, 404);
+      if (['/sync', '/off', '/test', '/join', '/notify', '/community'].indexOf(path) < 0) return reply(env, origin, { error: 'not-found' }, 404);
       if (path === '/join') {
         if (body.as === 'team') {
           const bizId = String(body.bizId || '');
@@ -69,6 +69,9 @@ export default {
       }
       if (path === '/notify') {
         const out = await notify(env, who, body); return reply(env, origin, out.body, out.status);
+      }
+      if (path === '/community') {
+        const out = await community(env, who, body, hub); return reply(env, origin, out.body, out.status);
       }
       const r = await hub.fetch('https://hub' + path, { method: 'POST', headers: { 'x-uid': who.uid, 'x-email': who.email }, body: JSON.stringify(body) });
       return reply(env, origin, await r.json(), r.status);
@@ -87,6 +90,77 @@ async function fsGet(env, path, token) {
   for (const k in (j.fields || {})) { const f = j.fields[k]; if (f.stringValue !== undefined) out[k] = f.stringValue; }
   return out;
 }
+
+// ---- Vyqil community alerts: a new request near you, a reply to your request, you were chosen ----
+// Nothing is trusted from the phone. The request, the sender's team membership and the reply are all read back from Firestore as the person asking.
+function fv(v) {
+  if (v.stringValue !== undefined) return v.stringValue; if (v.integerValue !== undefined) return Number(v.integerValue); if (v.doubleValue !== undefined) return v.doubleValue;
+  if (v.booleanValue !== undefined) return v.booleanValue; if (v.timestampValue !== undefined) return v.timestampValue;
+  if (v.arrayValue) return (v.arrayValue.values || []).map(fv); return null;
+}
+function fields(j) { const o = {}; for (const k in (j.fields || {})) o[k] = fv(j.fields[k]); return o; }
+async function fsDoc(env, path, token) {
+  const r = await fetch('https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents/' + path, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) return null; return fields(await r.json());
+}
+async function directoryNear(env, token, cells) {
+  const q = { structuredQuery: { from: [{ collectionId: 'directory' }], limit: 100, where: { compositeFilter: { op: 'AND', filters: [
+    { fieldFilter: { field: { fieldPath: 'cell' }, op: 'IN', value: { arrayValue: { values: cells.map(function (c) { return { stringValue: c }; }) } } } },
+    { fieldFilter: { field: { fieldPath: 'listed' }, op: 'EQUAL', value: { booleanValue: true } } }] } } } };
+  const r = await fetch('https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:runQuery', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(q) });
+  if (!r.ok) return [];
+  return (await r.json()).filter(function (x) { return x.document; }).map(function (x) { const o = fields(x.document); o.id = x.document.name.split('/').pop(); return o; });
+}
+function miles(a, b, c, d) { const R = 3958.8, t = Math.PI / 180, dl = (c - a) * t, dg = (d - b) * t, x = Math.sin(dl / 2) ** 2 + Math.cos(a * t) * Math.cos(c * t) * Math.sin(dg / 2) ** 2; return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); }
+function cellsAround(lat, lng, radius) {
+  radius = Math.min(100, Math.max(1, radius || 100));
+  const dLat = radius / 69, dLng = radius / (69 * Math.max(0.2, Math.cos(lat * Math.PI / 180))), out = [];
+  for (let a = Math.floor((lat - dLat + 90) / 2); a <= Math.floor((lat + dLat + 90) / 2); a++) for (let b = Math.floor((lng - dLng + 180) / 2); b <= Math.floor((lng + dLng + 180) / 2); b++) out.push(a + '_' + b);
+  return out.slice(0, 30);
+}
+function appUrl(product) { return product === 'contractor' ? '/contractor/community.html' : '/' + String(product || '').replace(/[^a-z]/g, '') + '/index.html'; }
+const PRODUCTS = ['contractor', 'services', 'landlord', 'realtor', 'salon', 'auto', 'photo', 'lessons'];
+async function ownerOf(env, biz, who) {
+  if (!/^[A-Za-z0-9]{10,40}$/.test(String(biz || ''))) return false;
+  const m = await fsGet(env, 'businesses/' + biz + '/members/' + who.uid, who.token); return !!m && (m.role === 'owner' || m.role === 'gm');
+}
+async function community(env, who, b, hub) {
+  const kind = String(b.kind || ''), leadId = String(b.leadId || '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(leadId) || ['lead', 'reply', 'chosen'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
+  const lead = await fsDoc(env, 'communityLeads/' + leadId, who.token);
+  if (!lead || PRODUCTS.indexOf(lead.target) < 0) return { status: 403, body: { error: 'not-allowed' } };
+  const send = async function (biz, title, text, product, win) {
+    const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: kind + ':' + leadId + ':' + (b.bizId || ''), win: win, biz: biz, title: String(title).slice(0, 70), body: String(text).slice(0, 120), url: appUrl(product) }) });
+    return { status: r.status, body: await r.json() };
+  };
+  if (kind === 'lead') {
+    const age = Date.now() - Date.parse(lead.createdAt || 0);
+    if (lead.fromUid !== who.uid || lead.status !== 'open' || !(age > -60000 && age < 20 * 60000) || !(await ownerOf(env, lead.fromBiz, who))) return { status: 403, body: { error: 'not-allowed' } };
+    let ids = [];
+    if (lead.to) ids = [lead.to];
+    else {
+      const radius = [25, 50, 100].indexOf(lead.radius) >= 0 ? lead.radius : 100;
+      const list = await directoryNear(env, who.token, cellsAround(lead.lat, lead.lng, radius));
+      ids = list.filter(function (d) {
+        if ((d.product || 'contractor') !== lead.target || d.id === lead.fromBiz) return false;
+        const mi = miles(lead.lat, lead.lng, d.lat, d.lng); if (mi > radius || mi > (d.radius || 100)) return false;
+        return lead.trade === 'Other' || !(d.trades || []).length || d.trades.indexOf(lead.trade) >= 0;
+      }).sort(function (x, y) { return miles(lead.lat, lead.lng, x.lat, x.lng) - miles(lead.lat, lead.lng, y.lat, y.lng); }).map(function (d) { return d.id; });
+    }
+    ids = ids.filter(function (x) { return /^[A-Za-z0-9]{10,40}$/.test(String(x)); }).slice(0, 30);
+    if (!ids.length) return { status: 200, body: { ok: true, sent: 0 } };
+    return send(ids, (lead.urgent ? 'Urgent: ' : '') + lead.trade + ' request near you', (lead.city || '') + ' · from ' + (lead.fromName || 'a Vyqil business'), lead.target, 3600000);
+  }
+  if (kind === 'reply') {
+    const bizId = String(b.bizId || ''), offer = await fsDoc(env, 'communityLeads/' + leadId + '/offers/' + bizId, who.token);
+    if (!offer || offer.ownerUid !== who.uid || lead.status !== 'open' || !(await ownerOf(env, bizId, who))) return { status: 403, body: { error: 'not-allowed' } };
+    return send([lead.fromBiz], 'New reply to your request', (offer.bizName || 'A business') + ' · ' + lead.trade, lead.fromProduct, 60000);
+  }
+  // chosen
+  if (lead.status !== 'assigned' || !lead.chosen || !(await ownerOf(env, lead.fromBiz, who))) return { status: 403, body: { error: 'not-allowed' } };
+  return send([lead.chosen], 'You were chosen', (lead.fromName || 'A business') + ' picked you · ' + lead.trade, lead.target, 3600000);
+}
+export { community };
 
 // Alerts about a customer portal. The wording is fixed here, so nobody can send their own text through this service.
 const TO_CUSTOMER = {
@@ -153,6 +227,7 @@ export class Hub {
       return this.out({ ok: true });
     }
     if (path === '/notify') return this.notify(uid, b);
+    if (path === '/biz') return this.bizPush(uid, b);
     const sub = b.sub;
     if (!sub || typeof sub.endpoint !== 'string' || sub.endpoint.length > 700 || !/^https:\/\//.test(sub.endpoint) || !sub.keys || typeof sub.keys.p256dh !== 'string' || typeof sub.keys.auth !== 'string' || sub.keys.p256dh.length > 200 || sub.keys.auth.length > 60)
       return this.out({ error: 'bad-subscription' }, 400);
@@ -221,6 +296,27 @@ export class Hub {
       if (st >= 200 && st < 300) sent++; else if (st === 404 || st === 410) this.drop(r.endpoint);
     }
     return this.out({ ok: true, sent: sent });
+  }
+
+  // Community alert to the team phones of one or more businesses. Fixed titles, once per request, and limited per person per hour.
+  async bizPush(uid, b) {
+    const now = Date.now(), hour = Math.floor(now / 3600000);
+    this.sql.exec("DELETE FROM kv WHERE k LIKE 'cm:%' AND k NOT LIKE ?", 'cm:%:' + hour);
+    const rk = 'cm:' + uid + ':' + hour, c = +((this.sql.exec('SELECT v FROM kv WHERE k=?', rk).toArray()[0] || {}).v || 0);
+    if (c >= 30) return this.out({ error: 'slow-down', detail: 'Too many alerts this hour.' }, 429);
+    const dk = 'dup:' + String(b.dup || ''), last = +((this.sql.exec('SELECT v FROM kv WHERE k=?', dk).toArray()[0] || {}).v || 0);
+    if (now - last < (+b.win || 60000)) return this.out({ ok: true, sent: 0, skipped: 'recent' });
+    this.sql.exec('INSERT OR REPLACE INTO kv VALUES (?, ?)', rk, String(c + 1)); this.sql.exec('INSERT OR REPLACE INTO kv VALUES (?, ?)', dk, String(now));
+    const ids = (Array.isArray(b.biz) ? b.biz : []).slice(0, 30).map(String); if (!ids.length) return this.out({ ok: true, sent: 0 });
+    const rows = this.sql.exec("SELECT endpoint, sub FROM devices WHERE kind='team' AND biz IN (" + ids.map(function () { return '?'; }).join(',') + ') LIMIT 40', ...ids).toArray();
+    const vapid = rows.length ? await this.vapid() : null, payload = { t: String(b.title || 'Vyqil'), b: String(b.body || ''), u: String(b.url || '') };
+    let sent = 0;
+    for (const r of rows) {
+      let st = 0;
+      try { st = await sendPush(JSON.parse(r.sub), payload, vapid, SUBJECT, { ttl: 86400, urgency: 'normal' }); } catch (e) { st = 0; }
+      if (st >= 200 && st < 300) sent++; else if (st === 404 || st === 410) this.drop(r.endpoint);
+    }
+    return this.out({ ok: true, sent: sent, devices: rows.length });
   }
 
   drop(endpoint) {
