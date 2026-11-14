@@ -1,4 +1,5 @@
 window.VQ_APP = {
+  community: { product: 'salon', inbound: { addKind: 'client', addLabel: 'Add as client', inboxTitle: 'Requests near you', listTitle: 'My salon in the community', catLabel: 'What you offer' } },
   id: 'salon', name: 'VyqilSalon', who: 'For salons, barbers and spas', tag: 'Appointments, clients and rebooking.', alertText: 'appointments and clients due to rebook',
   tabKinds: ['appt', 'client', 'service'],
   kinds: {
