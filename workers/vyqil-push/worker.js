@@ -126,11 +126,11 @@ async function ownerOf(env, biz, who) {
 }
 async function community(env, who, b, hub) {
   const kind = String(b.kind || ''), leadId = String(b.leadId || '');
-  if (!/^[A-Za-z0-9]{10,40}$/.test(leadId) || ['lead', 'reply', 'chosen'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
+  if (!/^[A-Za-z0-9]{10,40}$/.test(leadId) || ['lead', 'reply', 'chosen', 'msg'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
   const lead = await fsDoc(env, 'communityLeads/' + leadId, who.token);
   if (!lead || PRODUCTS.indexOf(lead.target) < 0) return { status: 403, body: { error: 'not-allowed' } };
   const send = async function (biz, title, text, product, win) {
-    const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: kind + ':' + leadId + ':' + (b.bizId || ''), win: win, biz: biz, title: String(title).slice(0, 70), body: String(text).slice(0, 120), url: appUrl(product) }) });
+    const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: kind + ':' + leadId + ':' + (b.bizId || '') + (kind === 'msg' ? ':' + String(biz[0]) : ''), win: win, biz: biz, title: String(title).slice(0, 70), body: String(text).slice(0, 120), url: appUrl(product) }) });
     return { status: r.status, body: await r.json() };
   };
   if (kind === 'lead') {
@@ -155,6 +155,14 @@ async function community(env, who, b, hub) {
     const bizId = String(b.bizId || ''), offer = await fsDoc(env, 'communityLeads/' + leadId + '/offers/' + bizId, who.token);
     if (!offer || offer.ownerUid !== who.uid || lead.status !== 'open' || !(await ownerOf(env, bizId, who))) return { status: 403, body: { error: 'not-allowed' } };
     return send([lead.fromBiz], 'New reply to your request', (offer.bizName || 'A business') + ' · ' + lead.trade, lead.fromProduct, 60000);
+  }
+  if (kind === 'msg') {
+    // Alert the other side of a reply thread. Only the person who posted or the business that replied may trigger it; the wording is fixed.
+    const bizId = String(b.bizId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(bizId)) return { status: 400, body: { error: 'bad-request' } };
+    const offer = await fsDoc(env, 'communityLeads/' + leadId + '/offers/' + bizId, who.token); if (!offer) return { status: 403, body: { error: 'not-allowed' } };
+    if (await ownerOf(env, lead.fromBiz, who)) return send([bizId], 'New message', (lead.fromName || 'A business') + ' · ' + lead.trade, lead.target, 60000);
+    if (offer.ownerUid === who.uid && (await ownerOf(env, bizId, who))) return send([lead.fromBiz], 'New message', (offer.bizName || 'A business') + ' · ' + lead.trade, lead.fromProduct, 60000);
+    return { status: 403, body: { error: 'not-allowed' } };
   }
   // chosen
   if (lead.status !== 'assigned' || !lead.chosen || !(await ownerOf(env, lead.fromBiz, who))) return { status: 403, body: { error: 'not-allowed' } };
