@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Reports - Vyqil Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<style>
+.rp{border:1px solid #1f2e3f;border-radius:12px;padding:10px 12px;margin:10px 0}.rp.done{opacity:.55}.rp small{display:block;color:#9fb0c4}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a><div class="tag">Community reports</div></div>
+  <div class="card"><h2>Reports</h2><p>Spam or abuse reports from the Vyqil community. Newest first.</p>
+    <div class="note" id="msg">Loading...</div><div id="list"></div></div>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); }, el = vyro.el;
+  vyro.start(function (ctx) {
+    var db = vyro.db, uid = ctx.user.uid;
+    function ms(t) { return t && t.toMillis ? t.toMillis() : 0; }
+    db.collection('admins').doc(uid).get().then(function (a) {
+      if (!a.exists) { $('msg').className = 'note'; $('msg').textContent = 'This page is for the Vyqil team. To be added, create a document in the Firebase console: collection admins, document id ' + uid + ' (any field, for example name = me). Then reload.'; return; }
+      return db.collection('communityReports').get().then(function (s) {
+        var rs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).sort(function (a2, b2) { return ms(b2.createdAt) - ms(a2.createdAt); });
+        $('msg').textContent = rs.length ? '' : 'No reports.';
+        rs.forEach(function (r) {
+          var box = el('div', 'rp' + (r.handled ? ' done' : '')); $('list').appendChild(box);
+          box.appendChild(el('b', '', r.reason)); box.appendChild(el('small', '', (ms(r.createdAt) ? new Date(ms(r.createdAt)).toLocaleString() : '') + ' · from business ' + r.reporterBiz));
+          var info = el('div', 'note', 'Loading the request...'); box.appendChild(info);
+          var row = el('div'); box.appendChild(row);
+          db.collection('communityLeads').doc(r.leadId).get().then(function (l) {
+            if (!l.exists) { info.textContent = 'The request no longer exists.'; return; }
+            var x = l.data(); info.textContent = 'Request: "' + x.title + '" by ' + x.fromName + ' (' + x.fromBiz + '), ' + x.trade + ', ' + x.city + ', ' + x.status + (x.details ? '. ' + x.details : '');
+            var del = el('button', 'btn ghost', 'Remove this request'); del.type = 'button';
+            del.onclick = function () { if (!window.confirm('Remove this request for everyone?')) return; del.disabled = true; db.collection('communityLeads').doc(r.leadId).delete().then(function () { info.textContent = 'Request removed.'; del.remove(); }, function (e) { del.disabled = false; $('err').textContent = vyro.friendly(e); }); };
+            row.appendChild(del);
+            var dir = el('button', 'btn ghost', 'Remove this business from the directory'); dir.type = 'button';
+            dir.onclick = function () { if (!window.confirm('Remove ' + x.fromBiz + ' from the directory? They can list again.')) return; dir.disabled = true; db.collection('directory').doc(x.fromBiz).delete().then(function () { dir.textContent = 'Removed'; }, function (e) { dir.disabled = false; $('err').textContent = vyro.friendly(e); }); };
+            row.appendChild(dir);
+          }, function (e) { info.textContent = vyro.friendly(e); });
+          if (!r.handled) { var hd = el('button', 'btn', 'Mark handled'); hd.type = 'button'; hd.onclick = function () { hd.disabled = true; db.collection('communityReports').doc(r.id).update({ handled: true }).then(function () { box.className = 'rp done'; hd.remove(); }, function (e) { hd.disabled = false; $('err').textContent = vyro.friendly(e); }); }; box.appendChild(hd); }
+        });
+      });
+    }).catch(function (e) { $('msg').textContent = ''; $('err').textContent = vyro.friendly(e); });
+  });
+</script>
+</body>
+</html>
