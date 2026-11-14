@@ -77,6 +77,10 @@ var R={
      if(ws.biz.status==='closed'){ p.appendChild(btn('Reopen business','',guard(async function(){ await vnet.reopenWorkspace(ws); location.reload(); }))); }
      else{ p.appendChild(vnet.el('div','note','Closing keeps all data but stops your team from using the apps. You can reopen it. Type the business name to confirm.')); var c=document.createElement('input'); c.placeholder='Type the business name'; p.appendChild(c);
        p.appendChild(btn('Close business','danger',guard(async function(){ if(c.value.trim()!==ws.biz.name){ msg('The name does not match.',true); return; } await vnet.closeWorkspace(ws); location.reload(); }))); }
+     p.appendChild(vnet.el('h3','','Delete this business permanently'));
+     p.appendChild(vnet.el('div','note','This erases the business, its records, its team access and its community listing and requests. It cannot be undone. Closing keeps your data; deleting does not. Download your data above first if you might need it. Type the business name to confirm.'));
+     var dc=document.createElement('input'); dc.placeholder='Type the business name'; p.appendChild(dc);
+     p.appendChild(btn('Delete permanently','danger',guard(async function(){ if(dc.value.trim()!==ws.biz.name){ msg('The name does not match.',true); return; } if(!confirm('Permanently delete '+ws.biz.name+'? This cannot be undone.')) return; msg('Deleting. Please wait...'); var left=await vnet.deleteWorkspace(ws,U); sessionStorage.setItem('vyroDeleted',left.length?('Deleted. A few items could not be removed and are unreachable: '+left.join(', ')+'.'):'Business deleted.'); location.href='dashboard.html'; })));
      p.appendChild(vnet.el('div','note','Transferring ownership to someone else is not available yet.')); } }
 };
 vnet.requireAuth(async function(u){

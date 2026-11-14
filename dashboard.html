@@ -9,96 +9,118 @@
 <h1 id="hi">Your businesses</h1>
 <div class="note err" id="err"></div>
 <div id="verify" class="banner hide">Please verify your email. Check your inbox for the link. <a href="#" id="resend">Send it again</a></div>
-<div id="notes"></div>
+<div id="flash"></div><div id="alerts"></div>
 <div class="card hide" id="inv"><h2>Invitations</h2><div id="invList"></div></div>
-<div class="card"><div class="top"><h2>Switch business</h2></div><select id="sw"></select>
-  <div class="note" id="role"></div>
-  <h3>Open an app for this business</h3><div class="apps" id="apps"></div>
-  <a class="btn ghost" id="manage" href="#">Manage this business</a> <a class="btn ghost" id="bill" href="#">Plan and billing</a>
-</div>
-<div class="card hide" id="mk"><h2>Create a business</h2>
-  <div class="note">Every business has its own name, team, sign-in link and data. Starting a different company (for example a contractor besides your restaurant)? Give it its own name here.</div>
+<div id="list"></div>
+<div class="card hide" id="mk"><h2 id="mkh">Add a business</h2>
+  <div class="note">Each business has its own name, team and data. Pick the kind of business and Vyqil gives it the right app. You can add more apps to it later.</div>
   <label>Business name</label><input id="bn" maxlength="80">
-  <label>Type of business</label><select id="bt"></select>
+  <label>What kind of business is it?</label><select id="bt"></select>
+  <div class="note" id="bapp"></div>
   <label>Country</label><input id="bc" value="United States" maxlength="60">
   <label>Time zone</label><select id="btz"></select>
   <label>Currency</label><select id="bcur"></select>
-  <label>Your app</label><div id="bapps"></div>
   <button class="btn" id="mkgo" type="button">Create business</button><button class="btn ghost" id="mkx" type="button">Cancel</button>
 </div>
-<button class="btn" id="newBiz" type="button">+ Create a business</button>
-<div class="card" id="sum"></div>
+<button class="btn" id="newBiz" type="button">+ Add Business</button>
+<div class="note" id="pricenote">Each app is a monthly cost per business. Billing is not switched on yet, so everything is free while Vyqil is in launch.</div>
 </div>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="shared/firebase-config.js"></script><script src="shared/install.js"></script><script src="js/net-config.js"></script><script src="js/net.js"></script>
+<script src="shared/firebase-config.js"></script><script src="shared/community.js"></script><script src="shared/install.js"></script><script src="js/net-config.js"></script><script src="js/net.js"></script>
 <script>
-
-var $=function(i){return document.getElementById(i)}, U, W=[], cur=null;
-function pick(){ return W.filter(function(w){return w.id===$('sw').value})[0]; }
-function draw(){
-  var w=cur=pick(); $('apps').textContent=''; $('sum').textContent='';
-  if(!w){ $('role').textContent='You have no businesses yet. Create one below, or accept an invitation. If you are a customer of a contractor, use their customer portal instead.'; $('manage').classList.add('hide'); $('bill').classList.add('hide'); return; }
-  $('manage').classList.remove('hide'); $('manage').href='business.html?b='+encodeURIComponent(w.id); var ownerLvl=(w.role==='owner'||w.role==='gm'); $('bill').classList.toggle('hide',!ownerLvl); $('bill').href='business.html?b='+encodeURIComponent(w.id)+'&tab=plan';
-  $('role').textContent='Your role here: '+(vnet.ROLE_LABEL[w.role]||w.role)+(w.status==='closed'?' (this business is closed)':'');
-  vnet.APPS.forEach(function(a){
-    var on=!!(w.apps&&w.apps[a.id])||(w.product===a.id&&!(w.apps&&a.id in w.apps));
-    var n=vnet.el(on&&a.live&&w.status!=='closed'?'a':'div','app'+(on&&a.live?' live':'')); n.appendChild(vnet.el('b','',a.name));
-    n.appendChild(vnet.el('small','',a.live?(on?'Tap to open':'Not turned on for this business.'):'Coming soon'));
-    if(on&&a.live&&w.status!=='closed'){ n.href='#'; n.onclick=function(e){e.preventDefault(); vnet.launch(U,w,a.id).catch(function(x){$('err').textContent=vnet.friendly(x)});}; }
-    else if(!on&&a.live&&w.status!=='closed'&&w.role==='owner'){ n=vnet.el('a','app live'); n.appendChild(vnet.el('b','',a.name)); n.appendChild(vnet.el('small','','Not on this business. Tap to start a separate business with its own name.')); n.href='#'; n.onclick=function(e){e.preventDefault(); $('mk').classList.remove('hide'); $('newBiz').classList.add('hide'); Array.prototype.forEach.call($('bapps').querySelectorAll('input'),function(c){c.checked=(c.value===a.id)}); $('bn').value=''; $('bn').focus(); $('mk').scrollIntoView();}; }
-    $('apps').appendChild(n);
+var $=function(i){return document.getElementById(i)}, U, W=[], PR=window.VYRO_PRICES||{};
+function app(id){ return vnet.APPS.filter(function(a){return a.id===id})[0]; }
+function priceText(id){ var v=PR[id]; return v==null?'monthly price set when billing starts':'$'+v+' / month'; }
+function onApps(w){ var out=[]; vnet.APPS.forEach(function(a){ var on=!!(w.apps&&w.apps[a.id])||(w.product===a.id&&!(w.apps&&a.id in w.apps)); if(on) out.push(a); }); return out; }
+function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
+function chip(text,bad,fn){ var b=vnet.el('button','btn'+(bad?'':' ghost'),text); b.type='button'; b.style.cssText='display:block;width:100%;margin:6px 0;text-align:left;'+(bad?'background:#c62828;border-color:#c62828;color:#fff':''); b.onclick=fn; return b; }
+function drawList(){
+  var box=$('list'); box.textContent='';
+  W.forEach(function(w){
+    var c=vnet.el('div','card'), closed=w.status==='closed', owner=w.role==='owner';
+    c.id='biz_'+w.id;
+    var top=vnet.el('div','top'); top.appendChild(vnet.el('h2','',w.name)); top.appendChild(vnet.el('span','pill'+(closed?'':' good'),closed?'Closed':(vnet.ROLE_LABEL[w.role]||w.role))); c.appendChild(top);
+    c.appendChild(vnet.el('div','note',w.type||''));
+    var nt=vnet.el('div'); nt.className='notices'; c.appendChild(nt);
+    var apps=onApps(w), row=vnet.el('div'); row.style.cssText='margin:8px 0';
+    if(!apps.length) row.appendChild(vnet.el('div','note','No app is turned on for this business.'));
+    apps.forEach(function(a){ var b=vnet.el('button','btn',closed?a.name+' (closed)':'Open '+a.name); b.type='button'; b.style.cssText='display:block;width:100%;margin:6px 0'; b.disabled=closed||!a.live; b.onclick=function(){ vnet.launch(U,w,a.id).catch(function(x){$('err').textContent=vnet.friendly(x)}); }; row.appendChild(b); });
+    c.appendChild(row);
+    if(owner&&!closed){
+      var avail=vnet.APPS.filter(function(a){ return a.live&&apps.indexOf(a)<0; });
+      if(avail.length){
+        var sel=document.createElement('select'); var o0=vnet.el('option','','Add App...'); o0.value=''; sel.appendChild(o0);
+        avail.forEach(function(a){ var o=vnet.el('option','',a.name+' - '+priceText(a.id)); o.value=a.id; sel.appendChild(o); });
+        sel.onchange=async function(){ var id=sel.value; if(!id) return; var a=app(id); sel.value='';
+          if(!confirm('Add '+a.name+' to '+w.name+'?\n\nIt will cost '+priceText(id)+'. Billing is not switched on yet, so it is free for now.')) return;
+          $('err').textContent=''; try{ await vnet.setApp({id:w.id,ref:vnet.db.collection('businesses').doc(w.id),biz:{apps:w.apps,product:w.product}},id,true); w.apps=w.apps||{}; w.apps[id]=true; if(!w.product) w.product=id; drawList(); loadNotices(); }catch(e){ $('err').textContent=vnet.friendly(e); } };
+        c.appendChild(sel);
+      }
+    }
+    var links=vnet.el('div'); links.style.cssText='margin-top:8px';
+    var m=vnet.el('a','btn ghost','Manage'); m.href='business.html?b='+encodeURIComponent(w.id); links.appendChild(m); links.appendChild(document.createTextNode(' '));
+    if(w.role==='owner'||w.role==='gm'){ var bl=vnet.el('a','btn ghost','Plan and billing'); bl.href='business.html?b='+encodeURIComponent(w.id)+'&tab=plan'; links.appendChild(bl); }
+    c.appendChild(links); box.appendChild(c);
   });
-  var open=W.filter(function(x){return x.status!=='closed'}).length;
-  $('sum').appendChild(vnet.el('h2','','At a glance'));
-  [['Businesses you belong to',W.length],['Businesses you own',W.filter(function(x){return x.role==='owner'}).length],['Open now',open]].forEach(function(r){var d=vnet.el('div','row');d.appendChild(vnet.el('span','',r[0]));d.appendChild(vnet.el('b','',String(r[1])));$('sum').appendChild(d)});
+}
+// Red notice for replies to the requests you sent; blue for new leads sent to you. Counts match what each app shows.
+async function loadNotices(){
+  var V=window.VQCommunity, db=vnet.db, rep={}, firstApp={}, leads={}, al=$('alerts'); al.textContent='';
+  try{
+    var s=await db.collection('communityLeads').where('fromUid','==',U.uid).where('status','==','open').get();
+    await Promise.all(s.docs.map(async function(d){ var l=d.data(); var o=await db.collection('communityLeads').doc(d.id).collection('offers').get(); var seen=+lsGet('vq_rep_seen_'+d.id)||0; var cnt=o.size!=null?o.size:o.docs.length; if(cnt>seen){ rep[l.fromBiz]=(rep[l.fromBiz]||0)+(cnt-seen); if(!firstApp[l.fromBiz]) firstApp[l.fromBiz]=l.fromProduct; } }));
+  }catch(e){ console.warn('replies',e&&e.message); }
+  if(V) await Promise.all(W.filter(function(w){return w.status!=='closed'}).map(async function(w){
+    try{
+      var d=await db.collection('directory').doc(w.id).get(); if(!d.exists) return; var x=d.data(); if(!x.listed||x.lat==null) return;
+      var seen=+lsGet('vq_leads_seen_'+w.id)||0, rad=x.radius||100;
+      var q=await db.collection('communityLeads').where('cell','in',V.cellsAround(x.lat,x.lng,rad)).where('status','==','open').get(), n=0, cand=[];
+      q.docs.forEach(function(k){ var l=k.data(); if((l.target||'contractor')!==x.product||l.fromBiz===w.id) return; if(l.to&&l.to!==w.id) return; if(V.miles(x.lat,x.lng,l.lat,l.lng)>Math.min(rad,l.radius||100)) return;
+        if(!l.to&&(x.trades||[]).length&&l.trade!=='Other'&&x.trades.indexOf(l.trade)<0) return; var t=l.createdAt&&l.createdAt.toMillis?l.createdAt.toMillis():0; if(t>seen) cand.push(k.id); });
+      for(var i=0;i<cand.length&&i<20;i++){ var o=await db.collection('communityLeads').doc(cand[i]).collection('offers').doc(w.id).get(); if(!o.exists) n++; }
+      if(n) leads[w.id]=n;
+    }catch(e){ console.warn('leads',e&&e.message); }
+  }));
+  var totalRep=0;
+  W.forEach(function(w){
+    var c=$('biz_'+w.id); if(!c) return; var nt=c.querySelector('.notices'); nt.textContent='';
+    var go=function(appId){ return function(){ vnet.launch(U,w,appId).catch(function(x){$('err').textContent=vnet.friendly(x)}); }; };
+    var pa=(firstApp[w.id]&&onApps(w).some(function(a){return a.id===firstApp[w.id]}))?firstApp[w.id]:(onApps(w)[0]||{}).id;
+    if(rep[w.id]){ totalRep+=rep[w.id]; nt.appendChild(chip('New reply: '+rep[w.id]+(rep[w.id]===1?' business replied':' businesses replied')+' to your requests',true,go(pa))); }
+    if(leads[w.id]) nt.appendChild(chip('You have '+leads[w.id]+' new '+(leads[w.id]===1?'lead':'leads'),false,go(w.product||pa)));
+  });
+  if(totalRep){ var b=vnet.el('div','banner'); b.style.cssText='background:#c62828;color:#fff;border-color:#c62828;margin:10px 0'; b.textContent='You have '+totalRep+' new '+(totalRep===1?'reply':'replies')+' to your requests. Open the business below to see them.'; al.appendChild(b); }
 }
 async function loadAll(){
-  W=await vnet.workspaces(U); var s=$('sw'); s.textContent='';
-  W.forEach(function(w){ var o=vnet.el('option','',w.name+(w.status==='closed'?' (closed)':'')); o.value=w.id; if(w.active)o.selected=true; s.appendChild(o); });
-  draw();
+  W=await vnet.workspaces(U); drawList();
+  var none=!W.length; $('mkh').textContent=none?'What kind of business do you have?':'Add a business'; $('mk').classList.toggle('hide',!none); $('newBiz').classList.toggle('hide',none); $('mkx').classList.toggle('hide',none);
   var inv=(await vnet.myInvites(U)); $('inv').classList.toggle('hide',!inv.length); $('invList').textContent='';
-  inv.forEach(function(i){ var r=vnet.el('div','row'), d=vnet.el('div'); d.appendChild(vnet.el('b','',i.bizName||'A business')); d.appendChild(vnet.el('small','','Join as '+(vnet.ROLE_LABEL[i.role]||i.role)+(i.expired?' (expired)':'')));
+  inv.forEach(function(i){ var r=vnet.el('div','row'), d=vnet.el('div'); d.appendChild(vnet.el('b','',i.bizName||'A business')); d.appendChild(vnet.el('small','','Join as '+(vnet.ROLE_LABEL[i.role]||i.role)));
     r.appendChild(d); var b=vnet.el('span'); var ok=vnet.el('button','btn','Accept'); ok.disabled=i.expired; ok.onclick=async function(){ try{ await vnet.acceptInvite(U,i); await loadAll(); }catch(e){ $('err').textContent=vnet.friendly(e);} };
     var no=vnet.el('button','btn ghost','Decline'); no.onclick=async function(){ try{ await vnet.declineInvite(i); await loadAll(); }catch(e){ $('err').textContent=vnet.friendly(e);} };
     b.appendChild(ok); b.appendChild(no); r.appendChild(b); $('invList').appendChild(r); });
+  loadNotices();
 }
 vnet.requireAuth(async function(u){
   U=u; $('verify').classList.toggle('hide',!!u.emailVerified);
   $('resend').onclick=async function(e){e.preventDefault(); try{ await u.sendEmailVerification(); $('verify').textContent='Verification email sent.'; }catch(x){ $('err').textContent=vnet.friendly(x);} };
   var me=await vnet.me(u.uid); $('hi').textContent=(me.name?me.name.split(' ')[0]+'\u2019s':'Your')+' businesses';
-  vnet.BUSINESS_TYPES.forEach(function(t){$('bt').appendChild(vnet.el('option','',t))}); vnet.CURRENCIES.forEach(function(t){$('bcur').appendChild(vnet.el('option','',t))});
-  vnet.TIMEZONES.forEach(function(t){var o=vnet.el('option','',t); $('btz').appendChild(o)});
-  // The app follows the type of business. Only a restaurant gets a choice (full restaurant or takeout only).
-  var TYPE_APP={'Restaurant or cafe':'restaurant','Contractor or trades':'contractor','Retail shop':'retail','Services':'contractor','Other':'contractor'};
-  function appName(id){ var a=vnet.APPS.filter(function(x){return x.id===id})[0]; return a?a.name:id; }
-  function drawApps(){
-    var box=$('bapps'); box.textContent=''; var t=$('bt').value;
-    if(t==='Restaurant or cafe'){
-      [['restaurant','VyqilRestaurant','Tables, kitchen screen, point of sale and team.'],['takeout','VyqilTakeout','Takeout and fast food only. No tables. Costs less.']].forEach(function(o,k){
-        var l=vnet.el('label'); l.style.cssText='display:flex;gap:8px;align-items:flex-start;color:var(--text);margin:6px 0';
-        var c=document.createElement('input'); c.type='radio'; c.name='restApp'; c.value=o[0]; c.style.width='auto'; c.checked=(k===0);
-        var d=vnet.el('span'); d.appendChild(vnet.el('b','',o[1])); d.appendChild(document.createElement('br')); d.appendChild(vnet.el('small','',o[2]));
-        l.appendChild(c); l.appendChild(d); box.appendChild(l); });
-    } else { box.appendChild(vnet.el('div','note','This business will use '+appName(TYPE_APP[t]||'contractor')+'.')); }
-  }
-  $('bt').onchange=drawApps; drawApps();
+  vnet.CATEGORIES.forEach(function(c){ var o=vnet.el('option','',c[0]); o.value=c[0]; $('bt').appendChild(o); }); vnet.CURRENCIES.forEach(function(t){$('bcur').appendChild(vnet.el('option','',t))});
+  vnet.TIMEZONES.forEach(function(t){$('btz').appendChild(vnet.el('option','',t))});
+  function chosenApp(){ var c=vnet.CATEGORIES.filter(function(x){return x[0]===$('bt').value})[0]; return c?c[1]:'contractor'; }
+  function showApp(){ var a=app(chosenApp()); $('bapp').textContent=a?'This business gets '+a.name+' ('+priceText(a.id)+'). '+a.desc:''; }
+  $('bt').onchange=showApp; showApp();
+  try{ var dm=sessionStorage.getItem('vyroDeleted'); if(dm){ sessionStorage.removeItem('vyroDeleted'); var nb=vnet.el('div','banner',dm); $('flash').appendChild(nb); } }catch(e){}
   try{ await loadAll(); }catch(e){ $('err').textContent=vnet.friendly(e); }
-  if(new URLSearchParams(location.search).get('go')==='1'){
-    var open1=W.filter(function(w){return w.status!=='closed'});
-    if(open1.length===1){ var w1=open1[0], on=vnet.APPS.filter(function(a){return a.live&&w1.apps&&w1.apps[a.id]}); if(on.length===1&&w1.role!=='owner'){ $('hi').textContent='Opening '+on[0].name+'...'; try{ await vnet.launch(U,w1,on[0].id); return; }catch(e){ $('err').textContent=vnet.friendly(e); } } }
-  }
-  $('sw').onchange=async function(){ draw(); try{ await vnet.setActive(U,$('sw').value);}catch(e){} };
-  $('newBiz').onclick=function(){ $('mk').classList.remove('hide'); $('newBiz').classList.add('hide'); };
+  $('newBiz').onclick=function(){ $('mk').classList.remove('hide'); $('newBiz').classList.add('hide'); $('mkx').classList.remove('hide'); };
   $('mkx').onclick=function(){ $('mk').classList.add('hide'); $('newBiz').classList.remove('hide'); };
   $('mkgo').onclick=async function(){
     $('err').textContent=''; var name=$('bn').value.trim(); if(!name){ $('err').textContent='Enter the business name.'; return; }
-    var rb=$('bapps').querySelector('input:checked'), apps=[rb?rb.value:(TYPE_APP[$('bt').value]||'contractor')];
     $('mkgo').disabled=true;
-    try{ await vnet.createWorkspace(U,{name:name,type:$('bt').value,country:$('bc').value.trim(),timezone:$('btz').value,currency:$('bcur').value,apps:apps}); $('bn').value=''; $('mk').classList.add('hide'); $('newBiz').classList.remove('hide'); await loadAll(); }
+    try{ var id=await vnet.createWorkspace(U,{name:name,type:$('bt').value,country:$('bc').value.trim(),timezone:$('btz').value,currency:$('bcur').value,apps:[chosenApp()]}); $('bn').value=''; $('mk').classList.add('hide'); await loadAll(); }
     catch(e){ $('err').textContent=vnet.friendly(e); } $('mkgo').disabled=false;
   };
 });
-
 </script></body></html>
