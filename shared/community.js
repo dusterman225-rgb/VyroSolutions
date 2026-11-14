@@ -91,5 +91,14 @@
     var t = []; if (st && st.n) t.push(st.n + (st.n === 1 ? ' Vyqil job' : ' Vyqil jobs') + (st.avg ? ' · ' + st.avg.toFixed(1) + ' stars' : ''));
     if (st && st.n >= 5 && st.avg >= 4.5) t.unshift('Top community neighbor'); if (perk) t.push('Perk: ' + perk); return t.join(' · ');
   }
-  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, badge: badge, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
+  // Asks the Vyqil alerts service to send a phone alert. Silent if alerts are not set up: the in-app lists still work.
+  function notify(kind, leadId, bizId) {
+    try {
+      var u = String(window.VYQIL_PUSH_URL || 'https://vyqil-push.dusterman225.workers.dev').replace(/\/$/, '');
+      return firebase.auth().currentUser.getIdToken().then(function (t) {
+        return fetch(u + '/community', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t }, body: JSON.stringify({ kind: kind, leadId: leadId, bizId: bizId || '' }) });
+      }).catch(function () { /* alerts are optional */ });
+    } catch (e) { return Promise.resolve(); }
+  }
+  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, badge: badge, notify: notify, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
 })();
