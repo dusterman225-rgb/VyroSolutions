@@ -75,7 +75,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
   var $ = function (id) { return document.getElementById(id); }, V = window.VQCommunity, el = vyro.el;
   vyro.start(function (ctx) {
     var db = vyro.db, canEdit = ctx.role === 'owner' || ctx.role === 'gm', dirRef = db.collection('directory').doc(ctx.bizId);
-    var me = { lat: null, lng: null, city: '', trades: [], radius: 100, listed: false }, filterTrade = '', leads = [], mine = {}, unsub = null;
+    var me = { lat: null, lng: null, city: '', trades: [], radius: 100, listed: false }, filterTrade = '', leads = [], mine = {}, added = {}, unsub = null;
 
     V.TRADES.forEach(function (t) {
       var l = el('label'); l.style.cssText = 'display:flex;align-items:center;gap:10px;margin:6px 0;min-height:34px';
@@ -110,7 +110,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       var box = $('reqs'); box.textContent = '';
       var list = leads.filter(function (l) {
         if ((l.target || 'contractor') !== 'contractor') return false; if (l.to && l.to !== ctx.bizId) return false; if (l.fromBiz === ctx.bizId) return false;
-        l._mi = V.miles(me.lat, me.lng, l.lat, l.lng); if (l._mi > me.radius) return false;
+        l._mi = V.miles(me.lat, me.lng, l.lat, l.lng); if (l._mi > Math.min(me.radius, l.radius || 100)) return false;
         if (filterTrade ? l.trade !== filterTrade : !inMyTrades(l) && !l.to) return false; return true;
       }).sort(function (a, b) { return (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a._mi - b._mi; });
       $('reqMsg').textContent = list.length ? '' : (me.lat == null ? '' : 'No open requests within ' + me.radius + ' miles right now. New ones appear here by themselves.');
@@ -122,7 +122,8 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
         info('From', l.fromName); info('Posted', V.ago(l.createdAt)); info('Details', l.details); info('Where', l.city + ' (about ' + Math.round(l._mi) + ' miles away)'); info('Their phone', l.phone);
         var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call'); call.href = th; inn.appendChild(call); }
         var rb = el('button', 'btn', mine[l.id] ? 'Update my reply' : 'Reply with my details'); rb.type = 'button'; rb.onclick = function () { reply(l); }; inn.appendChild(rb);
-        var ab = el('button', 'btn ghost', 'Add to my Leads'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; inn.appendChild(ab);
+        if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id]; inn.appendChild(ce); inn.appendChild(el('div', 'note ok', 'In your Leads.')); }
+        else { var ab = el('button', 'btn ghost', 'Add to my Leads'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; inn.appendChild(ab); }
         d.appendChild(inn); box.appendChild(d);
       });
     }
@@ -151,7 +152,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
         if (!ph.value.trim() && !em.value.trim()) { note.className = 'note err'; note.textContent = 'Add a phone number or an email so they can reach you.'; return; }
         go.disabled = true; note.className = 'note'; note.textContent = 'Sending...';
         try { await db.collection('communityLeads').doc(l.id).collection('offers').doc(ctx.bizId).set({ bizId: ctx.bizId, ownerUid: ctx.user.uid, bizName: String(ctx.biz.name || 'Contractor').slice(0, 80), priceNote: price.value.trim().slice(0, 60), message: msg.value.trim().slice(0, 300), phone: ph.value.trim().slice(0, 30), email: em.value.trim().slice(0, 80), createdAt: vyro.stamp() });
-          mine[l.id] = true; m.remove(); draw(); }
+          mine[l.id] = true; V.notify('reply', l.id, ctx.bizId); m.remove(); draw(); }
         catch (e) { go.disabled = false; note.className = 'note err'; note.textContent = vyro.friendly(e); }
       };
       m.addEventListener('click', function (e) { if (e.target === m) m.remove(); }); document.body.appendChild(m);
@@ -159,8 +160,8 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     async function addLead(l, btn) {
       btn.disabled = true;
       try {
-        await ctx.bizRef.collection('leads').add({ name: l.fromName, phone: l.phone || '', email: '', address: l.city, source: 'Other', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
-        btn.textContent = 'Added to Leads';
+        var ref = await ctx.bizRef.collection('leads').add({ communityLeadId: l.id, name: l.fromName, phone: l.phone || '', email: '', address: l.city, source: 'Vyqil Community', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+        added[l.id] = ref.id; draw();
       } catch (e) { btn.disabled = false; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }
     }
 
@@ -177,6 +178,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       sc.onload = function () { Q.onStart.forEach(function (fn) { fn(); }); Q.render(); }; document.body.appendChild(sc);
     })();
 
+    ctx.bizRef.collection('leads').get().then(function (s) { s.docs.forEach(function (d) { var x = d.data(); if (x.communityLeadId) added[x.communityLeadId] = d.id; }); draw(); }, function () { /* ignore */ });
     dirRef.get().then(function (d) {
       if (d.exists) { var x = d.data(); me = { lat: x.lat, lng: x.lng, city: x.city || '', trades: x.trades || [], radius: x.radius || 100, listed: !!x.listed };
         $('place').value = me.city; $('radius').value = String(me.radius); $('listed').checked = me.listed; $('showPhone').checked = !!x.phone; $('perk').value = x.perk || '';
