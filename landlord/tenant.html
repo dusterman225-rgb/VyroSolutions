@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#05070A">
+<title>Tenant portal - VyqilLandlord</title><link rel="icon" href="images/icon-192.png" type="image/png">
+<style>
+:root{color-scheme:dark;--bg:#05070a;--card:#0e1620;--line:#1f2e3f;--ink:#eef3f8;--mute:#9fb0c4;--acc:#2f7cf6;--bad:#ff8a8a;--ok:#5fd69a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Arial,sans-serif}main{max-width:560px;margin:0 auto;padding:16px 16px 48px}
+.logo{display:block;width:min(80vw,300px);margin:8px auto 16px;mix-blend-mode:screen}h1{font-size:1.3rem;margin:4px 0 12px}h2{font-size:1.05rem;margin:0 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}label{display:block;color:var(--mute);font-size:.85rem;margin:10px 0 4px}
+input,textarea,select{width:100%;background:#14202e;border:1px solid #27405c;color:var(--ink);border-radius:10px;padding:11px;font:16px Arial,sans-serif}textarea{min-height:90px}
+button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 16px;font:700 16px Arial,sans-serif;margin-top:12px;width:100%}button.ghost{background:none;border:1px solid var(--line);color:var(--mute)}button:disabled{opacity:.5}
+.mute{color:var(--mute);font-size:.9rem}.err{color:var(--bad);min-height:1.2em;margin-top:8px}.ok{color:var(--ok)}.row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}
+.chk{display:flex;gap:10px;align-items:center;margin-top:10px}.chk input{width:auto}a{color:#7fb4ff}
+</style></head>
+<body><main>
+<img class="logo" src="images/logo.png" alt="VyqilLandlord">
+<div id="signin" class="card" style="display:none">
+  <h1>Tenant portal</h1><p class="mute">Sign in to see your rent and send repair requests to your landlord.</p>
+  <label for="em">Email</label><input id="em" type="email" autocomplete="email" inputmode="email">
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+  <button id="go" type="button">Sign in</button><button id="forgot" class="ghost" type="button">Forgot your password?</button>
+  <div id="serr" class="err"></div>
+</div>
+<div id="app" style="display:none"><div id="who" class="mute"></div><div id="portals"></div><button id="out" class="ghost" type="button">Sign out</button><div id="aerr" class="err"></div></div>
+<p class="mute" style="text-align:center;margin-top:24px">Your landlord can see what you enter here. Do not put payment or bank details in a repair request.</p>
+</main>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script>
+(function () {
+  firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
+  var auth = firebase.auth(), db = firebase.firestore(), $ = function (i) { return document.getElementById(i); };
+  function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
+  function money(c) { c = Math.round(+c || 0); return '$' + Math.floor(c / 100).toLocaleString('en-US') + '.' + ('0' + (c % 100)).slice(-2); }
+  function pad(n) { return ('0' + n).slice(-2); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmt(s) { var p = String(s || '').split('-'); return p.length === 3 ? MON[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0] : ''; }
+  function friendly(e) { var m = { 'auth/invalid-credential': 'That email and password do not match.', 'auth/wrong-password': 'That email and password do not match.', 'auth/user-not-found': 'That email and password do not match.', 'auth/too-many-requests': 'Too many tries. Wait a few minutes.', 'auth/network-request-failed': 'No connection. Try again.', 'permission-denied': 'You do not have access to that.' }; return m[e && e.code] || 'Something went wrong. Please try again.'; }
+  var qs = new URLSearchParams(location.search); $('em').value = qs.get('e') || '';
+  $('go').onclick = function () { $('serr').textContent = ''; $('go').disabled = true; auth.signInWithEmailAndPassword($('em').value.trim(), $('pw').value).catch(function (e) { $('serr').textContent = friendly(e); }).then(function () { $('go').disabled = false; }); };
+  $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+  $('forgot').onclick = function () { var e = $('em').value.trim(); if (!e) { $('serr').textContent = 'Type your email first.'; return; } auth.sendPasswordResetEmail(e, { url: location.origin + location.pathname }).then(function () { $('serr').className = 'ok'; $('serr').textContent = 'If that email has a portal, a reset link is on its way.'; }, function () { $('serr').className = 'ok'; $('serr').textContent = 'If that email has a portal, a reset link is on its way.'; }); };
+  $('out').onclick = function () { auth.signOut(); };
+  function notify(id) { try { var u = String(window.VYQIL_PUSH_URL || 'https://vyqil-push.dusterman225.workers.dev').replace(/\/$/, ''); auth.currentUser.getIdToken().then(function (t) { return fetch(u + '/community', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t }, body: JSON.stringify({ kind: 'trepair', requestId: id }) }); }).catch(function () { /* optional */ }); } catch (e) { /* optional */ } }
+  function nextDue(p) { var now = new Date(), d = new Date(now.getFullYear(), now.getMonth(), p.dueDay || 1); var cur = ymd(d).slice(0, 7), paid = (p.ledger || []).some(function (l) { return l.m === cur; }), late = !paid && ymd(now) > ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() + (p.graceDays || 0)));
+    if (paid) d = new Date(now.getFullYear(), now.getMonth() + 1, p.dueDay || 1); return { date: ymd(d), paid: paid, late: late }; }
+  function drawPortal(p, pid) {
+    var box = el('div', 'card'); $('portals').appendChild(box);
+    box.appendChild(el('h2', '', p.landlordName || 'Your landlord')); box.appendChild(el('div', 'mute', (p.unit || 'Your home') + (p.landlordPhone ? ' · ' + p.landlordPhone : '')));
+    var nd = nextDue(p), r = el('div', 'row'); r.appendChild(el('span', '', 'Monthly rent')); r.appendChild(el('b', '', money(p.rent))); box.appendChild(r);
+    r = el('div', 'row'); r.appendChild(el('span', '', nd.paid ? 'Next rent due' : 'Rent due')); r.appendChild(el('b', '', fmt(nd.date))); box.appendChild(r);
+    if (nd.late) box.appendChild(el('div', 'err', 'This month\'s rent has not been received yet.' + (p.lateFee ? ' A late fee of ' + money(p.lateFee) + ' may apply.' : '')));
+    else if (nd.paid) box.appendChild(el('div', 'ok', 'This month\'s rent is recorded as paid.'));
+    box.appendChild(el('h2', '', 'Payments')); box.lastChild.style.marginTop = '14px';
+    if (!(p.ledger || []).length) box.appendChild(el('div', 'mute', 'No payments recorded yet.'));
+    (p.ledger || []).forEach(function (l) { var rr = el('div', 'row'); rr.appendChild(el('span', '', (l.m || '') + (l.y ? ' · ' + l.y : ''))); rr.appendChild(el('span', '', money(l.a) + (l.d ? ' on ' + fmt(l.d) : ''))); box.appendChild(rr); });
+    var rep = el('div', 'card'); $('portals').appendChild(rep); rep.appendChild(el('h2', '', 'Report a repair')); rep.appendChild(el('div', 'mute', 'Tell ' + (p.landlordName || 'your landlord') + ' what is wrong. For a fire, gas smell or flooding, call emergency services first.'));
+    var l1 = el('label', '', 'What is wrong'), i1 = el('input'); i1.maxLength = 120; i1.placeholder = 'Kitchen sink is leaking';
+    var l2 = el('label', '', 'Details (optional)'), i2 = el('textarea'); i2.maxLength = 500;
+    var l3 = el('label', '', 'Your phone (optional)'), i3 = el('input'); i3.type = 'tel'; i3.maxLength = 30;
+    var cw = el('div', 'chk'), ci = el('input'); ci.type = 'checkbox'; ci.id = 'u' + pid; var cl = el('label', '', 'It is urgent'); cl.htmlFor = ci.id; cl.style.margin = '0'; cw.appendChild(ci); cw.appendChild(cl);
+    var bt = el('button', '', 'Send to my landlord'), er = el('div', 'err'); bt.type = 'button';
+    [l1, i1, l2, i2, l3, i3, cw, bt, er].forEach(function (n) { rep.appendChild(n); });
+    var mine = el('div'); rep.appendChild(mine);
+    bt.onclick = function () {
+      var is = i1.value.trim(); if (!is) { er.className = 'err'; er.textContent = 'Say what is wrong.'; return; } bt.disabled = true; er.textContent = '';
+      var d = { portalId: pid, bizId: p.bizId, tenantEmail: String(p.tenantEmail || '').toLowerCase(), tenantUid: auth.currentUser.uid, tenantName: String(p.tenantName || '').slice(0, 80), unit: String(p.unit || '').slice(0, 120), issue: is.slice(0, 120), details: i2.value.trim().slice(0, 500), urgent: !!ci.checked, phone: i3.value.trim().slice(0, 30), status: 'new', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      db.collection('tenantRequests').add(d).then(function (ref) { notify(ref.id); i1.value = ''; i2.value = ''; ci.checked = false; bt.disabled = false; er.className = 'ok'; er.textContent = 'Sent. Your landlord will see it.'; }, function (e) { bt.disabled = false; er.className = 'err'; er.textContent = friendly(e); });
+    };
+    db.collection('tenantRequests').where('tenantEmail', '==', String(p.tenantEmail || '').toLowerCase()).onSnapshot(function (s) {
+      mine.textContent = ''; var a = s.docs.map(function (x) { return x.data(); }).filter(function (x) { return x.portalId === pid; }).sort(function (x, y) { return (y.createdAt && y.createdAt.toMillis ? y.createdAt.toMillis() : 9e15) - (x.createdAt && x.createdAt.toMillis ? x.createdAt.toMillis() : 9e15); }).slice(0, 8);
+      if (a.length) mine.appendChild(el('h2', '', 'Your requests')); a.forEach(function (x) { var rr = el('div', 'row'); rr.appendChild(el('span', '', x.issue)); rr.appendChild(el('span', 'mute', x.status === 'new' ? 'Sent' : x.status === 'seen' ? 'Landlord is on it' : 'Closed')); mine.appendChild(rr); });
+    }, function () { /* the list is optional */ });
+  }
+  auth.onAuthStateChanged(function (u) {
+    $('portals').textContent = '';
+    if (!u) { $('app').style.display = 'none'; $('signin').style.display = 'block'; return; }
+    $('signin').style.display = 'none'; $('app').style.display = 'block'; $('who').textContent = 'Signed in as ' + u.email;
+    if (!u.emailVerified) { $('aerr').textContent = 'Please open the link in the email we sent you to set your password. Then sign in again.'; return; }
+    $('aerr').textContent = '';
+    db.collection('tenantPortals').where('tenantEmail', '==', String(u.email).toLowerCase()).get().then(function (s) {
+      if (s.empty) { $('portals').appendChild(el('div', 'card', 'No tenant portal is set up for this email yet. Ask your landlord to invite you.')); return; }
+      s.docs.forEach(function (d) { drawPortal(d.data(), d.id); });
+    }, function (e) { $('aerr').textContent = friendly(e); });
+  });
+})();
+</script></body></html>
