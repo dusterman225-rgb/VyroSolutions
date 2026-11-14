@@ -1,4 +1,5 @@
 window.VQ_APP = {
+  community: { product: 'photo', inbound: { addKind: 'client', addLabel: 'Add as client', inboxTitle: 'Requests near you', listTitle: 'My studio in the community', catLabel: 'What you shoot' } },
   id: 'photo', name: 'VyqilPhoto', who: 'For photographers and videographers', tag: 'Bookings, deposits and delivery.', alertText: 'shoots, balances due and gallery deadlines',
   tabKinds: ['booking', 'client'],
   checklists: { shoot: [{ t: 'Contract signed', off: -30 }, { t: 'Deposit received', off: -28 }, { t: 'Shot list and timeline sent', off: -7 }, { t: 'Balance due', off: -3 }, { t: 'Charge batteries and clear cards', off: -1 }, { t: 'Backup photos', off: 1 }, { t: 'Preview sent', off: 7 }, { t: 'Gallery delivered', off: 21 }] },
