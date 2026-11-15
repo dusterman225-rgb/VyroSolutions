@@ -94,7 +94,7 @@
         var b = await db.collection('businesses').doc(ids[i]).get(), bd = b.exists ? b.data() : null;
         if (!bd || bd.status === 'closed') continue;
         var has = bd.apps && C.id in bd.apps ? !!bd.apps[C.id] : bd.product === C.id;
-        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id }; }
+        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id, profile: bd.profile || {}, phone: (bd.profile && bd.profile.phone) || bd.phone || '' }; }
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
@@ -215,7 +215,9 @@
   }
   function render() {
     var v = $('view'); if (!v) return; v.textContent = '';
-    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === S.tab); });
+    var inTabs = tabsDef().some(function (x) { return x.id === S.tab; });
+    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === S.tab || (C.hub && !inTabs && b.dataset.t === 'more')); });
+    if (C.hub && !inTabs) { var back = el('button', 'btn ghost sm', '\u2039 Back to More'); back.type = 'button'; back.style.marginBottom = '6px'; back.onclick = function () { S.tab = 'more'; S.q = ''; render(); window.scrollTo(0, 0); }; v.appendChild(back); }
     var fab = $('fab'); if (fab) fab.style.display = S.tab === 'more' || Q.views[S.tab] ? 'none' : '';
     if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else if (Q.views[S.tab]) Q.views[S.tab](v); else listView(v, S.tab);
   }
@@ -297,10 +299,10 @@
         var i;
         if (f.t === 'check') { var w = el('div', 'chk'); i = el('input'); i.type = 'checkbox'; i.id = 'f_' + f.k; i.checked = !!r[f.k]; var l2 = el('label', '', f.l); l2.htmlFor = i.id; w.appendChild(i); w.appendChild(l2); s.appendChild(w); inputs[f.k] = { el: i, t: f.t }; return; }
         s.appendChild(Object.assign(el('label', 'f', f.l + (f.req ? ' *' : '')), { htmlFor: 'f_' + f.k }));
-        if (f.t === 'select') { i = el('select'); var blank = el('option', '', f.req ? 'Choose...' : '(none)'); blank.value = ''; i.appendChild(blank); f.o.forEach(function (o) { var op = el('option', '', o); op.value = o; i.appendChild(op); }); i.value = r[f.k] == null ? (f.d || (f.req ? f.o[0] : '')) : r[f.k]; }
+        if (f.t === 'select') { i = el('select'); var blank = el('option', '', f.req ? 'Choose...' : '(none)'); blank.value = ''; i.appendChild(blank); f.o.forEach(function (o) { var op = el('option', '', o); op.value = o; i.appendChild(op); }); i.value = r[f.k] == null ? ((typeof f.d === 'function' ? f.d(r) : f.d) || (f.req ? f.o[0] : '')) : r[f.k]; }
         else if (f.t === 'link') { i = el('select'); var b2 = el('option', '', '(none)'); b2.value = ''; i.appendChild(b2); byKind(f.to).sort(function (a, b) { return title(a).toLowerCase() < title(b).toLowerCase() ? -1 : 1; }).forEach(function (x) { var op = el('option', '', title(x)); op.value = x.id; i.appendChild(op); }); i.value = r[f.k] || ''; }
         else if (f.t === 'area') { i = el('textarea'); i.value = r[f.k] || ''; i.maxLength = 1500; }
-        else { i = el('input'); i.type = f.t === 'money' ? 'text' : f.t === 'number' ? 'number' : f.t === 'tel' ? 'tel' : f.t === 'email' ? 'email' : f.t === 'date' ? 'date' : f.t === 'time' ? 'time' : 'text'; if (f.t === 'money') i.inputMode = 'decimal'; if (f.t === 'number') { i.inputMode = 'decimal'; i.step = 'any'; } i.maxLength = 200; i.value = f.t === 'money' ? dollars(r[f.k]) : (r[f.k] == null ? (f.d != null ? f.d : '') : r[f.k]); }
+        else { i = el('input'); i.type = f.t === 'money' ? 'text' : f.t === 'number' ? 'number' : f.t === 'tel' ? 'tel' : f.t === 'email' ? 'email' : f.t === 'date' ? 'date' : f.t === 'time' ? 'time' : 'text'; if (f.t === 'money') i.inputMode = 'decimal'; if (f.t === 'number') { i.inputMode = 'decimal'; i.step = 'any'; } i.maxLength = 200; i.value = f.t === 'money' ? dollars(r[f.k]) : (r[f.k] == null ? (f.d != null ? (typeof f.d === 'function' ? f.d(r) : f.d) : '') : r[f.k]); }
         i.id = 'f_' + f.k; if (f.h) i.placeholder = f.h; s.appendChild(i); inputs[f.k] = { el: i, t: f.t };
         if (f.hint) s.appendChild(el('div', 'note', f.hint));
       });
@@ -367,7 +369,7 @@
   }
   function moreView(v) {
     var rest = kinds().filter(function (k) { return shownKinds().indexOf(k) < 0; });
-    if (rest.length) { v.appendChild(el('h2', '', 'More lists')); var c = el('div', 'card'); rest.forEach(function (k) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', K(k).plural)); m.appendChild(el('span', '', byKind(k).length + ' total')); row.appendChild(m); row.onclick = function () { S.tab = k; render(); }; c.appendChild(row); }); v.appendChild(c); }
+    if (C.hub) { try { C.hub(v); } catch (e) { console.error(e); } } else if (rest.length) { v.appendChild(el('h2', '', 'More lists')); var c = el('div', 'card'); rest.forEach(function (k) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', K(k).plural)); m.appendChild(el('span', '', byKind(k).length + ' total')); row.appendChild(m); row.onclick = function () { S.tab = k; render(); }; c.appendChild(row); }); v.appendChild(c); }
     Q.extras.forEach(function (fn) { try { fn(v); } catch (e) { console.error(e); } });
     v.appendChild(el('h2', '', 'Your business'));
     var card = el('div', 'card'); card.appendChild(el('div', 'hint', 'Signed in as ' + (S.user.email || '') + ' (' + roleLabel(S.biz.role) + ')')); v.appendChild(card);
