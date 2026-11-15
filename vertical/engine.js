@@ -164,6 +164,46 @@
   }
   Q.get = get; Q.byKind = byKind; Q.title = title;
 
+  // Shared helpers for the business apps' full builds (reports, letters, profile, texting).
+  Q.tools = (function () {
+    var MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    function cents(s) { var t = String(s == null ? '' : s).replace(/[$,\s]/g, ''); if (t === '' || !/^\d*\.?\d{0,2}$/.test(t) || t === '.') return null; return Math.round(parseFloat(t) * 100); }
+    function ymOf(d) { return String(d || '').slice(0, 7); }
+    function monthLabel(ym) { var p = ym.split('-'); return MON[+p[1] - 1] + ' ' + p[0]; }
+    function addMonths(ds, n) { var p = ds.split('-'), d = new Date(+p[0], +p[1] - 1 + n, 1), last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(+p[2], last)); return ymd(d); }
+    function add(kind, data) { data.kind = kind; data.by = ((Q.S.user && Q.S.user.email) || '').split('@')[0].slice(0, 30); data.createdAt = FV.serverTimestamp(); data.updatedAt = FV.serverTimestamp(); return recs().add(data); }
+    function upd(id, data) { data.updatedAt = FV.serverTimestamp(); return recs().doc(id).update(data); }
+    function prof() { return (Q.S.biz && Q.S.biz.profile) || {}; }
+    function letterhead() { var p = prof(), b = Q.S.biz || {}; return [b.name || '', p.address || '', [p.phone, p.email].filter(Boolean).join('  ·  ')].filter(Boolean).join('\n'); }
+    function copyText(text, t) { if (navigator.share) { navigator.share({ title: t, text: text }).catch(function () { /* cancelled */ }); return; } try { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Press and hold the text to copy it.'); }); } catch (e) { toast('Press and hold the text to copy it.'); } }
+    function smsUrl(phone, text) { return 'sms:' + String(phone || '').replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent(text || ''); }
+    function showText(t, text, phone) {
+      modal(function (s, close) {
+        s.appendChild(el('h3', '', t)); var ta = el('textarea'); ta.value = text; ta.rows = 11; ta.maxLength = 20000; s.appendChild(ta);
+        var b = el('div', 'btns'), c = el('button', 'btn', navigator.share ? 'Share' : 'Copy'), pr = el('button', 'btn ghost', 'Print'), x = el('button', 'btn ghost', 'Close'); c.type = pr.type = x.type = 'button';
+        c.onclick = function () { copyText(ta.value, t); }; x.onclick = close;
+        pr.onclick = function () { var w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to print.'); return; } var d = w.document; d.title = t; var pre = d.createElement('pre'); pre.style.cssText = 'font:14px/1.5 Arial,sans-serif;white-space:pre-wrap;margin:24px'; pre.textContent = ta.value; d.body.appendChild(pre); w.focus(); setTimeout(function () { w.print(); }, 300); };
+        if (phone) { var sm = el('button', 'btn', 'Text it'); sm.type = 'button'; sm.onclick = function () { location.href = smsUrl(phone, ta.value); }; b.appendChild(sm); }
+        b.appendChild(c); b.appendChild(pr); b.appendChild(x); s.appendChild(b);
+      });
+    }
+    function profileModal(why) {
+      modal(function (s, close) {
+        var p = prof(); s.appendChild(el('h3', '', 'Business profile')); s.appendChild(el('p', 'hint', why || 'This appears at the top of invoices, quotes and letters you share.'));
+        var F = {}; [['phone', 'Phone', 'tel', 30], ['email', 'Email', 'email', 80], ['address', 'Mailing address', 'text', 160], ['website', 'Website', 'text', 100], ['payInfo', 'How customers pay you', 'text', 200]].forEach(function (x) { s.appendChild(el('label', 'f', x[1])); var i = el('input'); i.type = x[2]; i.maxLength = x[3]; i.value = p[x[0]] || ''; if (x[0] === 'payInfo') i.placeholder = 'Zelle to 555-0100, or check by mail'; s.appendChild(i); F[x[0]] = i; });
+        var m = el('div', 'note err'); s.appendChild(m); var b = el('div', 'btns'), go = el('button', 'btn', 'Save'), x = el('button', 'btn ghost', 'Cancel'); go.type = x.type = 'button'; b.appendChild(go); b.appendChild(x); s.appendChild(b); x.onclick = close;
+        go.onclick = function () { var o = {}; Object.keys(F).forEach(function (k) { o[k] = F[k].value.trim(); }); go.disabled = true; db.collection('businesses').doc(Q.S.biz.id).update({ profile: o }).then(function () { Q.S.biz.profile = o; Q.S.biz.phone = o.phone || ''; close(); toast('Saved.'); render(); }, function (e) { m.textContent = friendly(e); go.disabled = false; }); };
+      });
+    }
+    function profileCard(v, why) { v.appendChild(el('h2', '', 'Business profile')); var c = el('div', 'card'); v.appendChild(c); var p = prof(); c.appendChild(el('div', 'hint', [p.phone, p.email, p.address].filter(Boolean).join(' · ') || 'Add your phone, address and how customers pay you. It appears on invoices, quotes and letters.')); var b = el('button', 'btn ghost', 'Edit business profile'); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin-top:8px'; b.onclick = function () { profileModal(why); }; c.appendChild(b); }
+    function csv(rows) { return rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n'); }
+    function download(name, text) { var a = el('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+    function bar(v, max, color) { var d = el('div'); d.style.cssText = 'height:8px;border-radius:4px;background:' + color + ';width:' + Math.max(2, max ? Math.round(v / max * 100) : 0) + '%;margin:2px 0'; return d; }
+    function hubGroup(v, h, rows) { v.appendChild(el('h2', '', h)); var c = el('div', 'card'); rows.forEach(function (x) { var r = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', x[0])); if (x[1]) m.appendChild(el('span', '', x[1])); r.appendChild(m); if (x[3]) r.appendChild(el('span', 'pill bad', String(x[3]))); r.onclick = x[2]; c.appendChild(r); }); v.appendChild(c); }
+    function open(id) { return function () { S.tab = id; S.q = ''; render(); window.scrollTo(0, 0); }; }
+    return { cents: cents, ymOf: ymOf, monthLabel: monthLabel, addMonths: addMonths, add: add, upd: upd, prof: prof, letterhead: letterhead, copyText: copyText, smsUrl: smsUrl, showText: showText, profileModal: profileModal, profileCard: profileCard, csv: csv, download: download, bar: bar, hubGroup: hubGroup, open: open };
+  })();
+
   // ---------- reminders: every dated thing across all records ----------
   // Each event: { date, time?, label, rec, kind, over (bool), alert:{hour|before,eve}, act:{label,run} }
   function events(from, to) {
@@ -204,22 +244,35 @@
     shownKinds().forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
     t.push({ id: 'more', l: 'More', i: '☰' }); return t;
   };
+  function menuGroups() {
+    if (C.menu) return typeof C.menu === 'function' ? C.menu() : C.menu;
+    var work = []; Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
+    var g = [{ h: 'Work', items: work }]; if (Q.views.reports) g.push({ h: 'Money', items: [{ l: 'Reports', tab: 'reports' }] }); return g;
+  }
+  function openTab(id) { return function () { S.tab = id; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0); }; }
+  function buildMenu(menu, setOpen) {
+    menu.textContent = ''; var head = el('div', 'mh'); head.appendChild(el('b', '', S.biz.name)); head.appendChild(el('small', '', C.name)); head.appendChild(el('small', '', roleLabel(S.biz.role) + ' · ' + (S.user.email || ''))); menu.appendChild(head);
+    function item(parent, label, fn, cls) { var a = el('button', 'mi' + (cls ? ' ' + cls : ''), label); a.type = 'button'; a.onclick = function () { setOpen(false); fn(); }; parent.appendChild(a); return a; }
+    item(menu, 'Dashboard', openTab('today'));
+    menuGroups().forEach(function (g) { var items = (g.items || []).filter(function (x) { return !x.show || x.show(); }); if (!items.length) return; var d = el('details'); d.appendChild(el('summary', 'mg', g.h)); items.forEach(function (x) { var a = item(d, x.l, x.run || openTab(x.tab)); if (x.badge) { var n = x.badge(); if (n) a.appendChild(el('span', 'badge', String(n))); } }); menu.appendChild(d); });
+    item(menu, 'More tools and settings', openTab('more')); item(menu, 'Phone alerts', function () { Q.push.panel(); });
+    var sw = el('a', 'mi', 'Switch business'); sw.href = '/dashboard.html'; menu.appendChild(sw);
+    item(menu, 'Sign out', function () { var p = Q.push && Q.push.on() ? Q.push.disable().catch(function () { /* ignore */ }) : Promise.resolve(); p.then(function () { return auth.signOut(); }); }, 'out');
+  }
   function shell() {
-    root.textContent = '';
-    var top = el('div', 'top'), lg = el('img'); lg.src = C.logo || '/icons/icon-192.png'; lg.alt = ''; top.appendChild(lg);
-    var t = el('div', 't'); t.appendChild(el('b', '', S.biz.name)); t.appendChild(el('span', '', C.name + ' · first version')); top.appendChild(t);
-    var bell = el('button', 'ibtn', '🔔'); bell.type = 'button'; bell.setAttribute('aria-label', 'Phone alerts'); bell.onclick = function () { Q.push.panel(); }; top.appendChild(bell);
-    root.appendChild(top); root.appendChild(el('main')); root.firstChild.nextSibling.id = 'view';
-    var nav = el('div', 'tabs'); tabsDef().forEach(function (x) { var b = el('button'); b.type = 'button'; b.dataset.t = x.id; b.appendChild(el('i', '', x.i)); b.appendChild(document.createTextNode(x.l)); b.onclick = function () { S.tab = x.id; S.q = ''; render(); window.scrollTo(0, 0); }; nav.appendChild(b); }); root.appendChild(nav);
-    var fab = el('button', 'fab', '+ New'); fab.id = 'fab'; fab.type = 'button'; fab.onclick = function () { var k = S.tab === 'today' || S.tab === 'more' ? (C.tabKinds || kinds())[0] : S.tab; if (S.tab === 'today') { quickAdd(); return; } openForm(k); }; root.appendChild(fab);
+    root.textContent = ''; var wrap = el('div', 'wrap'), top = el('div', 'topbar'), lg = el('img', 'mark'); lg.src = C.logo || '/icons/icon-192.png'; lg.alt = ''; top.appendChild(lg);
+    var mw = el('div', 'mwrap'), btn = el('button', 'menu-btn', 'Menu ▾'); btn.type = 'button'; btn.setAttribute('aria-expanded', 'false'); var menu = el('div', 'menu'); mw.appendChild(btn); mw.appendChild(menu); top.appendChild(mw); wrap.appendChild(top);
+    function setOpen(o) { if (o) buildMenu(menu, setOpen); menu.classList.toggle('open', o); btn.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+    btn.onclick = function (e) { e.stopPropagation(); setOpen(!menu.classList.contains('open')); }; document.addEventListener('click', function (e) { if (!menu.contains(e.target)) setOpen(false); }); document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+    wrap.appendChild(el('div', 'bizname', S.biz.name)); var main = el('main'); main.id = 'view'; wrap.appendChild(main); root.appendChild(wrap);
   }
   function render() {
     var v = $('view'); if (!v) return; v.textContent = '';
-    var inTabs = tabsDef().some(function (x) { return x.id === S.tab; });
-    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === S.tab || (C.hub && !inTabs && b.dataset.t === 'more')); });
-    if (C.hub && !inTabs) { var back = el('button', 'btn ghost sm', '\u2039 Back to More'); back.type = 'button'; back.style.marginBottom = '6px'; back.onclick = function () { S.tab = 'more'; S.q = ''; render(); window.scrollTo(0, 0); }; v.appendChild(back); }
-    var fab = $('fab'); if (fab) fab.style.display = S.tab === 'more' || Q.views[S.tab] ? 'none' : '';
+    if (S.tab !== 'today') {
+      var back = el('button', 'link', '‹ Dashboard'); back.type = 'button'; back.style.cssText = 'margin:0 0 4px;text-align:left;width:auto'; back.onclick = openTab('today'); v.appendChild(back);
+    }
     if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else if (Q.views[S.tab]) Q.views[S.tab](v); else listView(v, S.tab);
+    if (S.tab !== 'today') { var b2 = el('button', 'link', 'Back to dashboard'); b2.type = 'button'; b2.onclick = openTab('today'); v.appendChild(b2); }
   }
 
   Q.render = render;
@@ -238,29 +291,84 @@
     if (e.act) { var a = el('button', 'btn sm', e.act.label); a.type = 'button'; a.onclick = function (ev) { ev.stopPropagation(); e.act.run(); }; r.appendChild(a); }
     r.onclick = function () { if (e.rec && e.rec.id) openForm(e.rec.kind, e.rec); }; return r;
   }
+  // First-run checklist. Steps come from C.starter, or a sensible default. Done is worked out from the data; a few steps are ticked by hand.
+  function starterKey(n) { return 'vq_' + n + '_' + (S.biz ? S.biz.id : ''); }
+  function lsGet(k, d) { try { var x = JSON.parse(localStorage.getItem(k)); return x == null ? d : x; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* optional */ } }
+  function starterSteps() {
+    if (C.starter) return typeof C.starter === 'function' ? C.starter() : C.starter;
+    var ks = kinds().slice(0, 3), st = ks.map(function (k, i) { return { id: 'k' + k, t: (i ? 'Add a ' : 'Add your first ') + K(k).label.toLowerCase(), kind: k, form: k }; });
+    st.push({ id: 'alerts', t: 'Turn on phone alerts', h: 'Get reminders even when the app is closed.', manual: true, run: function () { Q.push.panel(); } });
+    if (Q.community && Q.community.listing) st.push({ id: 'comm', t: 'Set up Vyqil Community', h: 'Be found by nearby Vyqil businesses, and find them.', manual: true, run: function () { Q.community.listing(); } });
+    return st;
+  }
+  function starterCard(v) {
+    if (lsGet(starterKey('starter_off'), false)) return; var steps = starterSteps(), manual = lsGet(starterKey('starter_ck'), {});
+    function isDone(x) { try { if (x.done) return !!x.done(S.recs); if (x.kind) return byKind(x.kind).length > 0; } catch (e) { return false; } return !!manual[x.id]; }
+    var done = steps.filter(isDone).length; if (!steps.length) return;
+    var c = el('div', 'card starter'); var h = el('div', 'sh'); h.appendChild(el('h3', '', 'Get started')); h.appendChild(el('small', '', done + ' of ' + steps.length + ' done')); c.appendChild(h);
+    var bar = el('div', 'bar'); var fill = el('i'); fill.style.width = Math.round(done / steps.length * 100) + '%'; bar.appendChild(fill); c.appendChild(bar);
+    var next = null; steps.forEach(function (x) {
+      var d = isDone(x); if (!d && !next) next = x; var r = el('div', 'ck' + (d ? ' done' : '') + (x === next ? ' next' : '')); r.appendChild(el('span', 'tick', d ? '✓' : String(steps.indexOf(x) + 1)));
+      var m = el('div', 'm'); m.appendChild(el('b', '', x.t)); if (x.h && !d) m.appendChild(el('span', '', x.h)); r.appendChild(m);
+      var go = function () { if (x.manual) { manual[x.id] = true; lsSet(starterKey('starter_ck'), manual); } if (x.run) x.run(); else if (x.form) openForm(x.form, null, x.preset); else if (x.tab) openTab(x.tab)(); if (x.manual) setTimeout(render, 400); };
+      if (!d) { var b = el('button', x === next ? 'btn sm' : 'btn ghost sm', x === next ? 'Start' : 'Open'); b.type = 'button'; b.onclick = go; r.appendChild(b); }
+      c.appendChild(r);
+    });
+    var hide = el('button', 'link', done === steps.length ? 'All set. Hide this checklist' : 'Hide this checklist'); hide.type = 'button'; hide.onclick = function () { lsSet(starterKey('starter_off'), true); render(); }; c.appendChild(hide); v.appendChild(c);
+  }
+  Q.starterShow = function () { lsSet(starterKey('starter_off'), false); S.tab = 'today'; render(); };
+
+  // Month calendar on the home screen, with a colored dot for each kind of dated item.
+  var DOT = ['#4B9CD3', '#e0b04c', '#44c7a8', '#e5736f', '#a07af0', '#e08fc0', '#7fe3b0', '#f0a05a'], dotMap = {};
+  function dotColor(label) { if (!dotMap[label]) dotMap[label] = DOT[Object.keys(dotMap).length % DOT.length]; return dotMap[label]; }
+  function calendarCard(v) {
+    var t = today(), now = parse(t); if (!S.cal) S.cal = { y: now.getFullYear(), m: now.getMonth() };
+    var y = S.cal.y, m = S.cal.m, first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), from = ymd(first), to = ymd(new Date(y, m, days)), evs = events(from, to).filter(function (e) { return e.date >= from && e.date <= to; });
+    var by = {}; evs.forEach(function (e) { (by[e.date] = by[e.date] || []).push(e); });
+    var c = el('div', 'card'), hd = el('div', 'cal-head'), pv = el('button', 'cal-nav', '‹'), nx = el('button', 'cal-nav', '›'), tt = el('button', 'cal-title', ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m] + ' ' + y);
+    pv.type = nx.type = tt.type = 'button'; pv.setAttribute('aria-label', 'Previous month'); nx.setAttribute('aria-label', 'Next month');
+    pv.onclick = function () { S.cal = { y: m ? y : y - 1, m: m ? m - 1 : 11 }; S.calSel = null; render(); }; nx.onclick = function () { S.cal = { y: m < 11 ? y : y + 1, m: m < 11 ? m + 1 : 0 }; S.calSel = null; render(); }; tt.onclick = function () { S.cal = { y: now.getFullYear(), m: now.getMonth() }; S.calSel = t; render(); };
+    hd.appendChild(pv); hd.appendChild(tt); hd.appendChild(nx); c.appendChild(hd);
+    var g = el('div', 'cal-grid'); ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { g.appendChild(el('div', 'cal-dow', d)); });
+    for (var i = 0; i < first.getDay(); i++) g.appendChild(el('div', 'cal-cell blank'));
+    var sel = S.calSel || (parse(t).getMonth() === m && parse(t).getFullYear() === y ? t : null), legend = {};
+    for (var d = 1; d <= days; d++) {
+      (function (d) {
+        var ds = ymd(new Date(y, m, d)), b = el('button', 'cal-cell' + (ds === t ? ' today' : '') + (ds === sel ? ' sel' : '')); b.type = 'button'; b.appendChild(el('span', 'cal-num', String(d)));
+        var dots = el('span', 'cal-dots'); (by[ds] || []).slice(0, 4).forEach(function (e) { var i = el('i'); i.style.background = dotColor(e.label); legend[e.label] = 1; dots.appendChild(i); }); b.appendChild(dots);
+        b.onclick = function () { S.calSel = ds; render(); }; g.appendChild(b);
+      })(d);
+    }
+    c.appendChild(g); var lg = el('div', 'cal-legend'); Object.keys(legend).forEach(function (k) { var sp = el('span'), i = el('i'); i.style.background = dotColor(k); sp.appendChild(i); sp.appendChild(document.createTextNode(k)); lg.appendChild(sp); }); if (lg.firstChild) c.appendChild(lg);
+    if (sel) { var list = by[sel] || []; c.appendChild(el('h3', 'cal-day', fmtDate(sel) + (sel === t ? ' (today)' : ''))); if (!list.length) c.appendChild(el('div', 'hint', 'Nothing on this day.')); list.forEach(function (e) { c.appendChild(evRow(e)); }); }
+    v.appendChild(c);
+  }
   function todayView(v) {
     var t = today(), evs = events(addDays(t, -365), addDays(t, 14));
     Q.banners.forEach(function (fn) { try { fn(v); } catch (x) { console.error(x); } });
+    starterCard(v);
+    var q = C.quick || kinds().slice(0, 3).map(function (k) { return { l: 'New ' + K(k).label.toLowerCase(), form: k }; }), qa = el('div', 'qa');
+    q.slice(0, 3).forEach(function (x) { var b = el('button', 'btn', x.l); b.type = 'button'; b.onclick = function () { if (x.run) x.run(); else openForm(x.form); }; qa.appendChild(b); }); v.appendChild(qa);
+    calendarCard(v);
     if (C.stats) { var st = el('div', 'stat'); C.stats.forEach(function (s) { var d = el('div'); d.appendChild(el('b', '', s.fn(S.recs, t))); d.appendChild(el('span', '', s.l)); st.appendChild(d); }); v.appendChild(st); }
-    var over = evs.filter(function (e) { return e.over; }), td = evs.filter(function (e) { return e.date === t; }), wk = evs.filter(function (e) { return e.date > t && e.date <= addDays(t, 7); }), later = evs.filter(function (e) { return e.date > addDays(t, 7); });
+    var over = evs.filter(function (e) { return e.over; });
     function sec(h, list, cls) {
       if (!list.length) return; var hh = el('h2', '', h); v.appendChild(hh); var c = el('div', 'card' + (cls || '')); list.slice(0, 30).forEach(function (e) { c.appendChild(evRow(e)); }); v.appendChild(c);
     }
-    sec('Overdue', over, ' glow'); sec('Today', td); sec('Next 7 days', wk); sec('Later (next 2 weeks)', later);
+    sec('Overdue', over, ' glow');
     if (C.watch) C.watch.forEach(function (w) {
       var list = []; try { list = w.fn(S.recs, t) || []; } catch (x) { list = []; }
       if (!list.length) return; v.appendChild(el('h2', '', w.l)); var c = el('div', 'card');
       list.slice(0, 15).forEach(function (r) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(r))); if (w.sub) m.appendChild(el('span', '', w.sub(r, S.recs, t))); row.appendChild(m); row.onclick = function () { openForm(r.kind, r); }; c.appendChild(row); }); v.appendChild(c);
     });
-    if (!evs.length && !(C.watch && C.watch.length && v.querySelectorAll('.card').length)) {
-      var e = el('div', 'card'); e.appendChild(el('div', 'empty', 'Nothing due. Add your first ' + K(kinds()[0]).label.toLowerCase() + ' with the + New button, and dated items show up here.')); v.appendChild(e);
-    }
   }
 
   // ---------- lists ----------
   function listView(v, k) {
     var kd = K(k), all = byKind(k), q = (S.q || '').toLowerCase(), flt = S.filter[k] || '';
     var h = el('h2', '', kd.plural); h.appendChild(el('small', '', all.length + ' total')); v.appendChild(h);
+    var nb = el('button', 'btn wide', 'New ' + kd.label.toLowerCase()); nb.type = 'button'; nb.onclick = function () { openForm(k); }; v.appendChild(nb);
     var s = el('input', 'search'); s.type = 'search'; s.placeholder = 'Search ' + kd.plural.toLowerCase(); s.value = S.q || ''; s.oninput = function () { S.q = s.value; var pos = s.selectionStart; listBody(); }; v.appendChild(s);
     if (kd.stage && fieldOf(k, kd.stage) && fieldOf(k, kd.stage).o) {
       var chips = el('div', 'subs'); [''].concat(fieldOf(k, kd.stage).o).forEach(function (o) { var b = el('button', flt === o ? 'on' : '', o || 'All'); b.type = 'button'; b.onclick = function () { S.filter[k] = o; render(); }; chips.appendChild(b); }); v.appendChild(chips);
