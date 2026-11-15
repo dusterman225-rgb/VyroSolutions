@@ -534,6 +534,7 @@ window.VQ_APP = {
     Q.onStart.push(function () { bindMessages(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  A.fn = { letters: letters, profileModal: profileModal, unread: unread };
 })();
 
 // ===== Landlord: move-in and move-out steps, unit history, rent reminders =====
@@ -663,4 +664,47 @@ window.VQ_APP = {
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootR); else bootR();
+})();
+
+
+// Contractor-style menu, quick buttons and starter checklist for Landlord.
+(function () {
+  var A = window.VQ_APP;
+  function go(id) { return function () { Q.S.tab = id; Q.S.q = ''; Q.S.calSel = null; Q.render(); window.scrollTo(0, 0); }; }
+  function newApps() { return Q.byKind('applicant').filter(function (a) { return a.status === 'New'; }).length; }
+  A.menu = function () {
+    var F = A.fn || {};
+    return [
+      { h: 'Work', items: [
+        { l: 'Leads', tab: 'leads', badge: function () { return Q.community && Q.community.newCount ? Q.community.newCount() : 0; } },
+        { l: 'Applications', tab: 'applicant', badge: newApps },
+        { l: 'Properties', tab: 'property' }, { l: 'Units', tab: 'unit' }, { l: 'Tenants', tab: 'tenant' },
+        { l: 'Repairs', tab: 'repair' }, { l: 'Leases', tab: 'lease' }, { l: 'Inspections', tab: 'inspection' }] },
+      { h: 'Money', items: [
+        { l: 'Rent ledger', tab: 'payment' }, { l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' },
+        { l: 'Recurring bills', tab: 'bill' }, { l: 'Reports and tax summary', tab: 'reports' }] },
+      { h: 'People', items: [
+        { l: 'Messages', tab: 'messages', badge: function () { return F.unread ? F.unread() : 0; } },
+        { l: 'Vendors', tab: 'vendor' },
+        { l: 'Letters and notices', run: function () { if (F.letters) F.letters(); } }] },
+      { h: 'Business', items: [
+        { l: 'Business profile', run: function () { if (F.profileModal) F.profileModal(); } }] }
+    ];
+  };
+  A.quick = [
+    { l: 'New tenant', form: 'tenant' }, { l: 'New repair', form: 'repair' }, { l: 'Rent payment', form: 'payment' }
+  ];
+  A.starter = function () {
+    var F = A.fn || {};
+    return [
+      { id: 'prof', t: 'Add your business profile', h: 'Phone, address and how tenants pay you. It prints on leases and letters.', done: function () { var b = Q.S.biz || {}, p = b.profile || {}; return !!(p.phone || p.email || p.address); }, run: function () { if (F.profileModal) F.profileModal(); } },
+      { id: 'prop', t: 'First, add a property', h: 'A building, house or complex you manage.', kind: 'property', form: 'property' },
+      { id: 'unit', t: 'Next, add a unit', h: 'An apartment or house inside that property.', kind: 'unit', form: 'unit' },
+      { id: 'ten', t: 'Add your tenants', h: 'Who lives in each unit, their rent and due day.', kind: 'tenant', form: 'tenant' },
+      { id: 'lease', t: 'Write a lease', h: 'Create a lease from the tenant details.', kind: 'lease', form: 'lease' },
+      { id: 'inv', t: 'Invite a tenant to the portal', h: 'They see rent, pay history and send repair requests.', done: function (rs) { return rs.some(function (r) { return r.kind === 'tenant' && r.portalId; }); }, run: go('tenant') },
+      { id: 'comm', t: 'Set up Vyqil Community', h: 'Be found by nearby Vyqil businesses, and find them.', manual: true, run: function () { if (Q.community) Q.community.listing(); } },
+      { id: 'alerts', t: 'Turn on phone alerts', h: 'Get rent and repair alerts when the app is closed.', manual: true, run: function () { Q.push.panel(); } }
+    ];
+  };
 })();
