@@ -3,6 +3,9 @@
 <title>Dashboard - Vyqil Network</title>
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
+<style>
+.vq-note{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;text-align:left;margin:8px 0;padding:11px 14px 11px 18px;border-radius:12px;border:1px solid #1c2a3a;background:#0C1117;color:#e8eef7;font:inherit;cursor:pointer;position:relative;overflow:hidden}.vq-note::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:#2b7bd8}.vq-note.red::before{background:#e5484d}.vq-note .t{flex:1;min-width:0}.vq-note .t b{display:block;font-size:.95rem}.vq-note .t span{display:block;font-size:.8rem;color:#8a9bb0;margin-top:2px}.vq-note .dot{min-width:24px;height:24px;border-radius:12px;background:#e5484d;color:#fff;font-size:.78rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 6px}.vq-note.blue .dot{background:#2b7bd8}.vq-note .go{color:#8a9bb0;font-size:1.3rem;line-height:1}
+</style>
 </head><body><div class="wrap">
 
 <div class="top"><span class="brand">VYQIL NETWORK</span><span><span id="vInstall"></span> <a href="account.html">Account</a></span></div>
@@ -35,7 +38,7 @@ function app(id){ return vnet.APPS.filter(function(a){return a.id===id})[0]; }
 function priceText(id){ var v=PR[id]; return v==null?'monthly price set when billing starts':'$'+v+' / month'; }
 function onApps(w){ var out=[]; vnet.APPS.forEach(function(a){ var on=!!(w.apps&&w.apps[a.id])||(w.product===a.id&&!(w.apps&&a.id in w.apps)); if(on) out.push(a); }); return out; }
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
-function chip(text,bad,fn){ var b=vnet.el('button','btn'+(bad?'':' ghost'),text); b.type='button'; b.style.cssText='display:block;width:100%;margin:6px 0;text-align:left;'+(bad?'background:#c62828;border-color:#c62828;color:#fff':''); b.onclick=fn; return b; }
+function chip(text,bad,fn,count,sub){ var b=vnet.el('button','vq-note '+(bad?'red':'blue')); b.type='button'; var d=vnet.el('span','dot',String(count)); var t=vnet.el('div','t'); t.appendChild(vnet.el('b','',text)); t.appendChild(vnet.el('span','',sub)); var g=vnet.el('span','go','\u203a'); b.appendChild(d); b.appendChild(t); b.appendChild(g); b.onclick=function(){ b.remove(); fn(); }; return b; }
 function drawList(){
   var box=$('list'); box.textContent='';
   W.forEach(function(w){
@@ -88,10 +91,9 @@ async function loadNotices(){
     var c=$('biz_'+w.id); if(!c) return; var nt=c.querySelector('.notices'); nt.textContent='';
     var go=function(appId){ return function(){ vnet.launch(U,w,appId).catch(function(x){$('err').textContent=vnet.friendly(x)}); }; };
     var pa=(firstApp[w.id]&&onApps(w).some(function(a){return a.id===firstApp[w.id]}))?firstApp[w.id]:(onApps(w)[0]||{}).id;
-    if(rep[w.id]){ totalRep+=rep[w.id]; nt.appendChild(chip('New reply: '+rep[w.id]+(rep[w.id]===1?' business replied':' businesses replied')+' to your requests',true,go(pa))); }
-    if(leads[w.id]) nt.appendChild(chip('You have '+leads[w.id]+' new '+(leads[w.id]===1?'lead':'leads'),false,go(w.product||pa)));
+    if(rep[w.id]){ totalRep+=rep[w.id]; nt.appendChild(chip('New '+(rep[w.id]===1?'reply':'replies'),true,go(pa),rep[w.id],(rep[w.id]===1?'A business replied':rep[w.id]+' businesses replied')+' to your requests')); }
+    if(leads[w.id]) nt.appendChild(chip('You have '+leads[w.id]+' new '+(leads[w.id]===1?'lead':'leads'),false,go(w.product||pa),leads[w.id],'From Vyqil businesses near you'));
   });
-  if(totalRep){ var b=vnet.el('div','banner'); b.style.cssText='background:#c62828;color:#fff;border-color:#c62828;margin:10px 0'; b.textContent='You have '+totalRep+' new '+(totalRep===1?'reply':'replies')+' to your requests. Open the business below to see them.'; al.appendChild(b); }
 }
 async function loadAll(){
   W=await vnet.workspaces(U); drawList();
