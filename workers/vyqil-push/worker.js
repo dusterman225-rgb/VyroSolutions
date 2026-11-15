@@ -126,6 +126,15 @@ async function ownerOf(env, biz, who) {
 }
 async function community(env, who, b, hub) {
   const kind = String(b.kind || ''), leadId = String(b.leadId || '');
+  if (kind === 'tmsg') {
+    // A tenant wrote to the landlord: alert the landlord's business. Wording is fixed; the name comes from the landlord's own portal record.
+    const mid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(mid)) return { status: 400, body: { error: 'bad-request' } };
+    const mg = await fsDoc(env, 'tenantMsgs/' + mid, who.token); if (!mg || mg.tenantUid !== who.uid || mg.from !== 'tenant') return { status: 403, body: { error: 'not-allowed' } };
+    const age = Date.now() - Date.parse(mg.createdAt || 0); if (!(age > -60000 && age < 20 * 60000)) return { status: 403, body: { error: 'not-allowed' } };
+    const pt = await fsDoc(env, 'tenantPortals/' + String(mg.portalId || ''), who.token); if (!pt || pt.bizId !== mg.bizId) return { status: 403, body: { error: 'not-allowed' } };
+    const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: 'tmsg:' + String(mg.portalId), win: 600000, biz: [mg.bizId], title: 'Message from ' + String(pt.tenantName || 'a tenant').slice(0, 40), body: 'Open VyqilLandlord to read it', url: appUrl('landlord') }) });
+    return { status: r.status, body: await r.json() };
+  }
   if (kind === 'trepair') {
     // A tenant sent a repair request: alert the landlord's business. Wording is fixed and the names come from the landlord's own portal record.
     const rid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(rid)) return { status: 400, body: { error: 'bad-request' } };
