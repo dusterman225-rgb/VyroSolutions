@@ -67,3 +67,13 @@ textarea{min-height:80px;resize:vertical}input[type=checkbox]{width:22px;height:
 .pill.btnp{cursor:pointer}
 a.row,.row.tap{cursor:pointer}
 .note{font-size:.78rem;color:var(--mut);margin:6px 0}.err{color:var(--red)}
+
+/* Notices on the home screen: a quiet card with a colored edge. Red is for replies, blue for new leads. */
+.vq-note{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin:10px 0;padding:12px 14px 12px 18px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;cursor:pointer;position:relative;overflow:hidden}
+.vq-note::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--blue2)}
+.vq-note.red::before{background:#e5484d}
+.vq-note .t{flex:1;min-width:0}.vq-note .t b{display:block;font-size:.95rem;letter-spacing:.01em}.vq-note .t span{display:block;font-size:.8rem;color:var(--mut);margin-top:2px}
+.vq-note .dot{min-width:24px;height:24px;border-radius:12px;background:#e5484d;color:#fff;font-size:.78rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.vq-note.blue .dot{background:var(--blue2)}
+.vq-note .go{color:var(--mut);font-size:1.3rem;line-height:1}
+.vq-note:active{background:var(--card2)}

@@ -291,6 +291,15 @@
     top.appendChild(el('div', 'hint', 'Requests from other Vyqil businesses near you show up here by themselves. Reply to win the job. Need someone yourself? Use Find a Vyqil.'));
     top.appendChild(block(mk('Find a Vyqil...', '', function () { find(null, null); })));
     var nr = newReplies(); top.appendChild(block(mk('My requests and replies' + (nr ? ' (' + nr + ' new)' : ''), nr ? '' : 'ghost', function () { requests(); })));
+    var sent = myLeads.filter(function (l) { return l.status !== 'closed'; }).sort(function (x, y) { return ms(y.createdAt) - ms(x.createdAt); }).slice(0, 10);
+    if (sent.length) {
+      v.appendChild(el('h2', '', 'Requests you sent'));
+      sent.forEach(function (l) {
+        var c2 = el('div', 'card'), n = (offers[l.id] || []).length, seen = +lsGet('vq_rep_seen_' + l.id) || 0, fresh = n > seen;
+        var m = el('div', 'm'); m.appendChild(el('b', '', l.title)); m.appendChild(el('span', '', l.trade + ' \u00b7 ' + l.city + ' \u00b7 ' + (l.status === 'open' ? (n ? n + (n === 1 ? ' reply' : ' replies') : 'Waiting for replies') : l.status === 'assigned' ? 'Chosen: ' + (l.chosenName || '') : 'Done')));
+        c2.appendChild(m); btnRow(c2).appendChild(mk(n ? (fresh ? 'View replies (new)' : 'View replies') : 'Details', fresh ? '' : 'ghost', function () { requests(l.id); })); v.appendChild(c2);
+      });
+    }
     if (ic) {
       var won = el('div'); v.appendChild(won); loadWon(won); v.appendChild(el('h2', '', ic.inboxTitle || 'Requests near you'));
       var body = el('div'); v.appendChild(body); drawInbound(body);
@@ -298,11 +307,16 @@
     }
   };
   Q.tabsExtra.push({ id: 'leads', l: 'Leads', i: '📥' });
+  // A notice goes away as soon as it is tapped, and also once the thing it points to has been viewed.
+  function note(v, tone, count, title, sub, fn) {
+    var b = el('button', 'vq-note ' + tone); b.type = 'button'; b.appendChild(el('span', 'dot', String(count)));
+    var t = el('div', 't'); t.appendChild(el('b', '', title)); t.appendChild(el('span', '', sub)); b.appendChild(t); b.appendChild(el('span', 'go', '\u203a'));
+    b.onclick = function () { b.remove(); fn(); }; v.appendChild(b);
+  }
   Q.banners.push(function (v) {
     var r = newReplies(), n = cfg.inbound ? newLeads() : 0;
-    function ban(text, bad, tab) { var b = el('button', 'btn' + (bad ? '' : ' ghost'), text); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0;text-align:left;' + (bad ? 'background:#c62828;border-color:#c62828;color:#fff' : ''); b.onclick = function () { if (tab === 'requests') { requests(); } else { S.tab = tab; Q.render(); } }; v.appendChild(b); }
-    if (r) ban('New reply: ' + r + (r === 1 ? ' business replied' : ' businesses replied') + ' to your requests. Tap to see.', true, 'requests');
-    if (n) ban('You have ' + n + ' new ' + (n === 1 ? 'lead' : 'leads') + '. Tap to see.', false, 'leads');
+    if (r) note(v, 'red', r, 'New ' + (r === 1 ? 'reply' : 'replies'), (r === 1 ? 'A business replied' : r + ' businesses replied') + ' to your requests', function () { requests(); });
+    if (n) note(v, 'blue', n, 'You have ' + n + ' new ' + (n === 1 ? 'lead' : 'leads'), 'From Vyqil businesses near you', function () { S.tab = 'leads'; Q.render(); });
   });
   // Builds a record of the app's own kind from a request: name, phone, address(town) and notes, plus the first option of any required list.
   function makeRec(l) {
