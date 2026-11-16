@@ -266,10 +266,25 @@
     btn.onclick = function (e) { e.stopPropagation(); setOpen(!menu.classList.contains('open')); }; document.addEventListener('click', function (e) { if (!menu.contains(e.target)) setOpen(false); }); document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
     wrap.appendChild(el('div', 'bizname', S.biz.name)); var main = el('main'); main.id = 'view'; wrap.appendChild(main); root.appendChild(wrap);
   }
+  // Back button: every new page is a history step, so the phone's back button and the Back link return to the page you came from.
+  var navTab = null, navN = 0, fromPop = false;
+  function trackNav() {
+    try {
+      if (navTab === null) history.replaceState({ vq: S.tab, n: 0 }, '');
+      else if (S.tab !== navTab && !fromPop) history.pushState({ vq: S.tab, n: ++navN }, '');
+    } catch (e) { /* history is optional */ }
+    navTab = S.tab; fromPop = false;
+  }
+  window.addEventListener('popstate', function (e) {
+    var ms = document.querySelectorAll('.modal');
+    if (ms.length) { ms[ms.length - 1].remove(); try { history.pushState({ vq: S.tab, n: ++navN }, ''); } catch (x) { /* ignore */ } return; }
+    var st = e.state; if (!st || !st.vq) return; navN = st.n || 0; fromPop = true; S.tab = st.vq; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0);
+  });
+  function goBack() { if (navN > 0) { try { history.back(); return; } catch (e) { /* fall through */ } } openTab('today')(); }
   function render() {
-    var v = $('view'); if (!v) return; v.textContent = '';
+    var v = $('view'); if (!v) return; v.textContent = ''; trackNav();
     if (S.tab !== 'today') {
-      var back = el('button', 'link', '‹ Dashboard'); back.type = 'button'; back.style.cssText = 'margin:0 0 4px;text-align:left;width:auto'; back.onclick = openTab('today'); v.appendChild(back);
+      var back = el('button', 'link', '‹ Back'); back.type = 'button'; back.style.cssText = 'margin:0 0 4px;text-align:left;width:auto'; back.onclick = goBack; v.appendChild(back);
     }
     if (S.tab === 'today') todayView(v); else if (S.tab === 'more') moreView(v); else if (Q.views[S.tab]) Q.views[S.tab](v); else listView(v, S.tab);
     if (S.tab !== 'today') { var b2 = el('button', 'link', 'Back to dashboard'); b2.type = 'button'; b2.onclick = openTab('today'); v.appendChild(b2); }
