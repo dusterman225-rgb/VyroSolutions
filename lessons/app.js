@@ -20,3 +20,6 @@ window.VQ_APP = {
     { l: 'Unpaid', fn: function (rs) { var s = 0; rs.forEach(function (r) { if (r.kind === 'bill' && r.status === 'Unpaid') s += r.amount || 0; }); return Q.u.money(s); } }],
   watch: [{ l: 'Lessons to mark attended or missed', fn: function (rs, t) { return rs.filter(function (r) { return r.kind === 'lesson' && r.status === 'Scheduled' && r.date < t; }); }, sub: function (r) { return Q.u.fmtDate(r.date); } }]
 };
+
+// Customer portal: which kind of record is the customer.
+window.VQ_APP.portal = { kind: 'student' };
