@@ -128,7 +128,8 @@
   $('menuBtn').addEventListener('click', function (e) { e.stopPropagation(); setMenu(!$('menu').classList.contains('open')); });
   document.addEventListener('click', function (e) { if (!$('menu').contains(e.target)) setMenu(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
-  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = vyro.loginUrl(); });
+  window.addEventListener('unhandledrejection', function (e) { if (window.vyroSigningOut) e.preventDefault(); });
+  $('out').addEventListener('click', function () { var go = function () { location.href = vyro.loginUrl(); }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
 
   vyro.start(async function (ctx) {
     if (ctx.biz.product === 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.contractor)) { location.replace('/restaurant/index.html'); return; }
