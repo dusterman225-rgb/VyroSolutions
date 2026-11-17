@@ -298,3 +298,8 @@ window.VQ_APP = {
     ];
   };
 })();
+
+// Customer portal: customers see their invoices and can request appointments.
+window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
+  return recs.filter(function (r) { return r.kind === 'invoice' && r.customer === c.id && r.status !== 'Void'; }).sort(function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; }).map(function (r) { return { n: String(r.number || ''), t: 'Invoice', a: r.amount || 0, s: r.status || '', d: r.due || r.date || '' }; });
+} };
