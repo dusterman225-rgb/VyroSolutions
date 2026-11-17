@@ -18,3 +18,6 @@ window.VQ_APP = {
     { l: 'Balances owed', fn: function (rs) { var s = 0; rs.forEach(function (r) { if (r.kind === 'booking' && r.status !== 'Cancelled' && r.status !== 'Inquiry' && !r.paidRest) s += Math.max(0, (r.total || 0) - (r.deposit || 0)); }); return Q.u.money(s); } }],
   watch: [{ l: 'Balance owed', fn: function (rs) { return rs.filter(function (r) { return r.kind === 'booking' && r.status !== 'Cancelled' && r.status !== 'Inquiry' && !r.paidRest && (r.total || 0) > (r.deposit || 0); }); }, sub: function (r) { return Q.u.money((r.total || 0) - (r.deposit || 0)); } }]
 };
+
+// Customer portal: which kind of record is the customer.
+window.VQ_APP.portal = { kind: 'client' };
