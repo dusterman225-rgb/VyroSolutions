@@ -17,7 +17,7 @@ window.VQ_APP = {
     repair: { label: 'Repair request', plural: 'Repairs', icon: '🔧', stage: 'status', closed: function (r) { return r.status === 'Done'; },
       fields: [{ k: 'issue', l: 'What is wrong', t: 'text', req: 1, hint: 'A short description, like "Kitchen sink is leaking".' }, { k: 'property', l: 'Property', t: 'link', to: 'property', hint: 'The building. Use this for outside or shared areas (roof, parking, hallway).' }, { k: 'unit', l: 'Unit', t: 'link', to: 'unit', hint: 'Which unit the repair is in, if it is inside one unit.' }, { k: 'trade', l: 'Type of work', t: 'select', hint: 'The kind of tradesperson needed. Used when you tap Find VyqilContractor.', o: ['Plumbing', 'Electrical', 'HVAC (heating and cooling)', 'Roofing', 'Painting', 'Flooring', 'Carpentry', 'Appliance repair', 'Handyman / general repair', 'Locksmith', 'Pest control', 'Landscaping and trees', 'Cleaning and turnover', 'Windows and doors', 'Other'] }, { k: 'status', l: 'Status', t: 'select', o: ['New', 'Scheduled', 'Waiting on parts', 'Done'], req: 1, hint: 'Where the repair stands. Choose Done when it is fixed and it moves out of your open list.' }, { k: 'urgent', l: 'Urgent', t: 'check', hint: 'Check for safety or damage problems (no heat, active leak). Urgent repairs show first.' }, { k: 'visit', l: 'Visit date', t: 'date', cal: 1, alert: { hour: 8 }, lbl: 'Repair visit', hint: 'The day the repair person is coming. It goes on your calendar and you get a reminder that morning.' }, { k: 'vendor', l: 'Who is fixing it', t: 'text', hint: 'The person or company doing the work. To be completed after a contractor is found.' }, { k: 'cost', l: 'Cost', t: 'money', hint: 'What the repair cost you. To be completed after a contractor is found. It then counts toward expenses in your reports and the unit history.' }, { k: 'notes', l: 'Notes', t: 'area', hint: 'Anything the repair person should know: access, pets, tenant availability.' }],
       title: function (r) { return (r.urgent ? '[Urgent] ' : '') + r.issue; }, sub: function (r) { return r.unit ? Q.title(Q.get(r.unit)) : ''; }, amount: function (r) { return r.cost || ''; },
-      actions: [{ l: 'Find VyqilContractor', saveFirst: true, run: function (r) { Q.community.find(r, { target: 'contractor', cat: r.trade, title: r.issue, details: r.notes, urgent: r.urgent }); } }, { l: 'See contractor replies', show: function (r) { return !!r.cid; }, run: function (r) { Q.community.requests(r.cid); } }] }
+      actions: [{ l: 'Find VyqilContractor', saveFirst: true, note: 'Use this only if you do not already have a contractor you use. If you already have someone, just type their name under "Who is fixing it".', run: function (r) { Q.community.find(r, { target: 'contractor', cat: r.trade, title: r.issue, details: r.notes, urgent: r.urgent }); } }, { l: 'See contractor replies', show: function (r) { return !!r.cid; }, run: function (r) { Q.community.requests(r.cid); } }] }
   },
   // Rent due dates are worked out each month from each current tenant's due day, minus payments logged for that month.
   events: function (rs, from, to) {
@@ -214,7 +214,7 @@ window.VQ_APP = {
   function listenRequests() {
     if (!Q.S.biz || listenRequests.on) return; listenRequests.on = true;
     Q.db.collection('tenantRequests').where('bizId', '==', Q.S.biz.id).where('status', '==', 'new').onSnapshot(function (s) {
-      var before = reqCount; reqs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); reqCount = reqs.length; if (reqCount > before) Q.toast(reqCount + ' tenant repair request' + (reqCount === 1 ? '' : 's') + ' waiting. See More > Tenant repair requests.');
+      var before = reqCount; reqs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); reqCount = reqs.length; if (reqCount > before) Q.toast(reqCount + ' tenant repair request' + (reqCount === 1 ? '' : 's') + ' waiting. See your home screen.'); if (Q.S.tab === 'today') Q.render();
     }, function () { /* optional */ });
   }
   function requestsModal() {
@@ -239,6 +239,7 @@ window.VQ_APP = {
     Q.onStart.push(function () { listenRequests(); setTimeout(syncAll, 6000); setInterval(syncAll, 45000); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  window.VQ_LL = window.VQ_LL || {}; window.VQ_LL.reqCount = function () { return reqCount; }; window.VQ_LL.requests = requestsModal;
 })();
 
 // ===== VyqilLandlord full build: leases, invoices, expenses, bills, vendors, inspections, reports, messages, letters, profile =====
@@ -438,7 +439,7 @@ window.VQ_APP = {
     Q.db.collection('tenantMsgs').where('bizId', '==', Q.S.biz.id).onSnapshot(function (s) {
       msgs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); var n = unread();
       if (lastUnread >= 0 && n > lastUnread) Q.toast('New message from a tenant. See More > Messages.'); lastUnread = n;
-      if (Q.S.tab === 'more' || Q.S.tab === 'messages') Q.render();
+      if (Q.S.tab === 'more' || Q.S.tab === 'messages' || Q.S.tab === 'today') Q.render();
     }, function () { /* optional */ });
   }
   function threadOf(pid) { return msgs.filter(function (m) { return m.portalId === pid; }).sort(function (a, b) { return ms(a) - ms(b); }); }
@@ -536,6 +537,7 @@ window.VQ_APP = {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   A.fn = { letters: letters, profileModal: profileModal, unread: unread };
+  window.VQ_LL = window.VQ_LL || {}; window.VQ_LL.unread = unread;
 })();
 
 // ===== Landlord: move-in and move-out steps, unit history, rent reminders =====
@@ -665,6 +667,28 @@ window.VQ_APP = {
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootR); else bootR();
+
+  // ---------- home dashboard: everything that needs the landlord, in one place ----------
+  function homeNote(v, n, cls, title, sub, fn) {
+    if (!n) return; var b = el('button', 'vq-note ' + cls); b.type = 'button'; var d = el('span', 'dot', String(n)), t = el('div', 't'); t.appendChild(el('b', '', title)); t.appendChild(el('span', '', sub));
+    b.appendChild(d); b.appendChild(t); b.appendChild(el('span', 'go', '\u203a')); b.onclick = fn; v.appendChild(b);
+  }
+  function go(id) { return function () { Q.S.tab = id; Q.S.q = ''; Q.S.calSel = null; Q.render(); window.scrollTo(0, 0); }; }
+  function bootHome() {
+    Q.banners = Q.banners || [];
+    Q.banners.push(function (v) {
+      var urgent = Q.byKind('repair').filter(function (r) { return r.status !== 'Done' && r.urgent; }).length;
+      var newApps = Q.byKind('applicant').filter(function (a) { return a.status === 'New'; }).length;
+      homeNote(v, urgent, 'red', urgent + (urgent === 1 ? ' urgent repair' : ' urgent repairs'), 'Not done yet', go('repair'));
+      var rc = (window.VQ_LL && VQ_LL.reqCount && VQ_LL.reqCount()) || 0, un = (window.VQ_LL && VQ_LL.unread && VQ_LL.unread()) || 0;
+      homeNote(v, rc, 'red', rc + (rc === 1 ? ' repair request from a tenant' : ' repair requests from tenants'), 'Make it a repair order or dismiss it', function () { VQ_LL.requests(); });
+      homeNote(v, un, 'blue', un + (un === 1 ? ' new message from a tenant' : ' new messages from tenants'), 'Tap to read and reply', go('messages'));
+      var calm = Math.max(0, Q.byKind('repair').filter(function (r) { return r.status === 'New' && !r.urgent; }).length);
+      homeNote(v, calm, 'blue', calm + (calm === 1 ? ' new repair order' : ' new repair orders'), 'Waiting to be scheduled', go('repair'));
+      homeNote(v, newApps, 'blue', newApps + (newApps === 1 ? ' new rental application' : ' new rental applications'), 'Contact them or move them along', go('applicant'));
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootHome); else bootHome();
 })();
 
 
