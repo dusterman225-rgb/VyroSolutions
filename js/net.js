@@ -114,15 +114,49 @@
   async function closeWorkspace(ws) { await ws.ref.update({ status: 'closed', closedAt: stamp() }); await audit(ws.id, 'workspace.close', ws.biz.name); }
   // Permanent delete. Firestore has no cascade, so this removes the business's data one collection at a time, then the business itself.
   // Anything the rules do not let it remove is left behind unreachable: once the business and its members are gone, nobody can open it.
-  var DELETE_ORDER = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'quotePrices', 'settings', 'subs', 'timelog', 'documents', 'audit'];
+  var DELETE_ORDER = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'quotePrices', 'settings', 'subs', 'timelog', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'stockLog', 'vendors', 'purchases', 'shifts', 'waste', 'overtime', 'swaps', 'coupons', 'closes', 'counters', 'consents', 'errors', 'usage', 'audit'];
   async function wipe(q) { for (var guard = 0; guard < 200; guard++) { var s = await q.limit(400).get(); if (s.empty) return; var b = db.batch(); s.forEach(function (d) { b.delete(d.ref); }); await b.commit(); if (s.size < 400) return; } }
   async function deleteWorkspace(ws, user) {
     if (ws.role !== 'owner') throw { message: 'Only the owner can delete a business.' };
     var id = ws.id, left = [];
     async function tryDo(label, fn) { try { await fn(); } catch (e) { left.push(label); } }
-    await tryDo('requests', async function () { var s = await db.collection('communityLeads').where('fromBiz', '==', id).get(); for (var i = 0; i < s.docs.length; i++) await s.docs[i].ref.delete(); });
+    async function delWhere(coll, field, val) { var q = await db.collection(coll).where(field, '==', val).get(); for (var j = 0; j < q.docs.length; j++) await q.docs[j].ref.delete(); }
+    // Requests this business sent to the Vyqil Community, with the replies and messages under each.
+    await tryDo('community requests', async function () {
+      var s = await db.collection('communityLeads').where('fromBiz', '==', id).get();
+      for (var i = 0; i < s.docs.length; i++) {
+        var offs = await s.docs[i].ref.collection('offers').get();
+        for (var k = 0; k < offs.docs.length; k++) { await wipe(offs.docs[k].ref.collection('msgs')); await offs.docs[k].ref.delete(); }
+        await s.docs[i].ref.delete();
+      }
+    });
+    // Replies this business sent to other people's community requests.
+    await tryDo('community replies', async function () {
+      var targets = ['contractor', 'services', 'landlord', 'realtor', 'salon', 'auto', 'photo', 'lessons'];
+      for (var t = 0; t < targets.length; t++) {
+        var s = await db.collection('communityLeads').where('target', '==', targets[t]).limit(500).get();
+        for (var i = 0; i < s.docs.length; i++) {
+          var o = s.docs[i].ref.collection('offers').doc(id), od = await o.get();
+          if (od.exists) { await wipe(o.collection('msgs')); await o.delete(); }
+        }
+      }
+    });
     await tryDo('listing', function () { return db.collection('directory').doc(id).delete(); });
-    await tryDo('tenant portals', async function () { var s = await db.collection('tenantPortals').where('bizId', '==', id).get(); for (var i = 0; i < s.docs.length; i++) await s.docs[i].ref.delete(); });
+    await tryDo('tenant portals', function () { return delWhere('tenantPortals', 'bizId', id); });
+    await tryDo('tenant requests', function () { return delWhere('tenantRequests', 'bizId', id); });
+    await tryDo('tenant messages', function () { return delWhere('tenantMsgs', 'bizId', id); });
+    await tryDo('appointment page', function () { return db.collection('bookingPages').doc(id).delete(); });
+    await tryDo('customer portals', function () { return delWhere('custPortals', 'bizId', id); });
+    await tryDo('appointment requests', function () { return delWhere('apptRequests', 'bizId', id); });
+    await tryDo('shared estimates', function () { return delWhere('publicEstimates', 'bizId', id); });
+    await tryDo('public page', function () { return delWhere('publicBrands', 'bizId', id); });
+    await tryDo('job portals', async function () {
+      var s = await db.collection('portals').where('bizId', '==', id).get();
+      for (var i = 0; i < s.docs.length; i++) { var nm = ['messages', 'documents', 'updates', 'invoices']; for (var k = 0; k < nm.length; k++) await wipe(s.docs[i].ref.collection(nm[k])); await s.docs[i].ref.delete(); }
+    });
+    // Things stored inside jobs and invoices.
+    await tryDo('job details', async function () { var s = await ws.ref.collection('jobs').get(); for (var i = 0; i < s.docs.length; i++) { await wipe(s.docs[i].ref.collection('updates')); await wipe(s.docs[i].ref.collection('tasks')); } });
+    await tryDo('invoice details', async function () { var s = await ws.ref.collection('invoices').get(); for (var i = 0; i < s.docs.length; i++) { await wipe(s.docs[i].ref.collection('payRequests')); await wipe(s.docs[i].ref.collection('payments')); } });
     for (var i = 0; i < DELETE_ORDER.length; i++) { var nm = DELETE_ORDER[i]; await tryDo(nm, function () { return wipe(ws.ref.collection(nm)); }); }
     await tryDo('invitations', async function () { var s = await db.collection('invites').where('bizId', '==', id).get(); for (var i2 = 0; i2 < s.docs.length; i2++) await s.docs[i2].ref.delete(); });
     await tryDo('team', async function () { var s = await ws.ref.collection('members').get(); for (var i3 = 0; i3 < s.docs.length; i3++) if (s.docs[i3].id !== user.uid) await s.docs[i3].ref.delete(); });
