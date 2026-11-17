@@ -3,7 +3,7 @@
 // checklists and reminders. Records live in businesses/{id}/records, so one business never sees another's data.
 (function () {
   'use strict';
-  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {} };
+  var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {}, eventSources: [], menuTop: [] };
   var S = Q.S;
 
   // ---------- small helpers ----------
@@ -224,6 +224,7 @@
       });
     });
     if (C.events) { try { C.events(S.recs, from, to).forEach(function (e) { e.over = e.date < t; out.push(e); }); } catch (x) { /* optional */ } }
+    Q.eventSources.forEach(function (fn) { try { fn(from, to).forEach(function (e) { e.over = false; out.push(e); }); } catch (x) { /* optional */ } });
     out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.time || '') < (b.time || '') ? -1 : 1; });
     return out;
   }
@@ -254,6 +255,7 @@
     menu.textContent = ''; var head = el('div', 'mh'); head.appendChild(el('b', '', S.biz.name)); head.appendChild(el('small', '', C.name)); head.appendChild(el('small', '', roleLabel(S.biz.role) + ' · ' + (S.user.email || ''))); menu.appendChild(head);
     function item(parent, label, fn, cls) { var a = el('button', 'mi' + (cls ? ' ' + cls : ''), label); a.type = 'button'; a.onclick = function () { setOpen(false); fn(); }; parent.appendChild(a); return a; }
     item(menu, 'Dashboard', openTab('today'));
+    Q.menuTop.forEach(function (x) { var a2 = item(menu, x.l, x.run || openTab(x.tab)); if (x.badge) { var n = x.badge(); if (n) a2.appendChild(el('span', 'badge', String(n))); } });
     menuGroups().forEach(function (g) { var items = (g.items || []).filter(function (x) { return !x.show || x.show(); }); if (!items.length) return; var d = el('details'); d.appendChild(el('summary', 'mg', g.h)); items.forEach(function (x) { var a = item(d, x.l, x.run || openTab(x.tab)); if (x.badge) { var n = x.badge(); if (n) a.appendChild(el('span', 'badge', String(n))); } }); menu.appendChild(d); });
     item(menu, 'More tools and settings', openTab('more')); item(menu, 'Phone alerts', function () { Q.push.panel(); });
     var sw = el('a', 'mi', 'Switch business'); sw.href = '/dashboard.html'; menu.appendChild(sw);
@@ -276,6 +278,7 @@
     navTab = S.tab; fromPop = false;
   }
   window.addEventListener('popstate', function (e) {
+    var pk = document.querySelector('.vq-pick'); if (pk) { pk.remove(); try { history.pushState({ vq: S.tab, n: ++navN }, ''); } catch (x) { /* ignore */ } return; }
     var ms = document.querySelectorAll('.modal');
     if (ms.length) { ms[ms.length - 1].remove(); try { history.pushState({ vq: S.tab, n: ++navN }, ''); } catch (x) { /* ignore */ } return; }
     var st = e.state; if (!st || !st.vq) return; navN = st.n || 0; fromPop = true; S.tab = st.vq; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0);
