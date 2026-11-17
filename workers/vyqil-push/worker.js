@@ -44,8 +44,10 @@ export default {
   async fetch(req, env) {
     const origin = req.headers.get('Origin') || '';
     try {
+      const p0 = new URL(req.url).pathname;
+      if (p0.indexOf('/pay/') === 0) return payRoute(req, env, p0);
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
-      const path = new URL(req.url).pathname;
+      const path = p0;
       const hub = env.HUB.get(env.HUB.idFromName('main'));
       if (req.method === 'GET') {
         if (path === '/vapid') { const r = await hub.fetch('https://hub/vapid'); return reply(env, origin, await r.json()); }
@@ -234,6 +236,17 @@ export class Hub {
     this.sql.exec('CREATE TABLE IF NOT EXISTS rem (endpoint TEXT, rid TEXT, at INTEGER, title TEXT, body TEXT, PRIMARY KEY (endpoint, rid))');
     this.sql.exec('CREATE TABLE IF NOT EXISTS sent (endpoint TEXT, rid TEXT, at INTEGER, PRIMARY KEY (endpoint, rid))');
   }
+  // The gas wallet: made here, kept here. Only its public address is ever shown.
+  gasKey() {
+    if (this.gasP) return this.gasP;
+    this.gasP = (async () => {
+      const row = this.sql.exec("SELECT v FROM kv WHERE k='gas'").toArray()[0]; if (row) return JSON.parse(row.v);
+      const kp = await edGenerate(), v = { pub: b58enc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))), pkcs8: b64enc(new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))) };
+      this.sql.exec("INSERT OR IGNORE INTO kv VALUES ('gas', ?)", JSON.stringify(v));
+      return JSON.parse(this.sql.exec("SELECT v FROM kv WHERE k='gas'").toArray()[0].v);
+    })();
+    return this.gasP;
+  }
   async vapid() {
     const row = this.sql.exec("SELECT v FROM kv WHERE k='vapid'").toArray()[0];
     if (row) return JSON.parse(row.v);
@@ -254,10 +267,13 @@ export class Hub {
       this.sql.exec('DELETE FROM devices WHERE endpoint=? AND uid=?', ep, uid);
       return this.out({ ok: true });
     }
+    if (path === '/gas/pub') return this.out({ pub: (await this.gasKey()).pub });
+    if (path === '/gas/sign') { const k = await this.gasKey(); return this.out({ sig: b64enc(await edSign(b64dec(k.pkcs8), b64dec(String(b.msg || '')))) }); }
     if (path === '/rate') {
       // Counts uses of a key inside a time window. Used to slow down the public booking form.
       const k = 'rt:' + String(b.k || '').slice(0, 80), now = Date.now(), row = this.sql.exec('SELECT v FROM kv WHERE k=?', k).toArray()[0];
       let st = now, n = 0; if (row) { const p = String(row.v).split('|'); if (now - +p[0] < (+b.win || 3600000)) { st = +p[0]; n = +p[1]; } }
+      this.sql.exec("DELETE FROM kv WHERE k LIKE 'rt:%' AND CAST(substr(v, 1, instr(v, '|') - 1) AS INTEGER) < ?", now - 2 * 86400000);
       if (n >= (+b.max || 5)) return this.out({ ok: false });
       this.sql.exec('INSERT OR REPLACE INTO kv VALUES (?, ?)', k, st + '|' + (n + 1)); return this.out({ ok: true });
     }
@@ -466,4 +482,217 @@ async function bookPublic(env, req, b, hub) {
   const id = String((await r.json()).name || '').split('/').pop();
   try { await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': 'book:' + bizId }, body: JSON.stringify({ dup: 'appt:' + id + ':new', win: 30000, biz: [bizId], title: 'Appointment request', body: (name.slice(0, 40) + ' · ' + String(type.name || '').slice(0, 40)), url: appUrl(PRODUCTS.indexOf(pg.product) >= 0 ? pg.product : 'contractor') }) }); } catch (x) { /* the request is saved either way */ }
   return { status: 200, body: { ok: true, id: id } };
+}
+
+// =====================================================================================================
+// Pay with Vyqil: Vyqil pays the Solana network fee (and opens the receiver's USDC account).
+// USDC on Solana only. The customer's wallet signs; this worker checks the payment is exactly what Vyqil allows,
+// adds the gas wallet's signature as fee payer, and sends it. The gas wallet's key is made inside the Durable Object
+// and never leaves it (nobody, including Vyqil staff, can read it).
+//   GET  /pay/info    -> gas wallet address + balance (fund this address with a little SOL)
+//   POST /pay/quote   -> { to }: is there a USDC account for this wallet yet, and what the one-time startup fee is
+//   POST /pay/send    -> { tx, mode }: check, co-sign and send a payment ("person" = 1% on top, "biz" = 2% from the payment)
+// =====================================================================================================
+const PAY = {
+  FEE_WALLET: 'HeGjhmZESYB17wcErsq82GcrAhwKyzQL8SZEqd8D6uQV',
+  TOKEN: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', ATA: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', SYS: '11111111111111111111111111111111',
+  MINT: { mainnet: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', devnet: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' },
+  BPS: { person: 100, biz: 200 },
+  MIN_TOTAL: 500000,      // $0.50: below this the fee would not cover the network fee
+  MIN_RECEIVE: 100000,    // the receiver must be left with at least $0.10 after the startup fee
+  ACCOUNT_SIZE: 165
+};
+const B58A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58enc(u8) {
+  let n = 0n; for (let i = 0; i < u8.length; i++) n = (n << 8n) | BigInt(u8[i]);
+  let s = ''; while (n > 0n) { s = B58A[Number(n % 58n)] + s; n /= 58n; }
+  let z = 0; while (z < u8.length && u8[z] === 0) z++; return '1'.repeat(z) + s;
+}
+function b58dec(str) {
+  let n = 0n; for (let i = 0; i < str.length; i++) { const v = B58A.indexOf(str[i]); if (v < 0) throw new Error('bad-base58'); n = n * 58n + BigInt(v); }
+  const out = []; while (n > 0n) { out.unshift(Number(n & 255n)); n >>= 8n; }
+  let z = 0; while (z < str.length && str[z] === '1') z++; return Uint8Array.from(new Array(z).fill(0).concat(out));
+}
+function b64dec(s) { const bin = atob(s), o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
+function b64enc(u8) { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+function catBytes(list) { let n = 0; list.forEach(function (a) { n += a.length; }); const o = new Uint8Array(n); let p = 0; list.forEach(function (a) { o.set(a, p); p += a.length; }); return o; }
+
+// ---- is this 32-byte value a point on the ed25519 curve? (A program address must NOT be.) ----
+const P25519 = (1n << 255n) - 19n;
+function fmod(a) { const r = a % P25519; return r >= 0n ? r : r + P25519; }
+function fpow(b, e) { let r = 1n; b = fmod(b); while (e > 0n) { if (e & 1n) r = fmod(r * b); b = fmod(b * b); e >>= 1n; } return r; }
+function finv(a) { return fpow(a, P25519 - 2n); }
+const D25519 = fmod(-121665n * finv(121666n));
+function onCurve(bytes) {
+  let y = 0n; for (let i = 31; i >= 0; i--) y = (y << 8n) | BigInt(i === 31 ? bytes[i] & 127 : bytes[i]);
+  if (y >= P25519) return false;
+  const y2 = fmod(y * y), u = fmod(y2 - 1n), v = fmod(D25519 * y2 + 1n), x2 = fmod(u * finv(v));
+  if (x2 === 0n) return true; return fpow(x2, (P25519 - 1n) / 2n) === 1n;
+}
+async function sha256(u8) { return new Uint8Array(await crypto.subtle.digest('SHA-256', u8)); }
+async function findPda(seeds, programB58) {
+  const prog = b58dec(programB58), tag = new TextEncoder().encode('ProgramDerivedAddress');
+  for (let bump = 255; bump >= 0; bump--) { const h = await sha256(catBytes(seeds.concat([Uint8Array.of(bump), prog, tag]))); if (!onCurve(h)) return h; }
+  throw new Error('no-pda');
+}
+async function ataOf(ownerB58, mintB58) { return b58enc(await findPda([b58dec(ownerB58), b58dec(PAY.TOKEN), b58dec(mintB58)], PAY.ATA)); }
+
+// ---- read a normal ("legacy") Solana transaction ----
+function readCompact(buf, o) { let v = 0, s = 0; for (;;) { if (o >= buf.length) throw new Error('short'); const b = buf[o++]; v |= (b & 127) << s; if (!(b & 128)) break; s += 7; if (s > 14) throw new Error('bad-length'); } return [v, o]; }
+function parseTx(raw) {
+  let o = 0, n; [n, o] = readCompact(raw, o); if (n < 1 || n > 4) throw new Error('bad-signatures');
+  const sigs = []; for (let i = 0; i < n; i++) { sigs.push(raw.slice(o, o + 64)); o += 64; }
+  const start = o; if (raw[o] & 128) throw new Error('versioned');
+  const nReq = raw[o], nRoSigned = raw[o + 1], nRoUnsigned = raw[o + 2]; o += 3;
+  let nk; [nk, o] = readCompact(raw, o); if (nk < 2 || nk > 40) throw new Error('bad-keys');
+  const keys = []; for (let i = 0; i < nk; i++) { keys.push(b58enc(raw.slice(o, o + 32))); o += 32; }
+  o += 32; // recent blockhash
+  let ni; [ni, o] = readCompact(raw, o); if (ni < 1 || ni > 8) throw new Error('bad-instructions');
+  const ixs = []; for (let i = 0; i < ni; i++) {
+    const pid = raw[o++]; let na; [na, o] = readCompact(raw, o); const accts = []; for (let j = 0; j < na; j++) accts.push(raw[o++]);
+    let dl; [dl, o] = readCompact(raw, o); const data = raw.slice(o, o + dl); o += dl; ixs.push({ pid: pid, accts: accts, data: data });
+  }
+  if (o !== raw.length) throw new Error('trailing-bytes');
+  return { sigs: sigs, msg: raw.slice(start), nReq: nReq, nRoSigned: nRoSigned, nRoUnsigned: nRoUnsigned, keys: keys, ixs: ixs };
+}
+function isSigner(t, i) { return i < t.nReq; }
+function isWritable(t, i) { return i < t.nReq - t.nRoSigned || (i >= t.nReq && i < t.keys.length - t.nRoUnsigned); }
+function u64le(d, o) { let v = 0n; for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(d[o + i]); return v; }
+function ceilDiv(a, b) { return (a + b - 1n) / b; }
+
+// ---- the rules. Returns { ok, error, ... } ----
+// `startup` is the one-time fee (USDC base units) for opening a receiver's USDC account, worked out fresh from the current rent and SOL price.
+async function checkPayment(t, ctx) {
+  const bad = function (m) { return { ok: false, error: m }; };
+  if (t.nReq !== 2 || t.sigs.length !== 2) return bad('This payment is not shaped the way Vyqil sends payments.');
+  if (t.keys[0] !== ctx.gas) return bad('The network fee payer is not Vyqil.');
+  const sender = t.keys[1], mint = ctx.mint;
+  if (sender === ctx.gas || sender === PAY.FEE_WALLET) return bad('That wallet cannot send this payment.');
+  const feeAta = await ataOf(PAY.FEE_WALLET, mint), senderAta = await ataOf(sender, mint);
+  const creates = [], moves = [];
+  for (const ix of t.ixs) {
+    const prog = t.keys[ix.pid], a = ix.accts.map(function (i) { return t.keys[i]; });
+    if (prog === PAY.ATA) {
+      if (a.length !== 6 || ix.data.length !== 1 || ix.data[0] !== 1) return bad('Unexpected account step.');
+      if (a[0] !== ctx.gas || a[3] !== mint || a[4] !== PAY.SYS || a[5] !== PAY.TOKEN) return bad('Unexpected account step.');
+      if (a[1] !== await ataOf(a[2], mint)) return bad('Unexpected account step.');
+      creates.push({ ata: a[1], owner: a[2] });
+    } else if (prog === PAY.TOKEN) {
+      if (ix.data.length !== 10 || ix.data[0] !== 12 || ix.data[9] !== 6 || a.length < 4 || a.length > 6) return bad('Unexpected transfer step.');
+      if (a[1] !== mint || a[3] !== sender || ix.accts[3] !== 1 || a[0] !== senderAta) return bad('Unexpected transfer step.');
+      for (let j = 4; j < ix.accts.length; j++) if (isSigner(t, ix.accts[j]) || isWritable(t, ix.accts[j])) return bad('Unexpected transfer step.');
+      moves.push({ dest: a[2], amt: u64le(ix.data, 1) });
+    } else return bad('This payment contains a step Vyqil does not allow.');
+  }
+  let F = 0n, R = 0n, recipientAta = '';
+  for (const m of moves) {
+    if (m.amt <= 0n) return bad('Zero-amount step.');
+    if (m.dest === feeAta) F += m.amt;
+    else { if (recipientAta && recipientAta !== m.dest) return bad('A payment can only go to one receiver.'); recipientAta = m.dest; R += m.amt; }
+  }
+  if (!recipientAta || R <= 0n) return bad('No receiver in this payment.');
+  if (recipientAta === senderAta || recipientAta === feeAta) return bad('That receiver is not allowed.');
+  let startupApplies = false;
+  for (const c of creates) {
+    if (c.ata === recipientAta) { if (startupApplies) return bad('Unexpected account step.'); startupApplies = true; }
+    else if (c.ata === feeAta && c.owner === PAY.FEE_WALLET) { /* Vyqil opening its own USDC account, once */ }
+    else return bad('Vyqil will only open the receiver\'s USDC account.');
+  }
+  const S = startupApplies ? ctx.startup : 0n, bps = BigInt(PAY.BPS[ctx.mode] || 0);
+  if (!bps) return bad('Unknown payment type.');
+  // gross: what the receiver is meant to get before any startup fee (person) or what the payer pays in total (business)
+  const gross = ctx.mode === 'person' ? R + S : R + F;
+  if (gross < BigInt(PAY.MIN_TOTAL)) return bad('The smallest payment is $0.50.');
+  if (R < BigInt(PAY.MIN_RECEIVE)) return bad('This payment is too small to cover the one-time account startup fee. Send a little more.');
+  const need = ceilDiv(gross * bps, 10000n), slack = S / 4n;
+  const got = F - S;
+  if (got < need - slack || got > need + slack + 2n) return bad('The Vyqil service fee in this payment is not correct. Please start the payment again.');
+  return { ok: true, sender: sender, recipientAta: recipientAta, recipientNew: startupApplies, R: R, F: F, startup: S, gross: gross };
+}
+
+// ---- one-time startup fee: the rent for a new USDC account, in USDC ----
+let rentCache = null, priceCache = null;
+async function rpcCall(env, method, params) {
+  const r = await fetch(env.SOLANA_RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: method, params: params }) });
+  const j = await r.json(); if (j.error) throw new Error(j.error.message || 'rpc'); return j.result;
+}
+async function startupUnits(env) {
+  if (!rentCache || Date.now() - rentCache.at > 3600000) rentCache = { at: Date.now(), v: BigInt(await rpcCall(env, 'getMinimumBalanceForRentExemption', [PAY.ACCOUNT_SIZE])) };
+  if (!priceCache || Date.now() - priceCache.at > 300000) {
+    const r = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot'), j = await r.json(), p = parseFloat(j && j.data && j.data.amount);
+    if (!(p > 0)) throw new Error('no-price'); priceCache = { at: Date.now(), v: p };
+  }
+  // lamports / 1e9 * price * 1e6 = lamports * price / 1000; rounded UP to the next cent
+  const raw = BigInt(Math.ceil(Number(rentCache.v) * priceCache.v / 1000)), cent = 10000n;
+  return ((raw + cent - 1n) / cent) * cent;
+}
+async function accountExists(env, addr) { const r = await rpcCall(env, 'getAccountInfo', [addr, { encoding: 'base64', commitment: 'confirmed' }]); return !!(r && r.value); }
+async function edImport(kind, fmt, bytes, usage) {
+  try { return await crypto.subtle.importKey(fmt, bytes, { name: 'Ed25519' }, true, [usage]); }
+  catch (e) { return await crypto.subtle.importKey(fmt, bytes, { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' }, true, [usage]); }
+}
+async function verifySig(pubB58, msg, sig) {
+  try { const k = await edImport('pub', 'raw', b58dec(pubB58), 'verify'); let ok; try { ok = await crypto.subtle.verify({ name: 'Ed25519' }, k, sig, msg); } catch (e) { ok = await crypto.subtle.verify('NODE-ED25519', k, sig, msg); } return ok; } catch (e) { return false; }
+}
+async function edGenerate() {
+  try { return await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']); }
+  catch (e) { return await crypto.subtle.generateKey({ name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' }, true, ['sign', 'verify']); }
+}
+async function edSign(pkcs8, msg) {
+  const k = await edImport('priv', 'pkcs8', pkcs8, 'sign'); try { return new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, k, msg)); } catch (e) { return new Uint8Array(await crypto.subtle.sign('NODE-ED25519', k, msg)); }
+}
+
+async function payRoute(req, env, path) {
+  const H = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Cache-Control': 'no-store', 'Content-Type': 'application/json' };
+  const out = function (o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: H }); };
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: H });
+  const net = env.SOLANA_NET === 'mainnet' ? 'mainnet' : 'devnet', mint = PAY.MINT[net];
+  const hub = env.HUB.get(env.HUB.idFromName('main'));
+  const hcall = async function (p, b, uid) { const r = await hub.fetch('https://hub' + p, { method: 'POST', headers: { 'x-uid': uid || 'pay' }, body: JSON.stringify(b || {}) }); return r.json(); };
+  try {
+    const gas = (await hcall('/gas/pub')).pub;
+    if (path === '/pay/info') {
+      let lamports = null; if (env.SOLANA_RPC) { try { lamports = await rpcCall(env, 'getBalance', [gas, { commitment: 'confirmed' }]).then(function (r) { return r.value; }); } catch (e) { /* shown as unknown */ } }
+      return out({ ok: true, network: net, gasWallet: gas, gasLamports: lamports, feeWallet: PAY.FEE_WALLET, mint: mint, ready: !!env.SOLANA_RPC && lamports != null && lamports >= 10000000 });
+    }
+    if (req.method !== 'POST') return out({ error: 'POST only' }, 405);
+    if (!env.SOLANA_RPC) return out({ error: 'not-set-up', detail: 'Payments are not set up yet.' }, 503);
+    let b; try { b = await req.json(); } catch (e) { return out({ error: 'bad-json' }, 400); }
+    const ip = req.headers.get('CF-Connecting-IP') || 'x';
+    if (path === '/pay/quote') {
+      const to = String(b.to || ''); let ownerOk = false; try { ownerOk = b58dec(to).length === 32; } catch (e) { /* invalid */ }
+      if (!ownerOk) return out({ error: 'bad-address', detail: 'That is not a Solana wallet address.' }, 400);
+      if (!(await hcall('/rate', { k: 'q:' + ip, max: 120, win: 3600000 })).ok) return out({ error: 'slow-down' }, 429);
+      const ata = await ataOf(to, mint), exists = await accountExists(env, ata);
+      let su = 0n; if (!exists) su = await startupUnits(env);
+      return out({ ok: true, network: net, gasWallet: gas, feeWallet: PAY.FEE_WALLET, recipientAta: ata, newAccount: !exists, startupUnits: su.toString() });
+    }
+    if (path === '/pay/send') {
+      const mode = b.mode === 'biz' ? 'biz' : 'person';
+      let raw; try { raw = b64dec(String(b.tx || '')); } catch (e) { return out({ error: 'bad-tx' }, 400); }
+      if (raw.length > 1232) return out({ error: 'bad-tx' }, 400);
+      let t; try { t = parseTx(raw); } catch (e) { return out({ error: 'bad-tx', detail: 'This payment could not be read. Please start again.' }, 400); }
+      const sender = t.keys[1];
+      if (!(await hcall('/rate', { k: 'si:' + ip, max: 40, win: 3600000 })).ok || !(await hcall('/rate', { k: 'ss:' + sender, max: 30, win: 3600000 })).ok) return out({ error: 'slow-down', detail: 'Too many payments from this device. Try again later.' }, 429);
+      let startup = 0n; try { startup = await startupUnits(env); } catch (e) { return out({ error: 'busy', detail: 'Could not work out the one-time startup fee. Please try again.' }, 503); }
+      const chk = await checkPayment(t, { gas: gas, mint: mint, mode: mode, startup: startup });
+      if (!chk.ok) return out({ error: 'rejected', detail: chk.error }, 400);
+      if (!(await verifySig(sender, t.msg, t.sigs[1]))) return out({ error: 'unsigned', detail: 'Your wallet\'s approval is missing or not valid. Please try again.' }, 400);
+      // Make sure it would succeed before Vyqil puts its name on it.
+      const sim = await rpcCall(env, 'simulateTransaction', [b64enc(raw), { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: false, commitment: 'confirmed' }]);
+      if (sim && sim.value && sim.value.err) {
+        const logs = (sim.value.logs || []).join(' '), low = /insufficient funds|custom program error: 0x1\b/i.test(logs);
+        return out({ error: 'would-fail', detail: low ? 'Not enough USDC in this wallet for the payment and the Vyqil fee.' : 'The network says this payment would not go through. Nothing was sent.' }, 400);
+      }
+      const bal = await rpcCall(env, 'getBalance', [gas, { commitment: 'confirmed' }]);
+      if (!bal || bal.value < 5000000) return out({ error: 'busy', detail: 'Payments are paused for a moment. Please try again later.' }, 503);
+      const g = await hcall('/gas/sign', { msg: b64enc(t.msg) }); if (!g.sig) return out({ error: 'busy' }, 503);
+      const full = raw.slice(); full.set(b64dec(g.sig), 1);   // signature slot 0 (after the 1-byte count)
+      const sig = await rpcCall(env, 'sendTransaction', [b64enc(full), { encoding: 'base64', skipPreflight: true, maxRetries: 5 }]);
+      return out({ ok: true, signature: sig, recipientNew: chk.recipientNew, startupUnits: chk.startup.toString() });
+    }
+    return out({ error: 'not-found' }, 404);
+  } catch (e) {
+    return out({ error: 'busy', detail: 'Could not reach the Solana network. Please try again.' }, 502);
+  }
 }
