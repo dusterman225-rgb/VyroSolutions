@@ -53,6 +53,7 @@ export default {
       }
       if (req.method !== 'POST') return reply(env, origin, { error: 'POST only' }, 405);
       if (origins(env).indexOf(origin) < 0) return reply(env, origin, { error: 'origin-not-allowed', detail: 'ALLOWED_ORIGIN in wrangler.jsonc must equal your site address. This request came from ' + origin }, 403);
+      if (path === '/book') { let bb; try { bb = await req.json(); } catch (e) { return reply(env, origin, { error: 'bad-json' }, 400); } const out = await bookPublic(env, req, bb, hub); return reply(env, origin, out.body, out.status); }
       const who = await whoIs(req, env);
       if (!who) return reply(env, origin, { error: 'signin', detail: 'Please sign in again.' }, 401);
       let body; try { body = await req.json(); } catch (e) { return reply(env, origin, { error: 'bad-json' }, 400); }
@@ -60,7 +61,7 @@ export default {
       if (path === '/join') {
         if (body.as === 'team') {
           const bizId = String(body.bizId || '');
-          if (!/^[A-Za-z0-9]{10,40}$/.test(bizId) || !(await fsGet(env, 'businesses/' + bizId + '/members/' + who.uid, who.token))) return reply(env, origin, { error: 'not-allowed', detail: 'You are not on this business team.' }, 403);
+          if (!/^[A-Za-z0-9]{8,40}$/.test(bizId) || !(await fsGet(env, 'businesses/' + bizId + '/members/' + who.uid, who.token))) return reply(env, origin, { error: 'not-allowed', detail: 'You are not on this business team.' }, 403);
           body.biz = bizId;
         } else {
           if (!who.email || !who.verified) return reply(env, origin, { error: 'verify-email', detail: 'Please verify your email address first.' }, 403);
@@ -96,7 +97,7 @@ async function fsGet(env, path, token) {
 function fv(v) {
   if (v.stringValue !== undefined) return v.stringValue; if (v.integerValue !== undefined) return Number(v.integerValue); if (v.doubleValue !== undefined) return v.doubleValue;
   if (v.booleanValue !== undefined) return v.booleanValue; if (v.timestampValue !== undefined) return v.timestampValue;
-  if (v.arrayValue) return (v.arrayValue.values || []).map(fv); return null;
+  if (v.arrayValue) return (v.arrayValue.values || []).map(fv); if (v.mapValue) return fields(v.mapValue); return null;
 }
 function fields(j) { const o = {}; for (const k in (j.fields || {})) o[k] = fv(j.fields[k]); return o; }
 async function fsDoc(env, path, token) {
@@ -121,14 +122,15 @@ function cellsAround(lat, lng, radius) {
 function appUrl(product) { return product === 'contractor' ? '/contractor/community.html' : '/' + String(product || '').replace(/[^a-z]/g, '') + '/index.html'; }
 const PRODUCTS = ['contractor', 'services', 'landlord', 'realtor', 'salon', 'auto', 'photo', 'lessons'];
 async function ownerOf(env, biz, who) {
-  if (!/^[A-Za-z0-9]{10,40}$/.test(String(biz || ''))) return false;
+  if (!/^[A-Za-z0-9]{8,40}$/.test(String(biz || ''))) return false;
   const m = await fsGet(env, 'businesses/' + biz + '/members/' + who.uid, who.token); return !!m && (m.role === 'owner' || m.role === 'gm');
 }
 async function community(env, who, b, hub) {
   const kind = String(b.kind || ''), leadId = String(b.leadId || '');
+  if (kind === 'areq' || kind === 'aupd' || kind === 'aresp') return appt(env, who, b, hub, kind);
   if (kind === 'tmsg') {
     // A tenant wrote to the landlord: alert the landlord's business. Wording is fixed; the name comes from the landlord's own portal record.
-    const mid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(mid)) return { status: 400, body: { error: 'bad-request' } };
+    const mid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{8,40}$/.test(mid)) return { status: 400, body: { error: 'bad-request' } };
     const mg = await fsDoc(env, 'tenantMsgs/' + mid, who.token); if (!mg || mg.tenantUid !== who.uid || mg.from !== 'tenant') return { status: 403, body: { error: 'not-allowed' } };
     const age = Date.now() - Date.parse(mg.createdAt || 0); if (!(age > -60000 && age < 20 * 60000)) return { status: 403, body: { error: 'not-allowed' } };
     const pt = await fsDoc(env, 'tenantPortals/' + String(mg.portalId || ''), who.token); if (!pt || pt.bizId !== mg.bizId) return { status: 403, body: { error: 'not-allowed' } };
@@ -137,14 +139,14 @@ async function community(env, who, b, hub) {
   }
   if (kind === 'trepair') {
     // A tenant sent a repair request: alert the landlord's business. Wording is fixed and the names come from the landlord's own portal record.
-    const rid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(rid)) return { status: 400, body: { error: 'bad-request' } };
+    const rid = String(b.requestId || ''); if (!/^[A-Za-z0-9]{8,40}$/.test(rid)) return { status: 400, body: { error: 'bad-request' } };
     const rq = await fsDoc(env, 'tenantRequests/' + rid, who.token); if (!rq || rq.tenantUid !== who.uid) return { status: 403, body: { error: 'not-allowed' } };
     const age = Date.now() - Date.parse(rq.createdAt || 0); if (!(age > -60000 && age < 20 * 60000)) return { status: 403, body: { error: 'not-allowed' } };
     const pt = await fsDoc(env, 'tenantPortals/' + String(rq.portalId || ''), who.token); if (!pt || pt.bizId !== rq.bizId) return { status: 403, body: { error: 'not-allowed' } };
     const r = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: 'trepair:' + rid, win: 3600000, biz: [rq.bizId], title: 'Repair request from ' + String(pt.tenantName || 'a tenant').slice(0, 40), body: String(pt.unit || 'Your property').slice(0, 80), url: appUrl('landlord') }) });
     return { status: r.status, body: await r.json() };
   }
-  if (!/^[A-Za-z0-9]{10,40}$/.test(leadId) || ['lead', 'reply', 'chosen', 'msg'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
+  if (!/^[A-Za-z0-9]{8,40}$/.test(leadId) || ['lead', 'reply', 'chosen', 'msg'].indexOf(kind) < 0) return { status: 400, body: { error: 'bad-request' } };
   const lead = await fsDoc(env, 'communityLeads/' + leadId, who.token);
   if (!lead || PRODUCTS.indexOf(lead.target) < 0) return { status: 403, body: { error: 'not-allowed' } };
   const send = async function (biz, title, text, product, win) {
@@ -165,7 +167,7 @@ async function community(env, who, b, hub) {
         return lead.trade === 'Other' || !(d.trades || []).length || d.trades.indexOf(lead.trade) >= 0;
       }).sort(function (x, y) { return miles(lead.lat, lead.lng, x.lat, x.lng) - miles(lead.lat, lead.lng, y.lat, y.lng); }).map(function (d) { return d.id; });
     }
-    ids = ids.filter(function (x) { return /^[A-Za-z0-9]{10,40}$/.test(String(x)); }).slice(0, 30);
+    ids = ids.filter(function (x) { return /^[A-Za-z0-9]{8,40}$/.test(String(x)); }).slice(0, 30);
     if (!ids.length) return { status: 200, body: { ok: true, sent: 0 } };
     return send(ids, (lead.urgent ? 'Urgent: ' : '') + lead.trade + ' request near you', (lead.city || '') + ' · from ' + (lead.fromName || 'a Vyqil business'), lead.target, 3600000);
   }
@@ -176,7 +178,7 @@ async function community(env, who, b, hub) {
   }
   if (kind === 'msg') {
     // Alert the other side of a reply thread. Only the person who posted or the business that replied may trigger it; the wording is fixed.
-    const bizId = String(b.bizId || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(bizId)) return { status: 400, body: { error: 'bad-request' } };
+    const bizId = String(b.bizId || ''); if (!/^[A-Za-z0-9]{8,40}$/.test(bizId)) return { status: 400, body: { error: 'bad-request' } };
     const offer = await fsDoc(env, 'communityLeads/' + leadId + '/offers/' + bizId, who.token); if (!offer) return { status: 403, body: { error: 'not-allowed' } };
     if (await ownerOf(env, lead.fromBiz, who)) return send([bizId], 'New message', (lead.fromName || 'A business') + ' · ' + lead.trade, lead.target, 60000);
     if (offer.ownerUid === who.uid && (await ownerOf(env, bizId, who))) return send([lead.fromBiz], 'New message', (offer.bizName || 'A business') + ' · ' + lead.trade, lead.fromProduct, 60000);
@@ -251,6 +253,13 @@ export class Hub {
       this.sql.exec('DELETE FROM sent WHERE endpoint IN (SELECT endpoint FROM devices WHERE endpoint=? AND uid=?)', ep, uid);
       this.sql.exec('DELETE FROM devices WHERE endpoint=? AND uid=?', ep, uid);
       return this.out({ ok: true });
+    }
+    if (path === '/rate') {
+      // Counts uses of a key inside a time window. Used to slow down the public booking form.
+      const k = 'rt:' + String(b.k || '').slice(0, 80), now = Date.now(), row = this.sql.exec('SELECT v FROM kv WHERE k=?', k).toArray()[0];
+      let st = now, n = 0; if (row) { const p = String(row.v).split('|'); if (now - +p[0] < (+b.win || 3600000)) { st = +p[0]; n = +p[1]; } }
+      if (n >= (+b.max || 5)) return this.out({ ok: false });
+      this.sql.exec('INSERT OR REPLACE INTO kv VALUES (?, ?)', k, st + '|' + (n + 1)); return this.out({ ok: true });
     }
     if (path === '/notify') return this.notify(uid, b);
     if (path === '/biz') return this.bizPush(uid, b);
@@ -376,4 +385,85 @@ export class Hub {
     if (left && retry) { await this.state.storage.setAlarm(Date.now() + 60000); return; }
     await this.plan(left > 0);
   }
+}
+
+
+// ---- Appointments ----
+// Alerts for appointment requests. Wording is fixed here; names come from the request itself, read back as the person asking.
+async function appt(env, who, b, hub, kind) {
+  const id = String(b.requestId || ''); if (!/^[A-Za-z0-9]{8,40}$/.test(id)) return { status: 400, body: { error: 'bad-request' } };
+  const r = await fsDoc(env, 'apptRequests/' + id, who.token); if (!r || !r.bizId) return { status: 403, body: { error: 'not-allowed' } };
+  const pg = (await fsDoc(env, 'bookingPages/' + r.bizId, who.token)) || {}, product = PRODUCTS.indexOf(pg.product) >= 0 ? pg.product : 'contractor';
+  const fresh = function (t) { const a = Date.now() - Date.parse(t || 0); return a > -60000 && a < 20 * 60000; };
+  const who2 = String(r.name || 'A customer').slice(0, 40) + ' · ' + String(r.typeName || 'Appointment').slice(0, 40);
+  const team = async function (title, dup) {
+    const x = await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ dup: 'appt:' + id + ':' + dup, win: 30000, biz: [r.bizId], title: title, body: who2, url: appUrl(product) }) });
+    return { status: x.status, body: await x.json() };
+  };
+  if (kind === 'areq') { if (r.uid !== who.uid || r.status !== 'pending' || !fresh(r.createdAt)) return { status: 403, body: { error: 'not-allowed' } }; return team('Appointment request', 'new'); }
+  if (kind === 'aupd') {
+    if (!who.email || who.email !== String(r.email || '').toLowerCase() || ['accepted', 'canceled'].indexOf(r.status) < 0 || !fresh(r.updatedAt)) return { status: 403, body: { error: 'not-allowed' } };
+    return team(r.status === 'accepted' ? 'Appointment accepted' : 'Appointment canceled', r.status);
+  }
+  // aresp: someone on the business team answered a request from a signed-in customer
+  if (!(await fsGet(env, 'businesses/' + r.bizId + '/members/' + who.uid, who.token))) return { status: 403, body: { error: 'not-allowed' } };
+  const text = { accepted: 'Your appointment is confirmed.', declined: 'Your appointment request was declined.', countered: 'The business suggested a new time.', canceled: 'Your appointment was canceled.' }[r.status];
+  if (!text || !fresh(r.updatedAt)) return { status: 403, body: { error: 'not-allowed' } };
+  if (r.source !== 'portal' || !r.email) return { status: 200, body: { ok: true, sent: 0 } };
+  const x = await hub.fetch('https://hub/notify', { method: 'POST', headers: { 'x-uid': who.uid }, body: JSON.stringify({ q: { to: 'customer', email: String(r.email).toLowerCase(), title: String(pg.bizName || 'Your business').slice(0, 60), body: text, url: '/' + product + '/portal.html' }, portalId: id, kind: 'aresp:' + r.status }) });
+  return { status: x.status, body: await x.json() };
+}
+
+// Open times, the same rule the apps use (see shared/booking.js): inside the weekly hours, after the notice period, not on top of anything taken.
+const _dtf = {};
+function _parts(tz, ms) {
+  const f = _dtf[tz] || (_dtf[tz] = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' })), o = {};
+  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+  return { y: +o.year, m: +o.month, d: +o.day, h: (+o.hour) % 24, mi: +o.minute };
+}
+function _offset(tz, ms) { const p = _parts(tz, ms); return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) - Math.floor(ms / 60000) * 60000; }
+function _zoned(tz, y, m, d, mins) { const g = Date.UTC(y, m - 1, d, 0, 0) + mins * 60000, o = _offset(tz, g); let r = g - o; const o2 = _offset(tz, r); if (o2 !== o) r = g - o2; return r; }
+function slotOk(pg, type, s, e, now) {
+  const tz = String(pg.tz || 'America/Los_Angeles'), lead = (+pg.leadHours || 0) * 3600000, horizon = Math.min(90, Math.max(1, +pg.horizonDays || 30)), len = Math.max(15, +type.min || 60), step = Math.max(15, +type.step || len), p0 = _parts(tz, now);
+  const busy = Array.isArray(pg.busy) ? pg.busy : [];
+  for (let i = 0; i <= horizon; i++) {
+    const dt = new Date(Date.UTC(p0.y, p0.m - 1, p0.d + i)), y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate(), dow = dt.getUTCDay();
+    for (const w of (type.windows || [])) {
+      if (+w.d !== dow) continue;
+      for (let t = +w.s; t + len <= +w.e; t += step) {
+        const a = _zoned(tz, y, m, d, t), z = a + len * 60000; if (a !== s || z !== e) continue;
+        if (a < now + lead) return false; return !busy.some(function (x) { return a < x.e && z > x.s; });
+      }
+    }
+  }
+  return false;
+}
+let botTok = null;
+async function botLogin(env) {
+  if (botTok && botTok.exp > Date.now() + 60000) return botTok;
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.WEB_API_KEY), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: env.BOT_EMAIL, password: env.BOT_PASSWORD, returnSecureToken: true }) });
+  if (!r.ok) return null; const j = await r.json(); botTok = { t: j.idToken, uid: j.localId, exp: Date.now() + (+j.expiresIn || 3600) * 1000 }; return botTok;
+}
+// A request from someone without an account. Checked for spam (Cloudflare Turnstile), for a real open time, and saved by a helper account.
+async function bookPublic(env, req, b, hub) {
+  const bad = function (code, detail, st) { return { status: st || 400, body: { error: code, detail: detail } }; };
+  if (!env.TURNSTILE_SECRET || !env.BOT_EMAIL || !env.BOT_PASSWORD || !env.WEB_API_KEY) return bad('not-set-up', 'Online booking is not set up yet. Please call the business.', 503);
+  const bizId = String(b.bizId || ''), typeId = String(b.typeId || ''), name = String(b.name || '').trim(), phone = String(b.phone || '').trim(), email = String(b.email || '').trim().toLowerCase(), reason = String(b.reason || '').trim(), token = String(b.token || '');
+  const s = +b.start, e = +b.end;
+  if (!/^[A-Za-z0-9]{8,40}$/.test(bizId) || !typeId || typeId.length > 40 || !Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 28800000 || !name || name.length > 80 || !phone || phone.length > 30 || email.length > 120 || !reason || reason.length > 300 || !token || token.length > 2100) return bad('bad-request', 'Please check the form and try again.');
+  const ip = req.headers.get('CF-Connecting-IP') || 'x', hub0 = async function (k, max, win) { const x = await hub.fetch('https://hub/rate', { method: 'POST', headers: { 'x-uid': 'rate' }, body: JSON.stringify({ k: k, max: max, win: win }) }); return (await x.json()).ok; };
+  if (!(await hub0('ip:' + ip, 6, 3600000)) || !(await hub0('biz:' + bizId, 60, 86400000))) return bad('slow-down', 'Too many requests. Please try again later.', 429);
+  const tv = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }) });
+  if (!tv.ok || !(await tv.json()).success) return bad('spam-check', 'The spam check did not pass. Please try again.', 403);
+  const bot = await botLogin(env); if (!bot) return bad('busy', 'Online booking is not available right now. Please call the business.', 503);
+  const pg = await fsDoc(env, 'bookingPages/' + bizId, bot.t); if (!pg || pg.enabled !== true || pg.who !== 'anyone') return bad('closed', 'This business is not taking requests here.', 403);
+  const type = (Array.isArray(pg.types) ? pg.types : []).filter(function (t) { return t && t.id === typeId; })[0]; if (!type) return bad('bad-request', 'Please choose the appointment type again.');
+  if (!slotOk(pg, type, s, e, Date.now())) return bad('taken', 'That time is no longer open. Please pick another.', 409);
+  const f = function (v) { return { stringValue: String(v) }; };
+  const doc = { fields: { bizId: f(bizId), email: f(email), name: f(name), phone: f(phone), typeId: f(typeId), typeName: f(String(type.name || '').slice(0, 40)), start: { integerValue: String(s) }, end: { integerValue: String(e) }, reason: f(reason), status: f('pending'), source: f('public'), uid: f(bot.uid), createdAt: { timestampValue: new Date().toISOString() } } };
+  const r = await fetch('https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents/apptRequests', { method: 'POST', headers: { Authorization: 'Bearer ' + bot.t, 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+  if (!r.ok) return bad('busy', 'Could not save the request. Please try again.', 502);
+  const id = String((await r.json()).name || '').split('/').pop();
+  try { await hub.fetch('https://hub/biz', { method: 'POST', headers: { 'x-uid': 'book:' + bizId }, body: JSON.stringify({ dup: 'appt:' + id + ':new', win: 30000, biz: [bizId], title: 'Appointment request', body: (name.slice(0, 40) + ' · ' + String(type.name || '').slice(0, 40)), url: appUrl(PRODUCTS.indexOf(pg.product) >= 0 ? pg.product : 'contractor') }) }); } catch (x) { /* the request is saved either way */ }
+  return { status: 200, body: { ok: true, id: id } };
 }
