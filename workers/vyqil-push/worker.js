@@ -463,14 +463,16 @@ async function botLogin(env) {
 // A request from someone without an account. Checked for spam (Cloudflare Turnstile), for a real open time, and saved by a helper account.
 async function bookPublic(env, req, b, hub) {
   const bad = function (code, detail, st) { return { status: st || 400, body: { error: code, detail: detail } }; };
-  if (!env.TURNSTILE_SECRET || !env.BOT_EMAIL || !env.BOT_PASSWORD || !env.WEB_API_KEY) return bad('not-set-up', 'Online booking is not set up yet. Please call the business.', 503);
+  if (!env.BOT_EMAIL || !env.BOT_PASSWORD || !env.WEB_API_KEY) return bad('not-set-up', 'Online booking is not set up yet. Please call the business.', 503);
   const bizId = String(b.bizId || ''), typeId = String(b.typeId || ''), name = String(b.name || '').trim(), phone = String(b.phone || '').trim(), email = String(b.email || '').trim().toLowerCase(), reason = String(b.reason || '').trim(), token = String(b.token || '');
   const s = +b.start, e = +b.end;
   if (!/^[A-Za-z0-9]{8,40}$/.test(bizId) || !typeId || typeId.length > 40 || !Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 28800000 || !name || name.length > 80 || !phone || phone.length > 30 || email.length > 120 || !reason || reason.length > 300 || !token || token.length > 2100) return bad('bad-request', 'Please check the form and try again.');
   const ip = req.headers.get('CF-Connecting-IP') || 'x', hub0 = async function (k, max, win) { const x = await hub.fetch('https://hub/rate', { method: 'POST', headers: { 'x-uid': 'rate' }, body: JSON.stringify({ k: k, max: max, win: win }) }); return (await x.json()).ok; };
-  if (!(await hub0('ip:' + ip, 6, 3600000)) || !(await hub0('biz:' + bizId, 60, 86400000))) return bad('slow-down', 'Too many requests. Please try again later.', 429);
-  const tv = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }) });
-  if (!tv.ok || !(await tv.json()).success) return bad('spam-check', 'The spam check did not pass. Please try again.', 403);
+  if (!(await hub0('ip:' + ip, env.TURNSTILE_SECRET ? 6 : 3, 3600000)) || !(await hub0('biz:' + bizId, 60, 86400000))) return bad('slow-down', 'Too many requests. Please try again later.', 429);
+  if (env.TURNSTILE_SECRET) {   // optional spam check; without it the stricter per-device limit above is used
+    const tv = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }) });
+    if (!tv.ok || !(await tv.json()).success) return bad('spam-check', 'The spam check did not pass. Please try again.', 403);
+  }
   const bot = await botLogin(env); if (!bot) return bad('busy', 'Online booking is not available right now. Please call the business.', 503);
   const pg = await fsDoc(env, 'bookingPages/' + bizId, bot.t); if (!pg || pg.enabled !== true || pg.who !== 'anyone') return bad('closed', 'This business is not taking requests here.', 403);
   const type = (Array.isArray(pg.types) ? pg.types : []).filter(function (t) { return t && t.id === typeId; })[0]; if (!type) return bad('bad-request', 'Please choose the appointment type again.');
