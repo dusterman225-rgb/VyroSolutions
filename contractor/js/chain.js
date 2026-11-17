@@ -39,20 +39,12 @@
     return j.result;
   }
 
-  async function solPriceUsd() {
-    var r = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot');
-    var j = await r.json(); var p = parseFloat(j && j.data && j.data.amount);
-    if (!(p > 0)) throw { code: 'vyro/no-price' };
-    return p;
-  }
-
-  // Works out how much of the coin the customer must send for a US-dollar amount, and the 1% split.
+  // Works out how much of the coin the customer must send for a US-dollar amount, and the 2% split.
   async function quote(coin, usdCents) {
-    var base, dec, price = null;
-    if (coin === 'USDC') { dec = 6; base = usdCents * 10000; }
-    else if (coin === 'SOL') { dec = 9; price = await solPriceUsd(); base = Math.ceil((usdCents / 100) / price * 1e9); }
-    else throw { code: 'vyro/bad-coin' };
-    var fee = Math.floor(base * CFG.feeBps / 10000);
+    var base, dec = 6, price = null;
+    if (coin !== 'USDC') throw { code: 'vyro/bad-coin' };
+    base = usdCents * 10000;
+    var fee = Math.ceil(base * CFG.feeBps / 10000);
     return { amountBase: base, feeBase: fee, bizBase: base - fee, decimals: dec, price: price };
   }
 
@@ -69,14 +61,9 @@
   }
   function checkTx(tx, req) {
     if (!tx || !tx.meta || tx.meta.err) return false;
-    if (req.coin === 'SOL') {
-      var keys = tx.transaction.message.accountKeys.map(function (k) { return k.pubkey || k; });
-      var ib = keys.indexOf(req.wallet), ifee = keys.indexOf(req.feeWallet);
-      if (ib < 0 || ifee < 0) return false;
-      var db = tx.meta.postBalances[ib] - tx.meta.preBalances[ib], df = tx.meta.postBalances[ifee] - tx.meta.preBalances[ifee];
-      return db >= req.bizBase && df >= req.feeBase;
-    }
-    return tokenDelta(tx, req.wallet, req.mint) >= req.bizBase && tokenDelta(tx, req.feeWallet, req.mint) >= req.feeBase;
+    // The first time a wallet receives USDC, Vyqil's one-time startup fee (about $0.40) comes out of the payment, so allow for it.
+    var STARTUP_MAX = 600000;
+    return tokenDelta(tx, req.wallet, req.mint) >= req.bizBase - STARTUP_MAX && tokenDelta(tx, req.feeWallet, req.mint) >= req.feeBase;
   }
 
   // Looks for a finished payment that used this request's reference. Returns {signature} or null.
