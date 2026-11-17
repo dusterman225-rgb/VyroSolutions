@@ -43,3 +43,6 @@ function money(c) { return Q.u.money(c); }
   A.kinds.client.actions = [{ l: 'Find rental space for this client', run: function (r) { Q.community.find(r, { target: 'landlord', cat: 'Apartment', title: 'Rental for a client', details: r.budget ? 'Budget about ' + Q.u.money(r.budget) + ' a month.' : '' }); } }];
   A.kinds.listing.actions = [{ l: 'Find a photographer, cleaner or contractor', run: function (r) { Q.community.find(r, { target: 'photo', cat: 'Real estate photos', title: 'Photos for a listing' }); } }];
 })();
+
+// Customer portal: which kind of record is the customer.
+window.VQ_APP.portal = { kind: 'client' };
