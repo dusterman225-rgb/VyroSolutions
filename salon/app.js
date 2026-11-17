@@ -18,3 +18,6 @@ window.VQ_APP = {
     { l: 'Revenue this month', fn: function (rs, t) { var m = t.slice(0, 7), s = 0; rs.forEach(function (r) { if (r.kind === 'appt' && r.status === 'Done' && (r.date || '').slice(0, 7) === m) s += (r.price || 0) + (r.tip || 0); }); return Q.u.money(s); } }],
   watch: [{ l: 'Due to rebook', fn: function (rs, t) { return rs.filter(function (c) { if (c.kind !== 'client' || !c.rebookEvery) return false; var last = '', next = false; rs.forEach(function (a) { if (a.kind === 'appt' && a.client === c.id) { if (a.status === 'Done' && a.date > last) last = a.date; if (a.status === 'Booked' && a.date >= t) next = true; } }); return !next && last && Q.u.diff(t, last) >= c.rebookEvery * 7; }); }, sub: function (r) { return 'Every ' + r.rebookEvery + ' weeks'; } }]
 };
+
+// Customer portal: which kind of record is the customer.
+window.VQ_APP.portal = { kind: 'client' };
