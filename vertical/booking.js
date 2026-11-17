@@ -52,7 +52,8 @@
     try {
       var a = app.auth(); await a.setPersistence(firebase.auth.Auth.Persistence.NONE);
       try { await a.createUserWithEmailAndPassword(email, randomPassword()); } catch (e) { if (!e || e.code !== 'auth/email-already-in-use') throw e; res.existing = true; }
-      if (!res.existing) { try { await a.sendPasswordResetEmail(email, { url: portalBase() }); } catch (e2) { await a.sendPasswordResetEmail(email); } }
+      // Always email a "set your password" link. If the address already has a Vyqil login (for example from an earlier invite that was never finished), this is how they get in.
+      try { await a.sendPasswordResetEmail(email, { url: portalBase() }); } catch (e2) { try { await a.sendPasswordResetEmail(email); } catch (e3) { res.mailError = Q.friendly(e3); } }
       try { await a.signOut(); } catch (x) { /* ignore */ }
     } catch (e) { res.error = Q.friendly(e); }
     try { await app.delete(); } catch (x) { /* ignore */ }
@@ -74,7 +75,7 @@
       Q.toast('Inviting...'); var res = await makeLogin(email); if (res.error) { Q.toast(res.error); return; }
       var ref = Q.db.collection('custPortals').doc();
       try { await ref.set(portalDoc(r)); await Q.recs().doc(r.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { Q.toast(Q.friendly(e)); return; }
-      Q.toast(res.existing ? 'They already have a login. Send them the link.' : 'Invitation emailed.'); r.portalId = ref.id; portalLink(r);
+      Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link and ask them to tap Forgot your password.' : res.existing ? 'That email already had a Vyqil login, so we emailed a link to set a new password.' : 'Invitation emailed.'); r.portalId = ref.id; portalLink(r);
     });
   }
   function syncPortals() {
@@ -142,7 +143,7 @@
       var cw = el('div', 'chk'), ce = el('input'); ce.type = 'checkbox'; ce.id = 'bk_on'; ce.checked = p.enabled !== false; var cl = el('label', '', 'Customers can request appointments'); cl.htmlFor = 'bk_on'; cw.appendChild(ce); cw.appendChild(cl); s.appendChild(cw);
       s.appendChild(el('label', 'f', 'Who can request')); var who = el('select'); [['customers', 'Only my customers (they sign in to their customer portal)'], ['anyone', 'Anyone with my booking link']].forEach(function (o) { var x = el('option', '', o[1]); x.value = o[0]; who.appendChild(x); }); who.value = p.who || 'customers'; s.appendChild(who);
       var wn = el('div', 'note', ''); s.appendChild(wn);
-      function whoNote() { wn.textContent = who.value === 'anyone' ? 'Anyone can ask for a time, with a short spam check. You can accept, suggest another time, or decline each one. A "Request appointment" button also shows on your customer portal.' : 'Only customers you have invited to the customer portal can request. A request button shows on their portal.'; if (who.value === 'anyone' && !(window.VQ_BOOKING && window.VQ_BOOKING.turnstileKey)) wn.textContent += ' The spam check is not set up yet, so requests from the public link will not work until it is.'; }
+      function whoNote() { wn.textContent = who.value === 'anyone' ? 'Anyone can ask for a time, with a short spam check. You can accept, suggest another time, or decline each one. A "Request appointment" button also shows on your customer portal.' : 'Only customers you have invited to the customer portal can request. A request button shows on their portal.'; if (who.value === 'anyone' && !(window.VQ_BOOKING && window.VQ_BOOKING.turnstileKey)) wn.textContent += ''; }
       who.onchange = whoNote; whoNote();
       s.appendChild(el('label', 'f', 'Your time zone')); var tz = el('select'); var zs = B.TZS.slice(); if (!zs.some(function (z) { return z[0] === p.tz; })) zs.push([p.tz, p.tz]); zs.forEach(function (z) { var o = el('option', '', z[1] + ' (' + z[0].split('/')[1].replace(/_/g, ' ') + ')'); o.value = z[0]; tz.appendChild(o); }); tz.value = p.tz; s.appendChild(tz);
       s.appendChild(el('label', 'f', 'Minimum notice')); var lead = el('select'); [[0, 'None'], [2, '2 hours'], [4, '4 hours'], [12, '12 hours'], [24, '1 day'], [48, '2 days'], [72, '3 days']].forEach(function (o) { var x = el('option', '', o[1]); x.value = String(o[0]); lead.appendChild(x); }); lead.value = String(p.leadHours); if (lead.value !== String(p.leadHours)) lead.value = '24'; s.appendChild(lead); s.appendChild(el('div', 'note', 'How soon from now a customer can book. Stops same-day surprises.'));

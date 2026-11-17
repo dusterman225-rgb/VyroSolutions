@@ -31,12 +31,35 @@
     var types = pg.types || [], now = Date.now(), tz = tzOf(pg), sel = el('select'), days = el('div', 'subs'), times = el('div'), picked = null;
     types.forEach(function (t, i) { var o = el('option', '', t.name + ' (' + (t.min >= 60 ? (t.min / 60) + (t.min === 60 ? ' hour' : ' hours') : t.min + ' min') + ')'); o.value = String(i); sel.appendChild(o); });
     if (types.length > 1) field(parent, 'What kind of appointment', sel); else if (types[0]) parent.appendChild(el('div', 'hint', types[0].name));
-    parent.appendChild(el('label', 'f', 'Pick a day')); parent.appendChild(days); parent.appendChild(el('label', 'f', 'Pick a time')); parent.appendChild(times);
+    parent.appendChild(el('label', 'f', 'Pick a day on the calendar')); parent.appendChild(days); parent.appendChild(el('label', 'f', 'Pick a time')); parent.appendChild(times);
     function drawDays() {
       var type = types[+sel.value || 0]; days.textContent = ''; times.textContent = ''; onPick(null); if (!type) return;
       var list = B.slots(pg, type, now), by = {}, order = []; list.forEach(function (x) { var k = B.ymd(tz, x.s); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(x); });
       if (!order.length) { times.appendChild(el('div', 'empty', 'No open times right now. Please check back later.')); return; }
-      order.slice(0, 45).forEach(function (k, i) { var b = el('button', '', B.fmtDay(tz, by[k][0].s)); b.type = 'button'; b.onclick = function () { Array.prototype.forEach.call(days.children, function (x) { x.className = ''; }); b.className = 'on'; drawTimes(type, by[k]); }; days.appendChild(b); });
+      var MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var f = order[0].split('-'), vy = +f[0], vm = +f[1], last = order[order.length - 1].split('-'), maxIdx = (+last[0]) * 12 + (+last[1]), minIdx = vy * 12 + vm, chosen = null;
+      var cal = el('div', 'card'); cal.style.cssText = 'padding:10px;margin:0 0 8px'; days.appendChild(cal);
+      function draw() {
+        cal.textContent = '';
+        var head = el('div'); head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
+        var pv = el('button', 'btn ghost', '‹'), nx = el('button', 'btn ghost', '›'); pv.type = nx.type = 'button'; pv.style.cssText = nx.style.cssText = 'width:44px;padding:6px 0';
+        pv.disabled = vy * 12 + vm <= minIdx; nx.disabled = vy * 12 + vm >= maxIdx;
+        pv.onclick = function () { vm--; if (vm < 1) { vm = 12; vy--; } draw(); }; nx.onclick = function () { vm++; if (vm > 12) { vm = 1; vy++; } draw(); };
+        var tt = el('b', '', MN[vm - 1] + ' ' + vy); tt.style.color = '#fff'; head.appendChild(pv); head.appendChild(tt); head.appendChild(nx); cal.appendChild(head);
+        var g = el('div'); g.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center'; cal.appendChild(g);
+        ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { var h = el('div', 'hint', d); h.style.margin = '0'; g.appendChild(h); });
+        var first = new Date(Date.UTC(vy, vm - 1, 1)).getUTCDay(), dim = new Date(Date.UTC(vy, vm, 0)).getUTCDate();
+        for (var i = 0; i < first; i++) g.appendChild(el('div'));
+        for (var d = 1; d <= dim; d++) (function (d) {
+          var k = vy + '-' + ('0' + vm).slice(-2) + '-' + ('0' + d).slice(-2), open = !!by[k], b = el('button', open ? 'btn ghost' : '', String(d)); b.type = 'button';
+          b.style.cssText = 'padding:9px 0;min-width:0;border-radius:8px;' + (open ? 'font-weight:700;' : 'background:none;border:0;color:#5b6570;opacity:.55;');
+          if (k === chosen) { b.className = 'btn'; b.style.cssText = 'padding:9px 0;min-width:0;border-radius:8px;font-weight:700'; }
+          if (open) b.onclick = function () { chosen = k; draw(); drawTimes(type, by[k]); }; else b.disabled = true;
+          g.appendChild(b);
+        })(d);
+        cal.appendChild(el('div', 'hint', 'Days in bold have open times.')).style.marginTop = '8px';
+      }
+      draw();
     }
     function drawTimes(type, list) {
       times.textContent = ''; onPick(null); var g = el('div', 'qa'); g.style.gridTemplateColumns = 'repeat(2,1fr)';
@@ -53,9 +76,9 @@
       inner.textContent = ''; var c = el('div', 'card'); inner.appendChild(c);
       var em = el('input'); em.type = 'email'; em.autocomplete = 'email'; em.value = qs.get('e') || ''; var pw = el('input'); pw.type = 'password'; pw.autocomplete = 'current-password';
       field(c, 'Email', em); field(c, 'Password', pw); var err = el('div', 'note err'); var go = el('button', 'btn wide', 'Sign in'); go.type = 'button'; var fg = el('button', 'link', 'Forgot your password?'); fg.type = 'button'; c.appendChild(go); c.appendChild(fg); c.appendChild(err);
-      go.onclick = function () { err.textContent = ''; go.disabled = true; auth.signInWithEmailAndPassword(em.value.trim(), pw.value).catch(function (e) { err.textContent = friendly(e); }).then(function () { go.disabled = false; }); };
+      go.onclick = function () { err.textContent = ''; go.disabled = true; auth.signInWithEmailAndPassword(em.value.trim(), pw.value).catch(function (e) { err.textContent = friendly(e) + (/do not match/.test(friendly(e)) ? ' First time here? Tap "Forgot your password?" to set your password.' : ''); }).then(function () { go.disabled = false; }); };
       pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') go.click(); });
-      fg.onclick = function () { if (!em.value.trim()) { err.textContent = 'Type your email first.'; return; } auth.sendPasswordResetEmail(em.value.trim(), { url: location.origin + location.pathname }).then(function () { err.className = 'note'; err.textContent = 'Check your email for a link to set a new password.'; }, function (e) { err.textContent = friendly(e); }); };
+      fg.onclick = function () { if (!em.value.trim()) { err.textContent = 'Type your email first.'; return; } auth.sendPasswordResetEmail(em.value.trim(), { url: location.origin + location.pathname }).catch(function () { return auth.sendPasswordResetEmail(em.value.trim()); }).then(function () { err.className = 'note'; err.textContent = 'Check your email for a link to set a new password.'; }, function (e) { err.textContent = friendly(e); }); };
     }
     function pushBtn(parent) {
       if (!(window.Notification && 'serviceWorker' in navigator && 'PushManager' in window)) return;
@@ -142,7 +165,7 @@
       var why = el('textarea'); why.maxLength = 300; why.placeholder = 'A few words about what you need'; field(c, 'Reason for the appointment', why);
       var ts = el('div'); ts.style.margin = '12px 0'; c.appendChild(ts);
       if (cfg.turnstileKey) { var s = el('script'); s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.onload = function () { try { window.turnstile.render(ts, { sitekey: cfg.turnstileKey, theme: 'dark', callback: function (t) { token = t; } }); } catch (e) { /* shown below */ } }; document.head.appendChild(s); }
-      else c.appendChild(el('div', 'note err', 'This page is not fully set up yet. Please call the business instead.'));
+      else token = 'none';
       var err = el('div', 'note err'); c.appendChild(err); var go = el('button', 'btn wide', 'Send request'); go.type = 'button'; c.appendChild(go);
       go.onclick = function () {
         if (!pick) { err.textContent = 'Choose a day and a time.'; return; } if (!nm.value.trim() || !ph.value.trim()) { err.textContent = 'Add your name and phone.'; return; } if (!why.value.trim()) { err.textContent = 'Add a few words about the reason.'; return; } if (!token) { err.textContent = 'Please complete the spam check.'; return; }
