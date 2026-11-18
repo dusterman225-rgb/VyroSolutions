@@ -106,6 +106,13 @@ select{appearance:none;-webkit-appearance:none;color-scheme:dark;background-colo
 option,optgroup{background:#0C1117;color:#fff}optgroup{color:#4B9CD3;font-style:normal;font-weight:700}
 select:focus{background-color:rgba(75,156,211,.08)}
 input,textarea,select{color-scheme:dark}
+.vq-sel{display:block;width:100%;text-align:left;min-height:44px;padding:12px 38px 12px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(5,7,10,.7) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%234B9CD3' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;color:#fff;font:16px system-ui,sans-serif;cursor:pointer}
+.vq-sel.ph{color:var(--mut)}.vq-sel:disabled{opacity:.5}.vq-sel:focus,.vq-sel:active{border-color:var(--blue);box-shadow:0 0 14px var(--glow)}
+.vq-pick{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center}
+.vq-pick-box{width:100%;max-width:560px;max-height:75vh;overflow-y:auto;background:#0a0f15;border:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 0 calc(14px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.6)}
+.vq-opt{display:block;width:100%;text-align:left;padding:14px 18px;background:none;border:0;border-bottom:1px solid rgba(255,255,255,.06);color:var(--silver);font:16px system-ui,sans-serif;cursor:pointer}
+.vq-opt.on{color:#fff;background:rgba(75,156,211,.18);box-shadow:inset 3px 0 0 var(--blue)}.vq-opt:active{background:rgba(75,156,211,.28)}.vq-opt:disabled{opacity:.4}
+.vq-grp{padding:14px 18px 6px;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);font-weight:700}
 
 /* Community leads: new = Vyqil blue, already viewed = dark */
 .card.lead-new{border-color:#64bcf7!important;background:rgba(100,188,247,.12)!important;box-shadow:0 0 0 1px rgba(100,188,247,.55),0 0 18px rgba(100,188,247,.25)}
