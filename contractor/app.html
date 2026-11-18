@@ -183,7 +183,16 @@
       var fl = await vflow.sync(ctx);
       if (fl.notes.length) {
         var fb = $('vFlow'); fb.style.cssText = 'display:block;margin:14px 0 4px;border:2px solid #4ba3ff;border-radius:14px;padding:10px 12px;background:#0b1624;box-shadow:0 0 14px rgba(75,163,255,.5)';
-        fl.notes.forEach(function (x) { var a = document.createElement('a'); a.href = x.href; a.textContent = x.text; a.style.cssText = 'display:block;color:#cfe6ff;padding:6px 0;text-decoration:none;overflow-wrap:anywhere'; fb.appendChild(a); });
+        fl.notes.forEach(function (x) {
+          var a = document.createElement('a'); a.href = x.href; a.textContent = x.text; a.style.cssText = 'display:block;color:#cfe6ff;padding:6px 0;text-decoration:none;overflow-wrap:anywhere'; fb.appendChild(a);
+          // "Customer accepted online" notices get a one-tap Create contract button.
+          if (x.estId && window.vflow && vflow.createContractFor) {
+            var cb = document.createElement('button'); cb.type = 'button'; cb.textContent = x.action || 'Create contract'; cb.className = 'btn';
+            cb.style.cssText = 'display:block;width:100%;margin:4px 0 8px;padding:10px;border-radius:10px;border:0;background:#4ba3ff;color:#04121f;font-weight:700';
+            cb.onclick = async function () { cb.disabled = true; cb.textContent = 'Creating...'; try { var cid = await vflow.createContractFor(ctx, x.estId); location.href = cid ? 'contract.html?id=' + cid : x.href; } catch (e) { cb.disabled = false; cb.textContent = 'Could not create. Open the estimate'; cb.onclick = function () { location.href = x.href; }; } };
+            fb.appendChild(cb);
+          }
+        });
       }
     } catch (e) { /* best effort */ }
 

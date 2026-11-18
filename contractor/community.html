@@ -22,6 +22,9 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
 .sheet .card{margin:8px 0}.hint{color:var(--cm-mut);font-size:.8rem}.empty{color:var(--cm-mut);text-align:center;padding:14px 8px;font-size:.88rem}
 .pill{display:inline-block;border:1px solid var(--cm-line);border-radius:999px;padding:1px 8px;font-size:.7rem;color:var(--cm-mut);white-space:nowrap}.pill.ok{color:#2fbf8b;border-color:#2b5a45}
 .btn.sm{min-height:34px;padding:0 10px;font-size:.78rem}
+.sec.lead-new{border-color:#64bcf7!important;background:rgba(100,188,247,.12)!important;box-shadow:0 0 0 1px rgba(100,188,247,.55),0 0 18px rgba(100,188,247,.25)}
+.sec.lead-old{background:#04070a!important;border-color:rgba(255,255,255,.06)!important;opacity:.78}
+.sec.lead-new summary{color:#9fd6fb}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:60;background:#11283d;border:1px solid #2f7cf6;color:#fff;padding:10px 14px;border-radius:12px;max-width:90vw}
 </style>
 </head>
@@ -112,28 +115,43 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       var box = $('filters'); box.textContent = ''; if (!me.trades.length) return;
       [''].concat(me.trades).forEach(function (t) { var b = el('button', 'tab' + (filterTrade === t ? ' on' : ''), t || 'All my trades'); b.type = 'button'; b.onclick = function () { filterTrade = t; draw(); drawFilters(); }; box.appendChild(b); });
     }
+    // New leads show in Vyqil blue; ones already looked at turn dark. Kept on this device only.
+    var shown = [];
+    function lget(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    function lset(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* optional */ } }
+    function seenMap() { return lget('vq_lseen_' + ctx.bizId) || {}; }
+    function dismissedMap() { return lget('vq_ldis_' + ctx.bizId) || {}; }
+    function markSeen(ids) { var m = seenMap(); ids.forEach(function (id) { if (!m[id]) m[id] = Date.now(); }); lset('vq_lseen_' + ctx.bizId, m); }
+    window.addEventListener('pagehide', function () { markSeen(shown); });
     function inMyTrades(l) { return !me.trades.length || l.trade === 'Other' || me.trades.indexOf(l.trade) > -1; }
     function draw() {
       var box = $('reqs'); box.textContent = '';
+      var dis = dismissedMap();
+      shown = [];
       var list = leads.filter(function (l) {
+        if (dis[l.id]) return false;
         if ((l.target || 'contractor') !== 'contractor') return false; if (l.to && l.to !== ctx.bizId) return false; if (l.fromBiz === ctx.bizId) return false;
         l._mi = V.miles(me.lat, me.lng, l.lat, l.lng); if (l._mi > Math.min(me.radius, l.radius || 100)) return false;
         if (filterTrade ? l.trade !== filterTrade : !inMyTrades(l) && !l.to) return false; return true;
-      }).sort(function (a, b) { return (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a._mi - b._mi; });
+      }).sort(function (a, b) { var s = seenMap(); return ((s[a.id] ? 1 : 0) - (s[b.id] ? 1 : 0)) || (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a._mi - b._mi; });
+      shown = list.map(function (l) { return l.id; });
       $('reqMsg').textContent = list.length ? '' : (me.lat == null ? '' : 'No open requests within ' + me.radius + ' miles right now. New ones appear here by themselves.');
       list.forEach(function (l) {
-        var d = el('details', 'sec'); d.style.marginTop = '8px'; var sm = el('summary', '', (l.urgent ? 'Urgent: ' : '') + l.title); var sub = el('small', '', ' ' + l.trade + ' · ' + Math.round(l._mi) + ' mi · ' + l.city); sm.appendChild(sub);
+        var isNew = !seenMap()[l.id], d = el('details', isNew ? 'sec lead-new' : 'sec lead-old'); d.style.marginTop = '8px'; var sm = el('summary', '', (isNew ? 'NEW \u00b7 ' : '') + (l.urgent ? 'Urgent: ' : '') + l.title);
+        d.addEventListener('toggle', function () { if (d.open && isNew) { isNew = false; markSeen([l.id]); d.className = 'sec lead-old'; sm.firstChild.textContent = sm.firstChild.textContent.replace(/^NEW \u00b7 /, ''); } }); var sub = el('small', '', ' ' + l.trade + ' · ' + Math.round(l._mi) + ' mi · ' + l.city); sm.appendChild(sub);
         if (l.to) { var p = el('small', 'late', ' asked you'); sm.appendChild(p); } if (mine[l.id]) sm.appendChild(el('small', '', ' · you replied'));
         d.appendChild(sm); var inn = el('div', 'in');
         function info(a, b) { if (!b) return; var r = el('div', 'row'); r.appendChild(el('span', '', a)); r.appendChild(el('b', '', b)); inn.appendChild(r); }
-        info('From', l.fromName); info('Posted', V.ago(l.createdAt)); info('Details', l.details); info('Where', l.city + ' (about ' + Math.round(l._mi) + ' miles away)'); info('Their phone', l.phone);
+        info('From', l.fromName); info('Posted', V.ago(l.createdAt)); info('Details', l.details); info('Where', l.city + ' (about ' + Math.round(l._mi) + ' miles away)'); info('Their phone', l.phone); info('Their email', l.email);
         var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call'); call.href = th; inn.appendChild(call); }
+        if (l.email) { var em0 = el('a', 'btn ghost', 'Email them'); em0.href = 'mailto:' + l.email.replace(/[^\w.@+-]/g, '') + '?subject=' + encodeURIComponent('Re: ' + l.title) + '&body=' + encodeURIComponent('Hi ' + (l.fromName || 'there') + ',\r\n\r\nI saw your request on Vyqil: ' + l.title + '.\r\n\r\n\r\nThanks,\r\n' + (ctx.biz.name || '')); inn.appendChild(em0); }
         var rpt = el('button', 'btn ghost', 'Report this request'); rpt.type = 'button'; rpt.onclick = function () { V.report(db, l, ctx.user.uid, ctx.bizId).then(function (ok) { if (ok) { rpt.textContent = 'Reported. Thank you.'; rpt.disabled = true; } }, function (e) { $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }); };
         if (mine[l.id]) { var mg = el('button', 'btn ghost', 'Messages'); mg.type = 'button'; mg.onclick = function () { V.openThread(db, l.id, ctx.bizId, ctx.user.uid, false, l.fromName); }; inn.appendChild(mg); }
         var rb = el('button', 'btn', mine[l.id] ? 'Update my reply' : 'Reply with my details'); rb.type = 'button'; rb.onclick = function () { reply(l); }; inn.appendChild(rb);
         if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id] + '&tpl=' + encodeURIComponent(l.trade || ''); inn.appendChild(ce); inn.appendChild(el('div', 'note ok', 'In your Leads.')); }
         else { var ab = el('button', 'btn ghost', 'Add to my Leads'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; inn.appendChild(ab); }
-        inn.appendChild(rpt); d.appendChild(inn); box.appendChild(d);
+        var rm = el('button', 'btn ghost', 'Remove from my dashboard'); rm.type = 'button'; rm.onclick = function () { if (confirm('Remove this lead from your dashboard? Only you stop seeing it. The other business is not told.')) { var dm = dismissedMap(); dm[l.id] = Date.now(); lset('vq_ldis_' + ctx.bizId, dm); draw(); } };
+        inn.appendChild(rpt); inn.appendChild(rm); d.appendChild(inn); box.appendChild(d);
       });
     }
     function drawWon() {
