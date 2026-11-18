@@ -13,7 +13,7 @@
   // Community requests that match this business become leads on their own (source "Vyqil Community"). A request is only added once per device, so deleting a lead keeps it deleted.
   function autoAdd(ctx, list) {
     if (['owner', 'gm', 'supervisor'].indexOf(ctx.role) < 0) return; var key = 'vq_comm_sync_' + ctx.bizId, done = []; try { done = JSON.parse(localStorage.getItem(key) || '[]') || []; } catch (e) { /* optional */ }
-    var col = ctx.bizRef.collection('leads'), todo = list.filter(function (l) { return done.indexOf(l.id) < 0; }).slice(0, 15);
+    var dis = lj('vq_ldis_' + ctx.bizId) || {}, col = ctx.bizRef.collection('leads'), todo = list.filter(function (l) { return done.indexOf(l.id) < 0 && !dis[l.id]; }).slice(0, 15);
     todo.forEach(function (l) {
       var ref = col.doc('vq' + l.id);
       ref.get().then(function (d) {
@@ -22,6 +22,7 @@
       }).catch(function () { /* try again next time */ });
     });
   }
+  function lj(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function mount(ctx, opts) {
     opts = opts || {}; var V = window.VQCommunity, host = opts.host || document.getElementById('vTiles'); if (!V || !host || !ctx) return; css();
     var canEdit = ctx.role === 'owner' || ctx.role === 'gm', db = vyro.db, seenKey = 'vq_comm_seen_' + ctx.bizId;
@@ -44,13 +45,13 @@
       var seen = 0; try { seen = +localStorage.getItem(seenKey) || 0; } catch (e) { /* optional */ }
       var rad = x.radius || 100, trades = x.trades || [];
       return db.collection('communityLeads').where('cell', 'in', V.cellsAround(x.lat, x.lng, rad)).where('status', '==', 'open').get().then(function (s) {
-        var total = 0, fresh = 0, match = [];
+        var total = 0, fresh = 0, match = [], dis = lj('vq_ldis_' + ctx.bizId) || {}, seenL = lj('vq_lseen_' + ctx.bizId) || {};
         s.docs.forEach(function (q) {
-          var l = q.data(); if ((l.target || 'contractor') !== 'contractor' || l.fromBiz === ctx.bizId) return;
+          var l = q.data(); if (dis[q.id]) return; if ((l.target || 'contractor') !== 'contractor' || l.fromBiz === ctx.bizId) return;
           if (l.to && l.to !== ctx.bizId) return;
           if (V.miles(x.lat, x.lng, l.lat, l.lng) > Math.min(rad, l.radius || 100)) return;
           if (!l.to && trades.length && l.trade !== 'Other' && trades.indexOf(l.trade) < 0) return;
-          l.id = q.id; match.push(l); total++; var ms = l.createdAt && l.createdAt.toMillis ? l.createdAt.toMillis() : 0; if (ms > seen) fresh++;
+          l.id = q.id; match.push(l); total++; if (!seenL[q.id]) fresh++;
         });
         if (fresh) show('You have ' + fresh + ' new ' + (fresh === 1 ? 'lead' : 'leads'), 'From other Vyqil businesses near you. Tap to see and reply. Replying is how you win the job.');
         else if (total) show(total + ' open community ' + (total === 1 ? 'lead' : 'leads') + ' near you', 'Tap to see them.');
