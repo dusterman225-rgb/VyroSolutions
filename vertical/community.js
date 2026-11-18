@@ -7,7 +7,7 @@
   if (!Q || !C || !C.community || !V) return;
   Q.tabsExtra = Q.tabsExtra || []; Q.banners = Q.banners || []; Q.views = Q.views || {};
   var el = Q.u.el, S = Q.S, cfg = C.community, myLeads = [], offers = {}, watched = {}, firstLoad = true, replyCount = {};
-  var dir = null, inLeads = [], inReplied = {}, inUnsub = null, inAsked = {};
+  var leadsIv = 0, shownLeads = [], dir = null, inLeads = [], inReplied = {}, inUnsub = null, inAsked = {};
 
   function db() { return Q.db; }
   function lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -83,6 +83,7 @@
       var det = el('textarea'); det.maxLength = 600; det.rows = 3; det.value = pre.details || ''; det.placeholder = 'Anything they should know. Do not put a street address or personal names here.'; field(s, 'Details', det);
       var urg = el('input'), uw = el('div', 'chk'); urg.type = 'checkbox'; urg.id = 'cm_urg'; urg.checked = !!pre.urgent; var ul = el('label', '', 'Urgent'); ul.htmlFor = urg.id; uw.appendChild(urg); uw.appendChild(ul); s.appendChild(uw);
       var shp = el('input'), pw = el('div', 'chk'); shp.type = 'checkbox'; shp.id = 'cm_sp'; var pl = el('label', '', 'Let businesses who see this request call me'); pl.htmlFor = shp.id; pw.appendChild(shp); pw.appendChild(pl); s.appendChild(pw);
+      var emIn = el('input'); emIn.type = 'email'; emIn.maxLength = 80; emIn.placeholder = 'you@example.com'; emIn.value = lsGet('vq_email_' + S.biz.id) || (S.biz.profile && S.biz.profile.email) || S.user.email || ''; field(s, 'Your email *', emIn); s.appendChild(el('div', 'hint', 'Filled in from your account. Businesses that reply can reach you here.'));
       var ph = el('input'); ph.type = 'tel'; ph.maxLength = 30; ph.placeholder = 'Your phone number'; ph.style.display = 'none'; ph.value = lsGet('vq_phone') || ''; s.appendChild(ph); shp.onchange = function () { ph.style.display = shp.checked ? '' : 'none'; };
       var msg = el('div', 'note err'); s.appendChild(msg);
       var all = block(mk('', '', null)); s.appendChild(all);
@@ -95,10 +96,12 @@
       function build(to, toName) {
         var c = sel(); if (!c.target) { msg.textContent = 'Choose what you need.'; return null; }
         if (!title.value.trim()) { msg.textContent = 'Say what exactly you need.'; return null; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emIn.value.trim())) { msg.textContent = 'Type your email address so businesses can reach you.'; return null; }
+        lsSet('vq_email_' + S.biz.id, emIn.value.trim());
         if (shp.checked && String(ph.value).replace(/\D/g, '').length < 7) { msg.textContent = 'Type a phone number, or untick the box.'; return null; }
         if (shp.checked) lsSet('vq_phone', ph.value.trim());
         return { fromBiz: S.biz.id, fromUid: S.user.uid, fromProduct: cfg.product, target: c.target, fromName: String(S.biz.name || '').slice(0, 80), trade: c.cat, title: title.value.trim().slice(0, 100), details: det.value.trim().slice(0, 600), urgent: !!urg.checked,
-          city: String(place.city || '').slice(0, 60), lat: V.r2(place.lat), lng: V.r2(place.lng), cell: V.cellOf(V.r2(place.lat), V.r2(place.lng)), to: to || '', toName: (toName || '').slice(0, 80), radius: +rad.value, status: 'open', phone: shp.checked ? ph.value.trim().slice(0, 30) : '', recId: rec && rec.id ? rec.id : '', createdAt: Q.FV.serverTimestamp() };
+          city: String(place.city || '').slice(0, 60), lat: V.r2(place.lat), lng: V.r2(place.lng), cell: V.cellOf(V.r2(place.lat), V.r2(place.lng)), to: to || '', toName: (toName || '').slice(0, 80), radius: +rad.value, status: 'open', phone: shp.checked ? ph.value.trim().slice(0, 30) : '', email: emIn.value.trim().slice(0, 80), recId: rec && rec.id ? rec.id : '', createdAt: Q.FV.serverTimestamp() };
       }
       function post(to, toName, btn) {
         var d = build(to, toName); if (!d) return; var cw = V.canPost(); if (cw) { msg.textContent = cw; return; } msg.textContent = ''; btn.disabled = true;
@@ -157,7 +160,7 @@
             (function (box) { V.trustFor(db(), o.bizId).then(function (t) { if (t) { var ts = el('span', '', t); ts.style.opacity = '.8'; box.insertBefore(ts, box.children[1] || null); } }); })(mm);
             if (o.priceNote) mm.appendChild(el('span', '', 'Price: ' + o.priceNote)); if (o.message) mm.appendChild(el('span', '', o.message));
             var th = V.phoneHref(o.phone); if (th) { var a = el('a', '', 'Call ' + o.phone); a.href = th; a.style.display = 'block'; mm.appendChild(a); }
-            if (o.email) { var e = el('a', '', o.email); e.href = 'mailto:' + encodeURIComponent(o.email); e.style.display = 'block'; mm.appendChild(e); }
+            if (o.email) { var e = el('a', '', o.email); e.href = 'mailto:' + o.email.replace(/[^\w.@+-]/g, '') + '?subject=' + encodeURIComponent('Re: ' + l.title) + '&body=' + encodeURIComponent('Hi ' + (o.bizName || 'there') + ',\r\n\r\nThank you for replying to my request: ' + l.title + '.\r\n\r\n\r\nThanks,\r\n' + (S.biz.name || '')); e.style.display = 'block'; mm.appendChild(e); }
             r.appendChild(mm);
             var mb = mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, o.bizId, S.user.uid, true, o.bizName); }); r.appendChild(mb);
             if (l.status === 'open') { var ch = mk('Choose', 'sm', null); ch.onclick = function () { choose(l, o, ch); }; r.appendChild(ch); }
@@ -204,7 +207,12 @@
       refresh();
     }, function () { /* ignore */ });
   }
-  function waiting() { return inLeads.filter(function (l) { return !inReplied[l.id]; }).length; }
+  // Leads this business already looked at, and leads it removed from its own dashboard (kept on this device only).
+  function seenMap() { return lsGet('vq_lseen_' + S.biz.id) || {}; }
+  function dismissedMap() { return lsGet('vq_ldis_' + S.biz.id) || {}; }
+  function visibleLeads() { var d = dismissedMap(); return inLeads.filter(function (l) { return !d[l.id]; }); }
+  function markSeen(ids) { var m = seenMap(), ch = false; ids.forEach(function (id) { if (!m[id]) { m[id] = Date.now(); ch = true; } }); if (ch) lsSet('vq_lseen_' + S.biz.id, m); }
+  function waiting() { return visibleLeads().filter(function (l) { return !inReplied[l.id]; }).length; }
 
   function listing() {
     var ic = cfg.inbound, cats = V.CATS[cfg.product], me = dir ? { lat: dir.lat, lng: dir.lng, city: dir.city } : (lsGet('vq_place_' + S.biz.id) || { lat: null });
@@ -257,14 +265,19 @@
         body.textContent = '';
         if (!dir || dir.lat == null) { body.appendChild(el('div', 'empty', 'Set up your community listing first (More > Community).')); return; }
         if (!dir.listed) { body.appendChild(el('div', 'empty', 'You are hidden. Turn on your community listing to see requests.')); return; }
-        if (!inLeads.length) { body.appendChild(el('div', 'empty', 'No open requests within ' + (dir.radius || 100) + ' miles right now. New ones appear here by themselves.')); return; }
-        inLeads.slice().sort(function (a, b) { return (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || V.miles(dir.lat, dir.lng, a.lat, a.lng) - V.miles(dir.lat, dir.lng, b.lat, b.lng); }).forEach(function (l) {
-          var card = el('div', 'card'), h = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', (l.urgent ? '[Urgent] ' : '') + l.title));
+        var list0 = visibleLeads(), seenNow = seenMap();
+        shownLeads = list0.map(function (l) { return l.id; });
+        if (!list0.length) { body.appendChild(el('div', 'empty', 'No open requests within ' + (dir.radius || 100) + ' miles right now. New ones appear here by themselves.')); return; }
+        list0.slice().sort(function (a, b) { return ((seenNow[a.id] ? 1 : 0) - (seenNow[b.id] ? 1 : 0)) || (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || V.miles(dir.lat, dir.lng, a.lat, a.lng) - V.miles(dir.lat, dir.lng, b.lat, b.lng); }).forEach(function (l) {
+          var isNew = !seenNow[l.id], card = el('div', isNew ? 'card lead-new' : 'card lead-old'), h = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', (isNew ? 'NEW \u00b7 ' : '') + (l.urgent ? '[Urgent] ' : '') + l.title));
+          card.onclick = function () { if (card.className === 'card lead-new') { markSeen([l.id]); card.className = 'card lead-old'; var bb = card.querySelector('b'); if (bb) bb.textContent = bb.textContent.replace(/^NEW \u00b7 /, ''); } };
           m.appendChild(el('span', '', l.trade + ' · ' + Math.round(V.miles(dir.lat, dir.lng, l.lat, l.lng)) + ' mi · ' + l.city + ' · ' + V.ago(l.createdAt) + (l.to ? ' · asked you' : '') + (inReplied[l.id] ? ' · you replied' : '')));
           m.appendChild(el('span', '', 'From ' + l.fromName + ' (' + (V.NAMES[l.fromProduct] || 'Vyqil') + ')')); if (l.details) m.appendChild(el('span', '', l.details)); h.appendChild(m); card.appendChild(h);
           var th = V.phoneHref(l.phone); if (th) { var a = el('a', '', 'Call ' + l.phone); a.href = th; a.style.cssText = 'display:block;margin:6px 0'; card.appendChild(a); }
+          if (l.email) { var ea = el('a', '', 'Email ' + l.email); ea.href = 'mailto:' + l.email.replace(/[^\w.@+-]/g, '') + '?subject=' + encodeURIComponent('Re: ' + l.title) + '&body=' + encodeURIComponent('Hi ' + (l.fromName || 'there') + ',\r\n\r\nI saw your request on Vyqil: ' + l.title + '.\r\n\r\n\r\nThanks,\r\n' + (S.biz.name || '')); ea.style.cssText = 'display:block;margin:6px 0'; card.appendChild(ea); }
           var r = btnRow(card), rp = mk(inReplied[l.id] ? 'Update my reply' : 'Reply with my details', 'sm', function () { reply(l); }); r.appendChild(rp);
           if (inReplied[l.id]) r.appendChild(mk('Messages', 'ghost sm', function () { V.openThread(db(), l.id, S.biz.id, S.user.uid, false, l.fromName); }));
+          r.appendChild(mk('Remove', 'ghost sm', function () { Q.ask('Remove this lead from your dashboard? Only you stop seeing it. The other business is not told.', 'Remove', function () { var dm = dismissedMap(); dm[l.id] = Date.now(); lsSet('vq_ldis_' + S.biz.id, dm); card.remove(); refresh(); }); }));
           r.appendChild(mk('Report', 'ghost sm', function () { V.report(db(), l, S.user.uid, S.biz.id).then(function (ok) { if (ok) Q.toast('Reported. Thank you.'); }, function (e) { Q.toast(Q.friendly(e)); }); }));
           if (ic.addKind || ic.addAs) { var ad = mk(ic.addLabel || 'Add to my records', 'ghost sm', null); ad.onclick = function () { ad.disabled = true; var o = ic.addAs ? ic.addAs(l) : makeRec(l); o.data.kind = o.kind; o.data.by = (S.user.email || '').split('@')[0].slice(0, 30); o.data.createdAt = Q.FV.serverTimestamp(); o.data.updatedAt = Q.FV.serverTimestamp(); Q.recs().add(o.data).then(function () { ad.textContent = 'Added'; }, function (e) { ad.disabled = false; Q.toast(Q.friendly(e)); }); }; r.appendChild(ad); }
           body.appendChild(card);
@@ -281,11 +294,10 @@
   }
   // ---------- Leads tab and the home-screen notices ----------
   function leadsSeen() { return +lsGet('vq_leads_seen_' + S.biz.id) || 0; }
-  function newLeads() { var seen = leadsSeen(); return inLeads.filter(function (l) { return !inReplied[l.id] && ms(l.createdAt) > seen; }).length; }
+  function newLeads() { var m = seenMap(); return visibleLeads().filter(function (l) { return !inReplied[l.id] && !m[l.id]; }).length; }
   function newReplies() { var n = 0; myLeads.forEach(function (l) { if (l.status !== 'open') return; var c = (offers[l.id] || []).length, s2 = +lsGet('vq_rep_seen_' + l.id) || 0; if (c > s2) n += c - s2; }); return n; }
   function markRepliesSeen() { myLeads.forEach(function (l) { lsSet('vq_rep_seen_' + l.id, (offers[l.id] || []).length); }); }
   Q.views.leads = function (v) {
-    lsSet('vq_leads_seen_' + S.biz.id, Date.now());
     var ic = cfg.inbound; v.appendChild(el('h2', '', 'Leads'));
     var top = el('div', 'card'); v.appendChild(top);
     top.appendChild(el('div', 'hint', 'Requests from other Vyqil businesses near you show up here by themselves. Reply to win the job. Need someone yourself? Use Find a Vyqil.'));
@@ -303,6 +315,8 @@
     if (ic) {
       var won = el('div'); v.appendChild(won); loadWon(won); v.appendChild(el('h2', '', ic.inboxTitle || 'Requests near you'));
       var body = el('div'); v.appendChild(body); drawInbound(body);
+      // Leads shown here count as viewed once the person leaves this tab (they stay blue while it is open).
+      clearInterval(leadsIv); leadsIv = setInterval(function () { if (!document.body.contains(v) && S.tab !== 'leads') { clearInterval(leadsIv); markSeen(shownLeads); refresh(); } }, 1000);
       if (!dir || dir.lat == null || !dir.listed) { top.appendChild(block(mk('Set up my community listing', '', listing))); }
     }
   };
