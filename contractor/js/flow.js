@@ -107,7 +107,7 @@
 
   async function approveFromPortal(ctx, e, d) {
     await ctx.bizRef.collection('estimates').doc(e.id).update({ status: 'Approved', approvedAt: vyro.stamp(), approvedVia: 'customer portal', acceptedBy: d.approvedBy || '', acceptedAt: d.approvedAt || null, updatedAt: vyro.stamp() });
-    e.status = 'Approved';
+    e.status = 'Approved'; e.approvedVia = 'customer portal';
     await ensureJob(ctx, e);
     try { await ctx.bizRef.collection('jobs').doc(e.id).collection('updates').add({ text: 'Estimate ' + (e.number || '') + ' approved in the portal by ' + (d.approvedBy || 'the customer'), by: 'Customer portal', kind: 'status', createdAt: vyro.stamp() }); } catch (x) { /* optional */ }
     if (e.publicToken && window.vpublic && vpublic.closeEstimate) { try { await vpublic.closeEstimate(ctx, e.publicToken); } catch (x) { /* optional */ } }
@@ -184,6 +184,15 @@
     return out;
   }
 
+  // The Create contract button on the dashboard notice. Returns the new contract id (or the existing one).
+  async function createContractFor(ctx, estId) {
+    var s = await ctx.bizRef.collection('estimates').doc(estId).get();
+    if (!s.exists) return null;
+    var e = s.data(); e.id = estId;
+    if (e.contractId) return e.contractId;
+    return await makeContract(ctx, e);
+  }
+
   // Dashboard sweep. Returns { notes: [ {text, href} ] } for the "What just happened" card.
   async function sync(ctx) {
     var notes = [];
@@ -198,14 +207,18 @@
           try { ds = await vyro.db.collection('portals').doc(e.id).collection('documents').doc(e.id).get(); } catch (x) { ds = null; }
           if (ds && ds.exists) {
             var d = ds.data();
-            if (d.approvedAt) { await approveFromPortal(ctx, e, d); notes.push({ text: (e.customerName || 'Your customer') + ' approved estimate ' + (e.number || '') + ' in the portal.', href: 'estimate.html?id=' + e.id }); }
+            if (d.approvedAt) { await approveFromPortal(ctx, e, d); e.status = 'Approved'; e.approvedVia = 'customer portal'; }
             else if (d.response && ['revise', 'declined'].indexOf(d.response) > -1 && e.portalAnswer !== (d.response + '|' + (d.responseReason || ''))) {
               await ctx.bizRef.collection('estimates').doc(e.id).update({ portalAnswer: d.response + '|' + (d.responseReason || '') });
               notes.push({ text: (e.customerName || 'Your customer') + (d.response === 'revise' ? ' asked for changes to' : ' declined') + ' estimate ' + (e.number || '') + ': ' + (d.responseReason || ''), href: 'estimate.html?id=' + e.id });
             }
           }
         }
-        if (e.status === 'Approved' && !e.contractId && !e.autoContractAt) {
+        // Accepted online (portal or estimate link): the contractor gets a notice with a Create contract button instead of a silent auto-contract.
+        var online = e.approvedVia === 'customer portal' || e.approvedVia === 'customer link';
+        if (online && e.status === 'Approved' && !e.contractId) {
+          notes.push({ text: (e.customerName || 'Your customer') + ' accepted estimate ' + (e.number || '') + ' online.', href: 'estimate.html?id=' + e.id, estId: e.id, action: 'Create contract' });
+        } else if (e.status === 'Approved' && !e.contractId && !e.autoContractAt) {
           var cid = await makeContract(ctx, e);
           if (cid) notes.push({ text: 'A contract was created for estimate ' + (e.number || '') + '. Finish the blanks and share it.', href: 'contract.html?id=' + cid });
         }
@@ -234,5 +247,5 @@
     } catch (err) { return { ok: false, reason: 'error' }; }
   }
 
-  window.vflow = { reminderToPortal: reminderToPortal, message: message, portalLink: portalLink, estimateToPortal: estimateToPortal, invoiceToPortal: invoiceToPortal, makeContract: makeContract, afterSigned: afterSigned, sync: sync };
+  window.vflow = { reminderToPortal: reminderToPortal, message: message, portalLink: portalLink, estimateToPortal: estimateToPortal, invoiceToPortal: invoiceToPortal, makeContract: makeContract, createContractFor: createContractFor, afterSigned: afterSigned, sync: sync };
 })();
