@@ -478,7 +478,9 @@ async function bookPublic(env, req, b, hub) {
   const type = (Array.isArray(pg.types) ? pg.types : []).filter(function (t) { return t && t.id === typeId; })[0]; if (!type) return bad('bad-request', 'Please choose the appointment type again.');
   if (!slotOk(pg, type, s, e, Date.now())) return bad('taken', 'That time is no longer open. Please pick another.', 409);
   const f = function (v) { return { stringValue: String(v) }; };
+  const appFields = {}; if (pg.product === 'landlord' && b.app && typeof b.app === 'object') ['looking', 'moveIn', 'income', 'employer', 'curAddr', 'occupants', 'pets', 'refs'].forEach(function (k) { const v = b.app[k] != null ? String(b.app[k]).trim().slice(0, k === 'refs' ? 300 : 80) : ''; if (v) appFields[k] = f(v); });
   const doc = { fields: { bizId: f(bizId), email: f(email), name: f(name), phone: f(phone), typeId: f(typeId), typeName: f(String(type.name || '').slice(0, 40)), start: { integerValue: String(s) }, end: { integerValue: String(e) }, reason: f(reason), status: f('pending'), source: f('public'), uid: f(bot.uid), createdAt: { timestampValue: new Date().toISOString() } } };
+  if (Object.keys(appFields).length) doc.fields.app = { mapValue: { fields: appFields } };
   const r = await fetch('https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents/apptRequests', { method: 'POST', headers: { Authorization: 'Bearer ' + bot.t, 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
   if (!r.ok) return bad('busy', 'Could not save the request. Please try again.', 502);
   const id = String((await r.json()).name || '').split('/').pop();
