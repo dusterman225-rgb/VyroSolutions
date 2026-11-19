@@ -35,19 +35,24 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     <div class="tag">Community</div>
   </div>
 
-  <div class="card">
-    <h2>Nearby requests</h2>
-    <p class="note"><a href="../community-terms.html" target="_blank">How sharing works and what to avoid posting</a></p>
-    <p>Landlords and other Vyqil businesses near you post jobs here. Reply with your details, or add the job straight to your Leads.</p>
-    <div id="needSetup" class="note" style="display:none">Set your location and trades below first. Requests within your range then show here.</div>
-    <div id="filters" style="margin:10px 0"></div>
-    <div id="reqs"></div>
-    <div class="note" id="reqMsg"></div>
-  </div>
+  <details class="sec" id="nearSec">
+    <summary>Nearby requests <small id="nearSum"></small></summary>
+    <div class="in">
+      <p class="note"><a href="../community-terms.html" target="_blank">How sharing works and what to avoid posting</a></p>
+      <p>Landlords and other Vyqil businesses near you post jobs here. Reply with your details, or add the job straight to your Leads.</p>
+      <div id="needSetup" class="note" style="display:none">Set your location and trades below first. Requests within your range then show here.</div>
+      <div id="filters" style="margin:10px 0"></div>
+      <div id="reqs"></div>
+      <div class="note" id="reqMsg"></div>
+    </div>
+  </details>
 
   <div class="card" id="wonCard" style="display:none"><h2>Jobs you won</h2><p>People who chose you. Message them, then make your estimate.</p><div id="won"></div></div>
 
-  <div class="card"><h2>Need something yourself?</h2><div id="out"></div></div>
+  <details class="sec" id="needSec">
+    <summary>Need A Vyqil Member</summary>
+    <div class="in"><div id="out"></div></div>
+  </details>
 
   <details class="sec" id="setupSec" open>
     <summary>Your community listing <small id="setupSum"></small></summary>
@@ -145,7 +150,9 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       w.appendChild(ps); w.appendChild(go); w.appendChild(no); box.appendChild(w);
     }
     // New leads show in Vyqil blue; ones already looked at turn dark. Kept on this device only.
-    var shown = [];
+    var shown = [], nearTouched = false;
+    $('nearSec').addEventListener('toggle', function () { nearTouched = true; });
+    if (location.hash === '#need') $('needSec').open = true; if (location.hash === '#listing') $('setupSec').open = true;
     function lget(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
     function lset(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* optional */ } }
     function seenMap() { return lget('vq_lseen_' + ctx.bizId) || {}; }
@@ -164,6 +171,9 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
         if (filterTrade ? l.trade !== filterTrade : !inMyTrades(l) && !l.to) return false; return true;
       }).sort(function (a, b) { var s = seenMap(); return ((s[a.id] ? 1 : 0) - (s[b.id] ? 1 : 0)) || (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a._mi - b._mi; });
       shown = list.map(function (l) { return l.id; });
+      var nNew = list.filter(function (l) { return !seenMap()[l.id]; }).length;
+      $('nearSum').textContent = list.length ? '(' + list.length + (nNew ? ', ' + nNew + ' new' : '') + ')' : '';
+      if (nNew && !nearTouched) $('nearSec').open = true;
       $('reqMsg').textContent = list.length ? '' : (me.lat == null ? '' : 'No open requests within ' + me.radius + ' miles right now. New ones appear here by themselves.');
       list.forEach(function (l) {
         var isNew = !seenMap()[l.id], d = el('details', isNew ? 'sec lead-new' : 'sec lead-old'); d.style.marginTop = '8px'; var sm = el('summary', '', (isNew ? 'NEW \u00b7 ' : '') + (l.urgent ? 'Urgent: ' : '') + l.title);
@@ -261,7 +271,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       if (d.exists) { var x = d.data(); dirData = x; me = { lat: x.lat, lng: x.lng, city: x.city || '', trades: x.trades || [], radius: x.radius || 100, listed: !!x.listed };
         $('place').value = me.city; $('radius').value = String(me.radius); $('listed').checked = me.listed; $('showPhone').checked = !!x.phone; $('perk').value = x.perk || ''; $('lic').value = x.license || ''; $('ins').checked = !!x.insured;
         Array.prototype.forEach.call(document.querySelectorAll('#trades input'), function (c) { c.checked = me.trades.indexOf(c.value) > -1; }); $('placeMsg').textContent = me.city ? 'Using ' + me.city + '.' : '';
-        $('setupSec').open = false; }
+        $('setupSec').open = location.hash === '#listing'; }
       sum(); watch(); loadWon(); drawProf();
       try { localStorage.setItem('vq_comm_seen_' + ctx.bizId, String(Date.now())); } catch (e2) { /* optional */ }
     }, function (e) { $('err').textContent = vyro.friendly(e); });

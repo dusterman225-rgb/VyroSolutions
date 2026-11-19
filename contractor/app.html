@@ -27,9 +27,14 @@
         <details>
           <summary class="mg">Work</summary>
           <a class="mi" href="leads.html">Leads</a>
-          <a class="mi" href="community.html">Community</a>
           <a class="mi" href="estimates.html">Estimates</a>
           <a class="mi" href="jobs.html">Active jobs</a>
+        </details>
+        <details>
+          <summary class="mg">Community <span class="badge" id="bComm" style="display:none"></span></summary>
+          <a class="mi" href="community.html">Nearby requests and Vyqil members</a>
+          <a class="mi" href="community.html#need">Need A Vyqil Member</a>
+          <a class="mi" href="community.html#listing">My community listing</a>
         </details>
         <details>
           <summary class="mg">Customers <span class="badge" id="bMsg" style="display:none"></span></summary>
@@ -56,6 +61,7 @@
           <summary class="mg">Business</summary>
           <a class="mi" href="profile.html">Business profile</a>
           <a class="mi" href="team.html">Team</a>
+          <a class="mi" href="#" id="miStart">Get started checklist</a>
           <a class="mi" id="miLink" href="signinlink.html" style="display:none">Sign-in link</a>
         </details>
         <a class="mi" href="#" id="miAlerts">Phone alerts</a>
@@ -73,6 +79,7 @@
   <div class="tag" id="bizTag" style="margin:22px 0 0">Dashboard</div>
   <div id="wpBox"></div>
 
+  <div id="vStart"></div>
   <div id="vFlow" style="display:none"></div>
   <div id="vTiles" style="display:none"></div>
 
@@ -131,7 +138,44 @@
   window.addEventListener('unhandledrejection', function (e) { if (window.vyroSigningOut) e.preventDefault(); });
   $('out').addEventListener('click', function () { var go = function () { location.href = vyro.loginUrl(); }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
 
+  // ---- Get started checklist (same idea as VyqilLandlord): shows what is done, what is next, and can be hidden ----
+  async function getStarted(ctx) {
+    var box = $('vStart'), key = 'vq_cstart_off_' + ctx.bizId, off = false;
+    try { off = localStorage.getItem(key) === '1'; } catch (e) { /* ignore */ }
+    var mi = $('miStart'); if (mi) mi.onclick = function (ev) { ev.preventDefault(); try { localStorage.removeItem(key); } catch (e) { /* ignore */ } getStarted(ctx); window.scrollTo(0, 0); };
+    box.textContent = ''; if (off) return;
+    var steps = [
+      { t: 'Fill in your business profile', d: 'Your name, phone and address show on estimates and invoices.', href: 'profile.html', done: !!(ctx.biz.name && ctx.biz.phone) },
+      { t: 'Add your first customer', d: 'Keep their phone, email and address in one place.', href: 'customers.html', done: false, q: 'customers' },
+      { t: 'Create your first estimate', d: 'Start from a template and add your line items.', href: 'estimate.html', done: false, q: 'estimates' },
+      { t: 'Send an estimate to a customer portal', d: 'They approve it online and you get a notice with a Create contract button.', href: 'estimates.html', done: false, q: 'portal' },
+      { t: 'Join the Vyqil community', d: 'Set your trades and how far you travel to get nearby requests.', href: 'community.html', done: false, q: 'community' },
+      { t: 'Turn on phone alerts', d: 'Get a ping for new messages, approvals and requests.', href: '#alerts', done: !!(window.Notification && Notification.permission === 'granted') }
+    ];
+    async function has(c) { try { return !(await ctx.bizRef.collection(c).limit(1).get()).empty; } catch (e) { return false; } }
+    steps[1].done = await has('customers'); steps[2].done = await has('estimates');
+    try { var es = await ctx.bizRef.collection('estimates').limit(60).get(); steps[3].done = es.docs.some(function (d) { return d.data().portalShared; }); } catch (e) { /* ignore */ }
+    try { var dd = await vyro.db.collection('directory').doc(ctx.bizId).get(); steps[4].done = dd.exists && dd.data().listed === true; } catch (e) { /* ignore */ }
+    var n = steps.filter(function (x) { return x.done; }).length; if (n === steps.length) return;
+    var c = document.createElement('div'); c.className = 'card'; c.style.cssText = 'border:2px solid #4ba3ff;margin-top:12px';
+    var h = document.createElement('h2'); h.textContent = 'Get started'; h.style.margin = '0 0 4px'; c.appendChild(h);
+    var p = document.createElement('p'); p.style.cssText = 'margin:0 0 10px;opacity:.85'; p.textContent = n + ' of ' + steps.length + ' done'; c.appendChild(p);
+    var bar = document.createElement('div'); bar.style.cssText = 'height:8px;border-radius:99px;background:#1b2a3b;overflow:hidden;margin-bottom:12px'; var fill = document.createElement('div'); fill.style.cssText = 'height:100%;background:#4ba3ff;width:' + Math.round(n * 100 / steps.length) + '%'; bar.appendChild(fill); c.appendChild(bar);
+    var nextSet = false;
+    steps.forEach(function (st, i) {
+      var r = document.createElement('a'); r.href = st.href; r.style.cssText = 'display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #1f2e3f;text-decoration:none;color:inherit' + (st.done ? ';opacity:.55' : '');
+      if (st.href === '#alerts') r.onclick = function (ev) { ev.preventDefault(); var a = $('miAlerts'); if (a) a.click(); };
+      var dot = document.createElement('span'); dot.textContent = st.done ? '\u2713' : String(i + 1); dot.style.cssText = 'flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;' + (st.done ? 'background:#2fbf8b;color:#04121f' : 'border:2px solid #4ba3ff'); r.appendChild(dot);
+      var m = document.createElement('span'); var b = document.createElement('b'); b.textContent = st.t; m.appendChild(b); var d = document.createElement('div'); d.style.cssText = 'font-size:.85rem;opacity:.8'; d.textContent = st.d; m.appendChild(d);
+      if (!st.done && !nextSet) { nextSet = true; var nx = document.createElement('div'); nx.textContent = 'Next step'; nx.style.cssText = 'color:#9fd6fb;font-size:.78rem;font-weight:700;margin-top:3px'; m.appendChild(nx); }
+      r.appendChild(m); c.appendChild(r);
+    });
+    var hide = document.createElement('button'); hide.type = 'button'; hide.className = 'btn ghost'; hide.textContent = 'Hide this checklist'; hide.style.marginTop = '8px'; hide.onclick = function () { try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ } box.textContent = ''; }; c.appendChild(hide);
+    box.appendChild(c);
+  }
+
   vyro.start(async function (ctx) {
+    getStarted(ctx);
     if (ctx.biz.product === 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.contractor)) { location.replace('/restaurant/index.html'); return; }
     var canMoney = ctx.role === 'owner' || ctx.role === 'supervisor';
     $('mName').textContent = ctx.biz.name;
