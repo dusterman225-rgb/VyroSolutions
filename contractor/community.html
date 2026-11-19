@@ -81,6 +81,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
 <script src="../shared/firebase-config.js"></script>
 <script src="../shared/community.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/commnudge.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); }, V = window.VQCommunity, el = vyro.el;
   vyro.start(function (ctx) {
@@ -112,8 +113,36 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
 
     // ---- nearby requests ----
     function drawFilters() {
-      var box = $('filters'); box.textContent = ''; if (!me.trades.length) return;
-      [''].concat(me.trades).forEach(function (t) { var b = el('button', 'tab' + (filterTrade === t ? ' on' : ''), t || 'All my trades'); b.type = 'button'; b.onclick = function () { filterTrade = t; draw(); drawFilters(); }; box.appendChild(b); });
+      var box = $('filters'); box.textContent = ''; if (!me.trades.length && !canEdit) return;
+      var sel = el('select'); sel.style.cssText = 'width:100%;background:#14202e;border:1px solid #27405c;color:#eef3f8;border-radius:10px;padding:10px;font:16px Arial,sans-serif;min-height:42px';
+      [['', 'All my trades']].concat(me.trades.map(function (t) { return [t, t]; })).forEach(function (p) { var o = el('option', '', p[1]); o.value = p[0]; sel.appendChild(o); });
+      if (canEdit) { var ad = el('option', '', '+ Add trade...'); ad.value = '__add'; sel.appendChild(ad); }
+      sel.value = filterTrade;
+      sel.onchange = function () {
+        if (sel.value === '__add') { sel.value = filterTrade; addTrade(box); return; }
+        filterTrade = sel.value; draw();
+      };
+      box.appendChild(sel);
+    }
+    // Adds a trade to the community listing without leaving the page.
+    function addTrade(box) {
+      var left = V.TRADES.filter(function (t) { return me.trades.indexOf(t) < 0; });
+      var w = el('div'); w.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
+      if (!left.length) { w.appendChild(el('div', 'note', 'You already have every trade.')); box.appendChild(w); return; }
+      var ps = el('select'); ps.style.cssText = 'flex:1;min-width:150px;background:#14202e;border:1px solid #27405c;color:#eef3f8;border-radius:10px;padding:10px;font:16px Arial,sans-serif;min-height:42px';
+      left.forEach(function (t) { var o = el('option', '', t); o.value = t; ps.appendChild(o); });
+      var go = el('button', 'btn', 'Add'), no = el('button', 'btn ghost', 'Cancel'); go.type = no.type = 'button';
+      no.onclick = function () { drawFilters(); };
+      go.onclick = async function () {
+        go.disabled = true; var t = ps.value, next = me.trades.concat([t]);
+        try {
+          if (dirData) { var nd = Object.assign({}, dirData, { trades: next, updatedAt: vyro.stamp() }); await dirRef.set(nd); dirData = nd; }
+          me.trades = next; var cb = document.querySelector('#trades input[value="' + t.replace(/"/g, '') + '"]'); if (cb) cb.checked = true;
+          filterTrade = t; sum(); drawFilters(); draw();
+          if (!dirData) { $('reqMsg').className = 'note'; $('reqMsg').textContent = 'Trade added. Set your place and tap Save below to finish your listing.'; }
+        } catch (e) { go.disabled = false; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }
+      };
+      w.appendChild(ps); w.appendChild(go); w.appendChild(no); box.appendChild(w);
     }
     // New leads show in Vyqil blue; ones already looked at turn dark. Kept on this device only.
     var shown = [];
@@ -161,12 +190,11 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
         r.appendChild(el('b', '', l.title)); r.appendChild(el('div', 'note', l.trade + ' · ' + l.city + ' · from ' + l.fromName + ' · ' + (l.status === 'done' ? 'Done' : 'Chosen'))); if (l.details) r.appendChild(el('div', 'note', l.details));
         var th = V.phoneHref(l.phone); if (th) { var call = el('a', 'btn ghost', 'Call ' + l.phone); call.href = th; r.appendChild(call); }
         var mg = el('button', 'btn ghost', 'Messages'); mg.type = 'button'; mg.onclick = function () { V.openThread(db, l.id, ctx.bizId, ctx.user.uid, false, l.fromName); }; r.appendChild(mg);
-        if (added[l.id]) { var ce = el('a', 'btn', 'Create estimate'); ce.href = 'estimate.html?lead=' + added[l.id] + '&tpl=' + encodeURIComponent(l.trade || ''); r.appendChild(ce); }
-        else { var ab = el('button', 'btn', 'Add to my Leads and quote'); ab.type = 'button'; ab.onclick = function () { addLead(l, ab); }; r.appendChild(ab); }
+        var ce = el('button', 'btn', 'Create estimate'); ce.type = 'button'; ce.onclick = function () { ce.disabled = true; ce.textContent = 'Opening...'; vcommnudge.quote(ctx, l).catch(function (e) { ce.disabled = false; ce.textContent = 'Create estimate'; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }); }; r.appendChild(ce);
         box.appendChild(r);
       });
     }
-    function loadWon() { db.collection('communityLeads').where('chosen', '==', ctx.bizId).get().then(function (s) { wonList = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.status === 'assigned' || x.status === 'done'; }); drawWon(); }, function () { /* optional */ }); }
+    function loadWon() { db.collection('communityLeads').where('chosen', '==', ctx.bizId).get().then(function (s) { wonList = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return x.status === 'assigned' || x.status === 'done'; }); drawWon(); var wm = lget('vq_won_seen_' + ctx.bizId) || {}; wonList.forEach(function (x) { wm[x.id] = 1; }); lset('vq_won_seen_' + ctx.bizId, wm); }, function () { /* optional */ }); }
     var dirData = null;
     function drawProf() {
       var b = $('profBox'); b.textContent = ''; if (!dirData) { b.appendChild(el('div', 'note', 'Set up your listing first.')); return; }
@@ -210,7 +238,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     async function addLead(l, btn) {
       btn.disabled = true;
       try {
-        var ref = await ctx.bizRef.collection('leads').add({ communityLeadId: l.id, name: l.fromName, phone: l.phone || '', email: '', address: l.city, source: 'Vyqil Community', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
+        var ref = await ctx.bizRef.collection('leads').add({ communityLeadId: l.id, name: l.fromName, phone: l.phone || '', email: l.email || '', address: l.city, source: 'Vyqil Community', status: 'New', followUpOn: '', jobDetails: (l.trade + ': ' + l.title + (l.details ? '. ' + l.details : '') + ' (Vyqil community request)').slice(0, 900), notes: 'From the Vyqil community. Reply there to give them your contact details.', createdAt: vyro.stamp(), createdBy: ctx.user.uid, statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() });
         added[l.id] = ref.id; draw(); drawWon();
       } catch (e) { btn.disabled = false; $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); }
     }
