@@ -303,3 +303,145 @@ window.VQ_APP = {
 window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
   return recs.filter(function (r) { return r.kind === 'invoice' && r.customer === c.id && r.status !== 'Void'; }).sort(function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; }).map(function (r) { return { n: String(r.number || ''), t: 'Invoice', a: r.amount || 0, s: r.status || '', d: r.due || r.date || '' }; });
 } };
+
+// ===== Services tailoring: pick your services (pool, lawn, cleaning...), then everything is built around them =====
+(function () {
+  'use strict';
+  var A = window.VQ_APP, K = A.kinds;
+  function U() { return Q.u; }
+  function el(t, c, x) { return U().el(t, c, x); }
+  function today() { return U().today(); }
+
+  // What each service usually involves. The owner can edit every line later; these are starting points.
+  var SVC = {
+    'House cleaning': { icon: '🧹', plan: 'Every 2 weeks', tasks: ['Dust all surfaces', 'Vacuum and mop floors', 'Clean and sanitize kitchen', 'Clean and sanitize bathrooms', 'Empty trash cans', 'Make beds if asked'], included: 'Dusting, vacuuming, mopping, kitchen and bathroom cleaning, and trash removal.', supplies: [['All-purpose cleaner', 'bottles', 2], ['Glass cleaner', 'bottles', 2], ['Microfiber cloths', 'packs', 1], ['Trash bags', 'boxes', 1]] },
+    'Move-out and turnover cleaning': { icon: '📦', plan: 'One-time', tasks: ['Clean inside oven and fridge', 'Wipe inside cabinets and drawers', 'Clean all baseboards', 'Scrub tubs, tiles and toilets', 'Clean windows and tracks', 'Vacuum and mop every room'], included: 'A top-to-bottom clean of an empty home, including inside appliances and cabinets.', supplies: [['Oven cleaner', 'cans', 1], ['Degreaser', 'bottles', 1], ['Magic erasers', 'packs', 1]] },
+    'Lawn care': { icon: '🌱', plan: 'Weekly', tasks: ['Mow', 'Edge walks and beds', 'Trim around obstacles', 'Blow clippings off hard surfaces', 'Check gate is latched'], included: 'Mowing, edging, trimming and blowing off all hard surfaces.', supplies: [['Mower gas', 'gallons', 2], ['Trimmer line', 'spools', 1], ['Mower blades', 'blades', 1]] },
+    'Landscaping': { icon: '🌳', plan: 'Monthly', tasks: ['Weed beds', 'Prune shrubs', 'Refresh mulch where needed', 'Check sprinkler heads', 'Haul away debris'], included: 'Bed weeding, pruning, mulch touch-ups and debris haul-away.', supplies: [['Mulch', 'bags', 5], ['Weed killer', 'bottles', 1], ['Pruning shears', 'pairs', 1]] },
+    'Pool service': { icon: '🏊', plan: 'Weekly', tasks: ['Test and balance chemicals', 'Skim surface', 'Brush walls and steps', 'Vacuum pool', 'Empty skimmer and pump baskets', 'Check filter pressure'], included: 'Weekly chemical testing and balancing, skimming, brushing, vacuuming and basket cleaning.', supplies: [['Chlorine tablets', 'buckets', 1], ['Shock', 'bags', 2], ['pH increaser', 'tubs', 1], ['pH decreaser', 'tubs', 1], ['Test strips', 'bottles', 1]] },
+    'Pressure washing': { icon: '💦', plan: 'One-time', tasks: ['Pre-wet and apply cleaner', 'Wash driveway and walks', 'Wash siding or deck', 'Rinse and check results with the customer'], included: 'Pressure washing of the surfaces listed, with cleaner applied and a full rinse.', supplies: [['Surface cleaner', 'gallons', 1], ['Nozzle tips', 'sets', 1]] },
+    'Window cleaning': { icon: '🪟', plan: 'Monthly', tasks: ['Wash outside glass', 'Wipe frames and sills', 'Clean screens', 'Clean inside glass if booked'], included: 'Inside and outside glass, frames and sills.', supplies: [['Glass cleaner concentrate', 'bottles', 1], ['Squeegee blades', 'blades', 2], ['Scrubber sleeves', 'sleeves', 1]] },
+    'Gutter cleaning': { icon: '🍂', plan: 'One-time', tasks: ['Clear gutters by hand', 'Flush downspouts', 'Check for sagging or leaks', 'Bag and remove debris'], included: 'Debris cleared from all gutters, downspouts flushed, and debris removed.', supplies: [['Trash bags', 'boxes', 1], ['Work gloves', 'pairs', 2]] },
+    'Carpet cleaning': { icon: '🧽', plan: 'One-time', tasks: ['Pre-vacuum and inspect', 'Pre-treat stains', 'Hot water extraction', 'Set up fans if needed'], included: 'Pre-vacuum, stain pre-treatment and deep hot water extraction.', supplies: [['Carpet shampoo', 'gallons', 2], ['Spot remover', 'bottles', 2]] },
+    'Snow removal': { icon: '❄️', plan: 'One-time', tasks: ['Plow or shovel driveway', 'Clear walkways and steps', 'Salt or sand icy spots', 'Clear mailbox area'], included: 'Driveway and walkway clearing, with salt on icy spots.', supplies: [['Ice melt', 'bags', 4], ['Shovel', 'each', 1], ['Plow gas or diesel', 'gallons', 5]] },
+    'Junk removal': { icon: '🚛', plan: 'One-time', tasks: ['Walk through and confirm what goes', 'Load and haul', 'Sweep the area', 'Take items to donation or dump'], included: 'Loading and hauling away the items we agree on, plus a quick sweep up.', supplies: [['Dump or disposal fees', 'receipts', 0], ['Moving straps', 'sets', 1], ['Contractor trash bags', 'boxes', 1]] },
+    'Pest control': { icon: '🐜', plan: 'Monthly', tasks: ['Inspect inside and outside', 'Treat entry points and perimeter', 'Set or check traps', 'Report findings to the customer'], included: 'Inspection, perimeter treatment and trap checks, with a written report.', supplies: [['Perimeter spray', 'gallons', 1], ['Bait stations', 'packs', 2], ['Gloves and mask', 'sets', 1]] },
+    'Pet waste removal': { icon: '🐕', plan: 'Weekly', tasks: ['Walk the full yard', 'Bag and remove waste', 'Latch the gate behind you', 'Rinse the tools'], included: 'Weekly yard scoop and haul-away.', supplies: [['Waste bags', 'rolls', 3], ['Disinfectant spray', 'bottles', 1]] },
+    'Tree trimming': { icon: '🪓', plan: 'One-time', tasks: ['Mark and agree what comes off', 'Trim branches', 'Chip or haul the cuttings', 'Rake up and check power lines'], included: 'Trimming of the trees we agree on, with cuttings chipped or hauled.', supplies: [['Chainsaw chain and bar oil', 'bottles', 1], ['Chipper gas', 'gallons', 2]] },
+    'Staging': { icon: '🛋️', plan: 'One-time', tasks: ['Walk the home and plan the layout', 'Place furniture and decor', 'Final photo-ready touches'], included: 'A staging plan, furniture and decor placement, and final touches before photos.', supplies: [] },
+    'Other': { icon: '🛠️', plan: 'One-time', tasks: [], included: '', supplies: [] }
+  };
+  var ORDER = Object.keys(SVC);
+  function info(n) { return SVC[n] || { icon: '🛠️', plan: 'One-time', tasks: [], included: '', supplies: [] }; }
+
+  // Make the community directory (and the "Need a Vyqil" lists in this app) know the full service list.
+  try { var cats = window.VQCommunity && window.VQCommunity.CATS && window.VQCommunity.CATS.services; if (cats) { ORDER.forEach(function (n) { if (n !== 'Other' && cats.indexOf(n) < 0) cats.splice(Math.max(0, cats.indexOf('Other')), 0, n); }); } } catch (e) { /* optional */ }
+
+  function mySvc() { return ((Q.S && Q.S.biz && Q.S.biz.services) || []).slice(); }
+  function optList() { var m = mySvc(); return m.length ? m : ORDER.slice(); }
+  function save(arr) {
+    return firebase.firestore().collection('businesses').doc(Q.S.biz.id).update({ services: arr }).then(function () { Q.S.biz.services = arr; });
+  }
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+  // Dropdowns that show only the owner's own services.
+  function svcField(key, label, req) {
+    var f = { k: key, l: label, t: 'select', req: req ? 1 : 0, hint: 'Pick from the services you offer. Change that list under My services.' };
+    Object.defineProperty(f, 'o', { get: optList, enumerable: true });
+    return f;
+  }
+  var CU = K.customer; CU.fields.splice(CU.fields.length - 1, 0, svcField('service', 'Main service'));
+  var VI = K.visit; VI.fields.splice(VI.fields.length - 1, 0, svcField('service', 'Service this visit'));
+  var QU = K.quote; QU.fields.splice(1, 0, svcField('svc', 'Service (pick one)'));
+  (QU.fields.filter(function (f) { return f.k === 'service'; })[0] || {}).req = 0;
+  var oldQT = QU.title; QU.title = function (r) { return (r.prospect || 'Quote') + ' · ' + (r.service || r.svc || ''); };
+  var oldQS = QU.actions[0].run;
+  QU.actions[0] = { l: 'View or share the quote', run: function (r) {
+    var s = r.service || r.svc || '', r2 = Object.assign({}, r, { service: s, details: r.details || info(s).included || '' });
+    oldQS(r2);
+  } };
+  VI.actions.unshift({ l: 'Add the usual tasks for this service', show: function (r) { return !r.tasks; }, run: function (r) {
+    var s = r.service || (r.customer && Q.get(r.customer) && Q.get(r.customer).service) || '', t = info(s).tasks;
+    if (!t.length) { Q.toast('Pick a service on the visit first, or type your own tasks.'); return; }
+    Q.tools.upd(r.id, { service: r.service || s, tasks: t.join('\n').slice(0, 1400) }).then(function () { Q.toast('Tasks added.'); }, function (e) { Q.toast(Q.friendly(e)); });
+  } });
+  CU.actions.push({ l: 'Quote their main service', show: function (r) { return !!r.service; }, run: function (r) { Q.openForm('quote', null, { customer: r.id, prospect: r.name, address: r.address || '', svc: r.service, plan: info(r.service).plan, details: info(r.service).included }); } });
+  var oldWQ = CU.actions.filter(function (a) { return a.l === 'Write a quote'; })[0]; if (oldWQ) oldWQ.run = function (r) { Q.openForm('quote', null, { customer: r.id, prospect: r.name, address: r.address || '', svc: r.service || '', plan: r.service ? info(r.service).plan : undefined, details: r.service ? info(r.service).included : '' }); };
+
+  // ---- My services screen ----
+  function suppliesFor(arr) {
+    var have = Q.byKind('supply').map(function (s) { return String(s.name || '').toLowerCase(); }), made = 0, chain = Promise.resolve();
+    arr.forEach(function (n) { info(n).supplies.forEach(function (s) { if (have.indexOf(s[0].toLowerCase()) > -1) return; have.push(s[0].toLowerCase()); made++; chain = chain.then(function () { return Q.tools.add('supply', { name: s[0], qty: 0, unit: s[1], reorderAt: s[2] }); }); }); });
+    return chain.then(function () { return made; });
+  }
+  function myServices(first) {
+    Q.modal(function (s, close) {
+      var cur = mySvc();
+      s.appendChild(el('h3', '', first ? 'What services do you offer?' : 'My services'));
+      s.appendChild(el('p', 'hint', 'Add each service you offer, like pool cleaning or lawn care. Your visits, quotes, supplies and community listing are built around this list. You can change it any time.'));
+      var list = el('div'); s.appendChild(list);
+      var pick = el('select'), addB = el('button', 'btn', 'Add service'); addB.type = 'button';
+      var cust = el('input'); cust.maxLength = 40; cust.placeholder = 'Or type your own, like Dock cleaning';
+      var addC = el('button', 'btn ghost', 'Add my own'); addC.type = 'button';
+      var msg = el('div', 'note');
+      function draw() {
+        list.textContent = '';
+        if (!cur.length) list.appendChild(el('div', 'empty', 'Nothing added yet.'));
+        cur.forEach(function (n, i) {
+          var row = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', info(n).icon + ' ' + n));
+          var rm = el('button', 'btn ghost sm', 'Remove'); rm.type = 'button'; rm.onclick = function () { cur.splice(i, 1); draw(); };
+          row.appendChild(m); row.appendChild(rm); list.appendChild(row);
+        });
+        pick.textContent = ''; var b0 = el('option', '', 'Choose a service...'); b0.value = ''; pick.appendChild(b0);
+        ORDER.filter(function (n) { return cur.indexOf(n) < 0; }).forEach(function (n) { var o = el('option', '', n); o.value = n; pick.appendChild(o); });
+      }
+      s.appendChild(el('label', 'f', 'Add a service')); s.appendChild(pick); s.appendChild(addB);
+      s.appendChild(el('label', 'f', 'Not on the list?')); s.appendChild(cust); s.appendChild(addC); s.appendChild(msg);
+      addB.onclick = function () { if (pick.value && cur.indexOf(pick.value) < 0) { cur.push(pick.value); draw(); } };
+      addC.onclick = function () { var v = cust.value.trim(); if (v && cur.indexOf(v) < 0) { cur.push(v); cust.value = ''; draw(); } };
+      var sup = el('div', 'chk'), si = el('input'); si.type = 'checkbox'; si.id = 'svc_sup'; si.checked = true; var sl = el('label', '', 'Also add the supplies these services usually need to my Supplies list'); sl.htmlFor = si.id; sup.appendChild(si); sup.appendChild(sl); s.appendChild(sup);
+      var b = el('div', 'btns'), go = el('button', 'btn', 'Save'), x = el('button', 'btn ghost', first ? 'Not now' : 'Cancel'); go.type = x.type = 'button'; b.appendChild(go); b.appendChild(x); s.appendChild(b);
+      x.onclick = close;
+      go.onclick = function () {
+        go.disabled = true;
+        save(cur).then(function () { return si.checked ? suppliesFor(cur.filter(function (n) { return mySvc().indexOf(n) > -1; })) : 0; }).then(function (n) {
+          close(); Q.toast('Services saved.' + (n ? ' ' + n + ' supplies added.' : '')); Q.render();
+        }, function (e) { msg.className = 'note err'; msg.textContent = Q.friendly(e); go.disabled = false; });
+      };
+      draw();
+    });
+  }
+  A.fn = A.fn || {}; A.fn.services = function () { myServices(false); };
+
+  // ---- Home card, shown once automatically on first run ----
+  Q.extras.push(function (v) {
+    var m = mySvc(), c = el('div', 'card'); v.appendChild(el('h2', '', 'My services'));
+    v.appendChild(c);
+    if (!m.length) {
+      c.appendChild(el('div', 'hint', 'Choose the services you offer. Visits, quotes, supplies and your community listing are then built around them.'));
+      var b = el('button', 'btn', 'Choose my services'); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin-top:8px'; b.onclick = function () { myServices(true); }; c.appendChild(b);
+      var key = 'vq_svc_ask_' + (Q.S.biz ? Q.S.biz.id : ''); if (!ls(key)) { ls(key, '1'); setTimeout(function () { myServices(true); }, 500); }
+    } else {
+      var w = el('div'); m.forEach(function (n) { var t = el('span', 'tag', info(n).icon + ' ' + n); t.style.cssText = 'display:inline-block;margin:0 6px 6px 0;padding:6px 10px;border-radius:999px;background:rgba(127,127,127,.18);font-size:14px'; w.appendChild(t); }); c.appendChild(w);
+      var e = el('button', 'btn ghost', 'Edit my services'); e.type = 'button'; e.style.cssText = 'display:block;width:100%;margin-top:4px'; e.onclick = function () { myServices(false); }; c.appendChild(e);
+    }
+  });
+
+  // ---- Menu: Community has its own group; My services sits under Work ----
+  var oldMenu = A.menu;
+  A.menu = function () {
+    var g = oldMenu(), F = A.fn || {};
+    g.forEach(function (grp) { if (grp.h === 'Work') grp.items = grp.items.filter(function (i) { return i.tab !== 'leads'; }); });
+    g[0].items.unshift({ l: 'My services', run: function () { F.services && F.services(); } });
+    g.splice(1, 0, { h: 'Community', items: Q.communityMenu ? Q.communityMenu() : [] });
+    return g;
+  };
+
+  // ---- Get started: first step is choosing services ----
+  var oldStarter = A.starter;
+  A.starter = function () {
+    var st = oldStarter();
+    st.unshift({ id: 'svc', t: 'Choose your services', h: 'Pool, lawn, cleaning... everything else is built around this.', done: function () { return mySvc().length > 0; }, run: function () { myServices(true); } });
+    return st;
+  };
+})();
