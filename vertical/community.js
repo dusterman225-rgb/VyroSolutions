@@ -29,6 +29,19 @@
     }, function () { /* the rest of the app keeps working without it */ });
     setTimeout(function () { firstLoad = false; }, 5000);
   }
+  // Jobs this business was chosen for. Anything not yet looked at shows as a notice at login.
+  var wonList = [], wonToast = false;
+  function wonSeen() { return lsGet('vq_won_seen_' + S.biz.id) || {}; }
+  function newWon() { var m = wonSeen(); return wonList.filter(function (l) { return !m[l.id]; }); }
+  function markWonSeen() { var m = wonSeen(); wonList.forEach(function (l) { m[l.id] = 1; }); lsSet('vq_won_seen_' + S.biz.id, m); }
+  function watchWon() {
+    if (!cfg.inbound) return;
+    db().collection('communityLeads').where('chosen', '==', S.biz.id).onSnapshot(function (snap) {
+      wonList = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }).filter(function (l) { return l.status === 'assigned'; });
+      var nw = newWon(); if (nw.length && !wonToast) { wonToast = true; Q.toast('You were chosen for ' + (nw.length === 1 ? '"' + nw[0].title + '"' : nw.length + ' jobs') + '. See your home screen.'); }
+      refresh();
+    }, function () { /* ignore */ });
+  }
   function watchOffers(l) {
     if (watched[l.id]) return;
     watched[l.id] = db().collection('communityLeads').doc(l.id).collection('offers').onSnapshot(function (snap) {
@@ -287,7 +300,7 @@
     var ic = cfg.inbound;
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', ic.inboxTitle || 'Requests near you'));
-      var won = el('div'); s.appendChild(won); loadWon(won);
+      markWonSeen(); var won = el('div'); s.appendChild(won); loadWon(won);
       var body = el('div'); s.appendChild(body); btnRow(s).appendChild(mk('Close', 'ghost', close));
       drawInbound(body); var iv = setInterval(function () { if (!document.body.contains(s)) { clearInterval(iv); return; } drawInbound(body); }, 3000);
     });
@@ -313,7 +326,7 @@
       });
     }
     if (ic) {
-      var won = el('div'); v.appendChild(won); loadWon(won); v.appendChild(el('h2', '', ic.inboxTitle || 'Requests near you'));
+      var won = el('div'); v.appendChild(won); loadWon(won); markWonSeen(); v.appendChild(el('h2', '', ic.inboxTitle || 'Requests near you'));
       var body = el('div'); v.appendChild(body); drawInbound(body);
       // Leads shown here count as viewed once the person leaves this tab (they stay blue while it is open).
       clearInterval(leadsIv); leadsIv = setInterval(function () { if (!document.body.contains(v) && S.tab !== 'leads') { clearInterval(leadsIv); markSeen(shownLeads); refresh(); } }, 1000);
@@ -328,6 +341,8 @@
     b.onclick = function () { b.remove(); fn(); }; v.appendChild(b);
   }
   Q.banners.push(function (v) {
+    var nw = newWon();
+    if (nw.length) note(v, 'blue', nw.length, 'You were chosen' + (nw.length === 1 ? ' for ' + nw[0].title : ''), nw.length === 1 ? 'From ' + (nw[0].fromName || 'a Vyqil business') + '. Tap to see their details.' : 'Tap to see who picked you', function () { markWonSeen(); inbox(); });
     var r = newReplies(), n = cfg.inbound ? newLeads() : 0;
     if (r) note(v, 'red', r, 'New ' + (r === 1 ? 'reply' : 'replies'), (r === 1 ? 'A business replied' : r + ' businesses replied') + ' to your requests', function () { requests(); });
     if (n) note(v, 'blue', n, 'You have ' + n + ' new ' + (n === 1 ? 'lead' : 'leads'), 'From Vyqil businesses near you', function () { S.tab = 'leads'; Q.render(); });
@@ -364,7 +379,7 @@
 
   // ---------- wiring into the app ----------
   Q.community = { find: find, requests: requests, inbox: inbox, listing: listing };
-  Q.onStart.push(watchMine); Q.onStart.push(loadDirectory);
+  Q.onStart.push(watchMine); Q.onStart.push(watchWon); Q.onStart.push(loadDirectory);
   Q.extras.push(function (v) {
     v.appendChild(el('h2', '', 'Community'));
     var card = el('div', 'card'); v.appendChild(card);

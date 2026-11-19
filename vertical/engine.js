@@ -37,6 +37,12 @@
     m.addEventListener('click', function (e) { if (e.target === m) close(); });
     build(sh, close); document.body.appendChild(m); return close;
   }
+  // Sign out must always work: turning off phone alerts is tried for at most 2 seconds, then the account is signed out and the page reloads.
+  function signOutNow() {
+    var p = Promise.resolve();
+    try { if (Q.push && Q.push.on()) p = Promise.race([Q.push.disable().catch(function () { /* ignore */ }), new Promise(function (r) { setTimeout(r, 2000); })]); } catch (x) { /* ignore */ }
+    p.then(function () { return auth.signOut(); }).catch(function () { /* still reload */ }).then(function () { setTimeout(function () { location.reload(); }, 300); });
+  }
   function ask(msg, yes, fn) { modal(function (s, close) { s.appendChild(el('p', '', msg)); var b = el('div', 'btns'), y = el('button', 'btn danger', yes), n = el('button', 'btn ghost', 'Cancel'); y.type = n.type = 'button'; y.onclick = function () { close(); fn(); }; n.onclick = close; b.appendChild(y); b.appendChild(n); s.appendChild(b); }); }
   function download(name, text, type) { var a = el('a'); a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
   function friendly(e) {
@@ -259,7 +265,7 @@
     menuGroups().forEach(function (g) { var items = (g.items || []).filter(function (x) { return !x.show || x.show(); }); if (!items.length) return; var d = el('details'); d.appendChild(el('summary', 'mg', g.h)); items.forEach(function (x) { var a = item(d, x.l, x.run || openTab(x.tab)); if (x.badge) { var n = x.badge(); if (n) a.appendChild(el('span', 'badge', String(n))); } }); menu.appendChild(d); });
     item(menu, 'More tools and settings', openTab('more')); item(menu, 'Phone alerts', function () { Q.push.panel(); });
     var sw = el('a', 'mi', 'Switch business'); sw.href = '/dashboard.html'; menu.appendChild(sw);
-    item(menu, 'Sign out', function () { var p = Q.push && Q.push.on() ? Q.push.disable().catch(function () { /* ignore */ }) : Promise.resolve(); p.then(function () { return auth.signOut(); }); }, 'out');
+    item(menu, 'Sign out', function () { signOutNow(); }, 'out');
   }
   function shell() {
     root.textContent = ''; var wrap = el('div', 'wrap'), top = el('div', 'topbar'), lg = el('img', 'mark'); lg.src = C.logo || '/icons/icon-192.png'; lg.alt = ''; top.appendChild(lg);
@@ -505,7 +511,7 @@
     if (isAdmin()) btn('Rename business', function () { modal(function (s, close) { s.appendChild(el('h3', '', 'Business name')); var i = el('input'); i.value = S.biz.name; i.maxLength = 80; s.appendChild(i); var b = el('div', 'btns'), sv = el('button', 'btn', 'Save'); sv.type = 'button'; b.appendChild(sv); s.appendChild(b); sv.onclick = async function () { if (!i.value.trim()) return; try { await db.collection('businesses').doc(S.biz.id).update({ name: i.value.trim().slice(0, 80) }); S.biz.name = i.value.trim(); close(); shell(); render(); } catch (e) { toast(friendly(e)); } }; }); });
     if (isAdmin()) kinds().forEach(function (k) { btn('Download ' + K(k).plural.toLowerCase() + ' (CSV)', function () { download(C.id + '-' + k + '.csv', toCsv(k), 'text/csv'); }); });
     if (isAdmin()) btn('Download everything (backup)', function () { download(C.id + '-backup-' + today() + '.json', JSON.stringify(S.recs.map(function (r) { var o = Object.assign({}, r); delete o.createdAt; delete o.updatedAt; return o; }), null, 1), 'application/json'); });
-    btn('Sign out', function () { var p = Q.push && Q.push.on() ? Q.push.disable().catch(function () { /* ignore */ }) : Promise.resolve(); p.then(function () { return auth.signOut(); }); });
+    btn('Sign out', function () { signOutNow(); });
     var n = el('div', 'note'); n.textContent = 'This is a first version. It keeps your records and reminders for you and your team; it does not send emails, take payments or have a customer portal yet.'; v.appendChild(n);
   }
 
