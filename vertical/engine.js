@@ -57,6 +57,34 @@
   function recs() { return db.collection('businesses').doc(S.biz.id).collection(S.biz.col || 'records'); }
   Q.db = db; Q.recs = recs; Q.FV = FV; Q.modal = modal; Q.toast = toast; Q.ask = ask; Q.friendly = friendly;
 
+  // ---- The email must be confirmed before the app opens. Accounts made before 18 Nov 2026 are exempt so nobody is locked out. ----
+  function vqGate(u, done) {
+    var made = u && u.metadata && u.metadata.creationTime ? Date.parse(u.metadata.creationTime) : 0;
+    if (!u || u.emailVerified || u.isAnonymous || !u.email || (made && made < Date.parse('2026-11-18T00:00:00Z'))) { done(u); return; }
+    if (document.getElementById('vqVerify')) return;
+    var o = document.createElement('div'); o.id = 'vqVerify'; o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#05070a;color:#eef3f8;overflow:auto;font-family:system-ui,Arial,sans-serif';
+    var w = document.createElement('div'); w.style.cssText = 'max-width:440px;margin:0 auto;padding:48px 20px;text-align:center'; o.appendChild(w);
+    function mk(t, x, s) { var n = document.createElement(t); if (x) n.textContent = x; if (s) n.style.cssText = s; return n; }
+    w.appendChild(mk('h1', 'Confirm your email', 'font-size:1.5rem;margin:0 0 10px'));
+    w.appendChild(mk('p', 'We sent a link to ' + u.email + '. Open it, then come back here and tap the button below. Check your spam folder if you cannot find it.', 'color:#9fb0c4;line-height:1.5'));
+    var msg = mk('div', '', 'min-height:22px;margin:14px 0;color:#9fd6fb;font-size:.9rem');
+    var bs = 'display:block;width:100%;box-sizing:border-box;min-height:46px;margin:10px 0;border-radius:12px;font:600 16px system-ui,Arial,sans-serif;cursor:pointer;';
+    var ok = mk('button', 'I have confirmed my email', bs + 'background:#4B9CD3;color:#04121f;border:0'), again = mk('button', 'Send the email again', bs + 'background:none;color:#eef3f8;border:1px solid #27405c'), out = mk('button', 'Sign out', bs + 'background:none;color:#9fb0c4;border:0');
+    ok.type = again.type = out.type = 'button'; w.appendChild(msg); w.appendChild(ok); w.appendChild(again); w.appendChild(out); document.body.appendChild(o);
+    var finished = false;
+    function check(quiet) {
+      return u.reload().then(function () {
+        var cu = auth.currentUser || u;
+        if (cu.emailVerified) { if (finished) return; finished = true; document.removeEventListener('visibilitychange', onVis); o.remove(); done(cu); }
+        else if (!quiet) { msg.style.color = '#ffb4b4'; msg.textContent = 'Not confirmed yet. Open the link in the email first.'; }
+      }, function () { if (!quiet) { msg.style.color = '#ffb4b4'; msg.textContent = 'Could not check. Try again.'; } });
+    }
+    function onVis() { if (!document.hidden) check(true); }
+    document.addEventListener('visibilitychange', onVis);
+    ok.onclick = function () { msg.style.color = '#9fd6fb'; msg.textContent = 'Checking...'; check(false); };
+    again.onclick = function () { again.disabled = true; u.sendEmailVerification().then(function () { msg.style.color = '#9fd6fb'; msg.textContent = 'Sent. It can take a minute to arrive.'; }, function (e) { msg.style.color = '#ffb4b4'; msg.textContent = e && e.code === 'auth/too-many-requests' ? 'Too many tries. Wait a few minutes.' : 'Could not send. Try again.'; }).then(function () { setTimeout(function () { again.disabled = false; }, 30000); }); };
+    out.onclick = function () { finished = true; document.removeEventListener('visibilitychange', onVis); o.remove(); try { auth.signOut(); } catch (x) { /* ignore */ } };
+  }
   // ---------- sign in / create account ----------
   var root = $('app');
   function authView() {
@@ -80,7 +108,7 @@
         if (mode === 'up') { if (p.length < 10) { msg.textContent = 'Choose a password of at least 10 characters.'; return; } }
         go.disabled = true;
         try {
-          if (mode === 'up') { S.pendingName = biz.value.trim().slice(0, 80); await auth.createUserWithEmailAndPassword(e, p); }
+          if (mode === 'up') { S.pendingName = biz.value.trim().slice(0, 80); var nc = await auth.createUserWithEmailAndPassword(e, p); try { await nc.user.sendEmailVerification(); } catch (x) { /* the next screen has a Send again button */ } }
           else await auth.signInWithEmailAndPassword(e, p);
         } catch (err) { msg.textContent = friendly(err); go.disabled = false; }
       };
@@ -154,7 +182,9 @@
   }
 
   // ---------- data model helpers ----------
-  function kinds() { return Object.keys(C.kinds); }
+  function kinds() { return Object.keys(C.kinds).filter(function (k) { return !C.kinds[k].hidden; }); }
+  // A calendar item the owner types in by hand (shown on the home calendar, with a reminder). Every app gets it.
+  if (!C.kinds.mydate) C.kinds.mydate = { label: 'Calendar item', plural: 'Calendar items', icon: '\uD83D\uDCC5', hidden: true, fields: [{ k: 'title', l: 'What is it', t: 'text', req: 1, h: 'Call the plumber, meet the inspector' }, { k: 'date', l: 'Date', t: 'date', req: 1, cal: 1, alert: { hour: 8 }, lbl: 'My date', timeField: 'time' }, { k: 'time', l: 'Time (optional)', t: 'time' }, { k: 'notes', l: 'Notes', t: 'area' }], title: function (r) { return r.title || 'Calendar item'; }, sub: function (r) { return r.notes || ''; } };
   function K(k) { return C.kinds[k]; }
   function byKind(k) { return S.recs.filter(function (r) { return r.kind === k; }); }
   function get(id) { for (var i = 0; i < S.recs.length; i++) if (S.recs[i].id === id) return S.recs[i]; return null; }
@@ -253,8 +283,8 @@
   };
   function menuGroups() {
     if (C.menu) return typeof C.menu === 'function' ? C.menu() : C.menu;
-    var work = []; Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
-    var g = [{ h: 'Work', items: work }]; if (Q.views.reports) g.push({ h: 'Money', items: [{ l: 'Reports', tab: 'reports' }] }); return g;
+    var work = []; if (!Q.communityMenu) Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
+    var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports) g.push({ h: 'Money', items: [{ l: 'Reports', tab: 'reports' }] }); return g;
   }
   function openTab(id) { return function () { S.tab = id; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0); }; }
   function buildMenu(menu, setOpen) {
@@ -345,7 +375,13 @@
 
   // Month calendar on the home screen, with a colored dot for each kind of dated item.
   var DOT = ['#4B9CD3', '#e0b04c', '#44c7a8', '#e5736f', '#a07af0', '#e08fc0', '#7fe3b0', '#f0a05a'], dotMap = {};
-  function dotColor(label) { if (!dotMap[label]) dotMap[label] = DOT[Object.keys(dotMap).length % DOT.length]; return dotMap[label]; }
+  // Colours by meaning: money due is amber, repairs red, leases purple, and so on. An app can add its own in C.calColors = [{ m: /regex/i, c: '#hex' }].
+  var CALCOL = [{ m: /overdue|late/i, c: '#ff5d5d' }, { m: /rent|payment/i, c: '#f0c36d' }, { m: /invoice|bill|due|fee/i, c: '#f0a05a' }, { m: /repair|visit|fix|service/i, c: '#ff8a8a' }, { m: /lease|renew|insurance|licen[sc]e|expire/i, c: '#b48cff' }, { m: /inspect|showing|viewing|appointment|meeting/i, c: '#4B9CD3' }, { m: /move|start|begin|open/i, c: '#7fe3b0' }, { m: /follow|call|lead/i, c: '#4fd6d0' }, { m: /my date/i, c: '#ff7ad9' }];
+  function dotColor(label) {
+    var list = (C.calColors || []).concat(CALCOL); for (var i = 0; i < list.length; i++) if (list[i].m.test(String(label))) return list[i].c;
+    if (!dotMap[label]) dotMap[label] = DOT[Object.keys(dotMap).length % DOT.length]; return dotMap[label];
+  }
+  function dayGlow(cols) { var sh = []; if (cols[0]) sh.push('0 0 0 2px ' + cols[0], '0 0 10px 2px ' + cols[0] + '99'); if (cols[1]) sh.push('inset 0 0 0 2px ' + cols[1], 'inset 0 0 8px ' + cols[1] + '99'); return sh.join(','); }
   function calendarCard(v) {
     var t = today(), now = parse(t); if (!S.cal) S.cal = { y: now.getFullYear(), m: now.getMonth() };
     var y = S.cal.y, m = S.cal.m, first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), from = ymd(first), to = ymd(new Date(y, m, days)), evs = events(from, to).filter(function (e) { return e.date >= from && e.date <= to; });
@@ -360,11 +396,12 @@
     for (var d = 1; d <= days; d++) {
       (function (d) {
         var ds = ymd(new Date(y, m, d)), b = el('button', 'cal-cell' + (ds === t ? ' today' : '') + (ds === sel ? ' sel' : '')); b.type = 'button'; b.appendChild(el('span', 'cal-num', String(d)));
-        var dots = el('span', 'cal-dots'); (by[ds] || []).slice(0, 4).forEach(function (e) { var i = el('i'); i.style.background = dotColor(e.label); legend[e.label] = 1; dots.appendChild(i); }); b.appendChild(dots);
+        var dots = el('span', 'cal-dots'), cols = []; (by[ds] || []).forEach(function (e) { var cc = e.over ? '#ff5d5d' : dotColor(e.label); if (cols.indexOf(cc) < 0) cols.push(cc); legend[e.over ? 'Overdue' : e.label] = e.over ? '#ff5d5d' : dotColor(e.label); }); cols.slice(0, 4).forEach(function (cc) { var i = el('i'); i.style.background = cc; dots.appendChild(i); }); b.appendChild(dots); if (cols.length) b.style.boxShadow = dayGlow(cols);
         b.onclick = function () { S.calSel = ds; render(); }; g.appendChild(b);
       })(d);
     }
-    c.appendChild(g); var lg = el('div', 'cal-legend'); Object.keys(legend).forEach(function (k) { var sp = el('span'), i = el('i'); i.style.background = dotColor(k); sp.appendChild(i); sp.appendChild(document.createTextNode(k)); lg.appendChild(sp); }); if (lg.firstChild) c.appendChild(lg);
+    c.appendChild(g); var lg = el('div', 'cal-legend'); Object.keys(legend).forEach(function (k) { var sp = el('span'), i = el('i'); i.style.background = legend[k]; sp.appendChild(i); sp.appendChild(document.createTextNode(k)); lg.appendChild(sp); }); if (lg.firstChild) c.appendChild(lg);
+    var addB = el('button', 'btn ghost sm', '+ Add to my calendar'); addB.type = 'button'; addB.style.margin = '10px 0 0'; addB.onclick = function () { openForm('mydate', null, { date: sel || t }); }; c.appendChild(addB);
     if (sel) { var list = by[sel] || []; c.appendChild(el('h3', 'cal-day', fmtDate(sel) + (sel === t ? ' (today)' : ''))); if (!list.length) c.appendChild(el('div', 'hint', 'Nothing on this day.')); list.forEach(function (e) { c.appendChild(evRow(e)); }); }
     v.appendChild(c);
   }
@@ -425,18 +462,24 @@
     var kd = K(k), isNew = !rec, r = rec ? JSON.parse(JSON.stringify(rec)) : Object.assign({}, preset || {});
     modal(function (s, close) {
       s.appendChild(el('h3', '', (isNew ? 'New ' : '') + kd.label));
-      var inputs = {};
-      kd.fields.forEach(function (f) {
-        if (f.t === 'calc') { var lab = el('label', 'f', f.l), v = el('div', 'amt', showVal(f, null, r)); v.id = 'calc_' + f.k; s.appendChild(lab); s.appendChild(v); inputs[f.k] = { calc: true }; return; }
+      var inputs = {}, dropEl = null, dropName = '';
+      kd.fields.forEach(function (f, fi) {
+        // Fields that share a "drop" name sit together in a drop-down. It opens by itself on a new record or when something inside is filled in.
+        var host = s;
+        if (f.drop) {
+          if (dropName !== f.drop) { var grp = kd.fields.filter(function (g) { return g.drop === f.drop; }); dropName = f.drop; dropEl = el('details', 'vq-drop'); dropEl.appendChild(el('summary', '', f.drop)); dropEl.inner = el('div', 'in'); dropEl.appendChild(dropEl.inner); dropEl.open = (isNew && grp.some(function (g) { return g.dropOpenNew; })) || grp.some(function (g) { return r[g.k] != null && r[g.k] !== '' && r[g.k] !== false && g.t !== 'check' || (g.t === 'check' && r[g.k]); }) && !grp.some(function (g) { return g.dropClosed; }); s.appendChild(dropEl); }
+          host = dropEl.inner;
+        } else { dropName = ''; dropEl = null; }
+        if (f.t === 'calc') { var lab = el('label', 'f', f.l), v = el('div', 'amt', showVal(f, null, r)); v.id = 'calc_' + f.k; host.appendChild(lab); host.appendChild(v); inputs[f.k] = { calc: true }; return; }
         var i;
-        if (f.t === 'check') { var w = el('div', 'chk'); i = el('input'); i.type = 'checkbox'; i.id = 'f_' + f.k; i.checked = !!r[f.k]; var l2 = el('label', '', f.l); l2.htmlFor = i.id; w.appendChild(i); w.appendChild(l2); s.appendChild(w); inputs[f.k] = { el: i, t: f.t }; return; }
-        s.appendChild(Object.assign(el('label', 'f', f.l + (f.req ? ' *' : '')), { htmlFor: 'f_' + f.k }));
+        if (f.t === 'check') { var w = el('div', 'chk'); i = el('input'); i.type = 'checkbox'; i.id = 'f_' + f.k; i.checked = !!r[f.k]; var l2 = el('label', '', f.l); l2.htmlFor = i.id; w.appendChild(i); w.appendChild(l2); host.appendChild(w); inputs[f.k] = { el: i, t: f.t }; return; }
+        host.appendChild(Object.assign(el('label', 'f', f.l + (f.req ? ' *' : '')), { htmlFor: 'f_' + f.k }));
         if (f.t === 'select') { i = el('select'); var blank = el('option', '', f.req ? 'Choose...' : '(none)'); blank.value = ''; i.appendChild(blank); f.o.forEach(function (o) { var op = el('option', '', o); op.value = o; i.appendChild(op); }); i.value = r[f.k] == null ? ((typeof f.d === 'function' ? f.d(r) : f.d) || (f.req ? f.o[0] : '')) : r[f.k]; }
         else if (f.t === 'link') { i = el('select'); var b2 = el('option', '', '(none)'); b2.value = ''; i.appendChild(b2); byKind(f.to).sort(function (a, b) { return title(a).toLowerCase() < title(b).toLowerCase() ? -1 : 1; }).forEach(function (x) { var op = el('option', '', title(x)); op.value = x.id; i.appendChild(op); }); i.value = r[f.k] || ''; }
         else if (f.t === 'area') { i = el('textarea'); i.value = r[f.k] || ''; i.maxLength = 1500; }
         else { i = el('input'); i.type = f.t === 'money' ? 'text' : f.t === 'number' ? 'number' : f.t === 'tel' ? 'tel' : f.t === 'email' ? 'email' : f.t === 'date' ? 'date' : f.t === 'time' ? 'time' : 'text'; if (f.t === 'money') i.inputMode = 'decimal'; if (f.t === 'number') { i.inputMode = 'decimal'; i.step = 'any'; } i.maxLength = 200; i.value = f.t === 'money' ? dollars(r[f.k]) : (r[f.k] == null ? (f.d != null ? (typeof f.d === 'function' ? f.d(r) : f.d) : '') : r[f.k]); }
-        i.id = 'f_' + f.k; if (f.h) i.placeholder = f.h; s.appendChild(i); inputs[f.k] = { el: i, t: f.t };
-        if (f.hint) s.appendChild(el('div', 'note', f.hint));
+        i.id = 'f_' + f.k; if (f.h) i.placeholder = f.h; host.appendChild(i); inputs[f.k] = { el: i, t: f.t };
+        if (f.hint) host.appendChild(el('div', 'note', f.hint));
       });
       var msg = el('div', 'note err'); s.appendChild(msg);
       function collect() {
@@ -603,6 +646,6 @@
 
   // ---------- go ----------
   document.title = C.name;
-  auth.onAuthStateChanged(function (u) { if (!u) { S.biz = null; S.recs = []; authView(); } else boot(u); });
+  auth.onAuthStateChanged(function (u) { if (!u) { S.biz = null; S.recs = []; authView(); } else vqGate(u, boot); });
   if ('serviceWorker' in navigator) { /* registered when alerts are turned on */ }
 })();

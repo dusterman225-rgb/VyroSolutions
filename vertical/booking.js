@@ -193,12 +193,30 @@
     });
   }
 
+  // A request that came with a rental application also becomes an applicant, once (landlord app only).
+  function autoApplicants() {
+    if (!C.kinds || !C.kinds.applicant || !S().recs || !S().recs.length) return;
+    reqs.forEach(function (r) {
+      if (!r.app || r.status === 'canceled') return; var id = 'ap' + r.id, key = 'vq_apdone_' + id; if (Q.get(id)) return;
+      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (e) { /* ignore */ }
+      var a = r.app, inc = parseFloat(String(a.income || '').replace(/[^\d.]/g, ''));
+      var rec = { kind: 'applicant', name: String(r.name || '').slice(0, 80), status: 'New', phone: r.phone || '', email: r.email || '', looking: a.looking || '', employer: a.employer || '', curAddr: a.curAddr || '', pets: a.pets || '', refs: a.refs || '', apptId: r.id, notes: ('From an appointment request for ' + rangeOf(r) + '.').slice(0, 300), createdAt: Q.FV.serverTimestamp(), updatedAt: Q.FV.serverTimestamp() };
+      if (isFinite(inc) && inc > 0) rec.income = Math.round(inc * 100); var oc = parseInt(a.occupants, 10); if (oc > 0) rec.occupants = oc; if (/^\d{4}-\d{2}-\d{2}$/.test(a.moveIn || '')) rec.moveIn = a.moveIn;
+      Q.recs().doc(id).set(rec).catch(function () { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } });
+    });
+  }
+
   // ---------- the Appointments page ----------
   function btn(l, cls, fn) { var b = el('button', 'btn sm' + (cls ? ' ' + cls : ''), l); b.type = 'button'; b.onclick = fn; return b; }
   function reqCard(r) {
     var c = el('div', 'card'), m = el('div', 'm'); m.appendChild(el('b', '', r.name + ' · ' + r.typeName)); c.appendChild(el('div', '', '')).appendChild(m.firstChild);
     var tx = el('div', 'hint', rangeOf(r) + (r.source === 'public' ? ' · from your booking link' : '')); c.appendChild(tx);
     if (r.reason) c.appendChild(el('div', '', r.reason)).style.margin = '6px 0';
+    if (r.app) {   // rental application sent with the request
+      var ap = el('details', 'vq-drop'); ap.appendChild(el('summary', '', 'Rental application')); var ai = el('div', 'in'); ap.appendChild(ai);
+      [['looking', 'Interested in'], ['moveIn', 'Wants to move in'], ['income', 'Monthly income ($)'], ['employer', 'Employer'], ['curAddr', 'Current address'], ['occupants', 'People moving in'], ['pets', 'Pets'], ['refs', 'References']].forEach(function (p) { if (r.app[p[0]]) { var rw = el('div', 'row'), m2 = el('div', 'm'); m2.appendChild(el('span', '', p[1])); m2.appendChild(el('b', '', r.app[p[0]])); rw.appendChild(m2); ai.appendChild(rw); } });
+      ai.appendChild(el('div', 'hint', 'It was also added to your Applications.')); ap.open = r.status === 'pending'; c.appendChild(ap);
+    }
     var who = [r.phone, r.email].filter(Boolean).join(' · '); if (who) c.appendChild(el('div', 'hint', who));
     if (r.status === 'countered' && r.counter) c.appendChild(el('div', 'note', 'You suggested ' + B.fmtRange(tzOf(), r.counter.s, r.counter.e) + '. Waiting for ' + first(r.name) + '.'));
     if (r.note && r.status !== 'pending') c.appendChild(el('div', 'note', 'Your message: ' + r.note));
@@ -236,7 +254,7 @@
   function start() {
     if (started) return; started = true;
     Q.db.collection('bookingPages').doc(bid()).onSnapshot(function (d) { page = d.exists ? d.data() : null; refresh(); soonSync(); }, function () { /* not set up */ });
-    Q.db.collection('apptRequests').where('bizId', '==', bid()).onSnapshot(function (sn) { reqs = sn.docs.map(function (x) { var o = x.data(); o.id = x.id; return o; }); refresh(); soonSync(); }, function () { /* ignore */ });
+    Q.db.collection('apptRequests').where('bizId', '==', bid()).onSnapshot(function (sn) { reqs = sn.docs.map(function (x) { var o = x.data(); o.id = x.id; return o; }); refresh(); soonSync(); autoApplicants(); }, function () { /* ignore */ });
     setInterval(function () { syncNow(); syncPortals(); }, 45000); setTimeout(syncPortals, 6000);
   }
   function boot() {

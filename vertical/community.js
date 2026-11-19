@@ -313,8 +313,7 @@
   Q.views.leads = function (v) {
     var ic = cfg.inbound; v.appendChild(el('h2', '', 'Leads'));
     var top = el('div', 'card'); v.appendChild(top);
-    top.appendChild(el('div', 'hint', 'Requests from other Vyqil businesses near you show up here by themselves. Reply to win the job. Need someone yourself? Use Find a Vyqil.'));
-    top.appendChild(block(mk('Find a Vyqil...', '', function () { find(null, null); })));
+    top.appendChild(el('div', 'hint', 'Requests from other Vyqil businesses near you show up here by themselves. Reply to win the job. Need someone yourself? Open Menu > Community > Find a Vyqil.'));
     var nr = newReplies(); top.appendChild(block(mk('My requests and replies' + (nr ? ' (' + nr + ' new)' : ''), nr ? '' : 'ghost', function () { requests(); })));
     var sent = myLeads.filter(function (l) { return l.status !== 'closed'; }).sort(function (x, y) { return ms(y.createdAt) - ms(x.createdAt); }).slice(0, 10);
     if (sent.length) {
@@ -378,7 +377,16 @@
   }
 
   // ---------- wiring into the app ----------
-  Q.community = { find: find, requests: requests, inbox: inbox, listing: listing };
+  Q.community = { find: find, requests: requests, inbox: inbox, listing: listing, newCount: function () { return cfg.inbound ? newLeads() : 0; } };
+  // Community has its own part of the menu, apart from the work lists.
+  Q.communityMenu = function () {
+    var items = [];
+    if (cfg.inbound) items.push({ l: 'Leads', tab: 'leads', badge: function () { return newLeads(); } });
+    items.push({ l: 'Find a Vyqil...', run: function () { find(null, null); } });
+    items.push({ l: 'My requests and replies', run: function () { requests(); }, badge: function () { return newReplies(); } });
+    if (cfg.inbound) items.push({ l: 'My community listing', run: function () { listing(); } });
+    return items;
+  };
   Q.onStart.push(watchMine); Q.onStart.push(watchWon); Q.onStart.push(loadDirectory);
   Q.extras.push(function (v) {
     v.appendChild(el('h2', '', 'Community'));

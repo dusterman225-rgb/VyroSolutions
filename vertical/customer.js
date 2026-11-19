@@ -26,6 +26,16 @@
     if (r.note) c.appendChild(el('div', 'note', 'Message from the business: ' + r.note));
     return c;
   }
+  // Optional rental application, shown only on a landlord's request form. Returns a function that gives the filled-in answers (or null).
+  function appSection(parent, pg) {
+    if (!pg || pg.product !== 'landlord') return function () { return null; };
+    var d = el('details', 'card'); d.style.margin = '12px 0'; var sm = el('summary', '', 'Rental application (optional)'); sm.style.cssText = 'cursor:pointer;font-weight:700;color:#fff'; d.appendChild(sm);
+    d.appendChild(el('div', 'hint', 'Fill this in if you want to apply. The landlord sees it with your appointment request.')); var f = {};
+    function add(k, label, type, ph, area) { var i = el(area ? 'textarea' : 'input'); if (!area) i.type = type || 'text'; i.maxLength = area ? 300 : 80; if (ph) i.placeholder = ph; if (type === 'number') i.inputMode = 'decimal'; field(d, label, i); f[k] = i; }
+    add('looking', 'Place or unit you are interested in', 'text', '2 bedroom, Unit 4B'); add('moveIn', 'When do you want to move in', 'date'); add('income', 'Monthly income before taxes ($)', 'number', '3500'); add('employer', 'Employer', 'text'); add('curAddr', 'Current address', 'text'); add('occupants', 'People who would live there', 'number', '2'); add('pets', 'Pets', 'text', 'None, or one cat'); add('refs', 'References (name and phone)', 'text', '', true);
+    parent.appendChild(d);
+    return function () { var o = {}, any = false; Object.keys(f).forEach(function (k) { var v = String(f[k].value || '').trim(); if (v) { o[k] = v.slice(0, k === 'refs' ? 300 : 80); any = true; } }); return any ? o : null; };
+  }
   // Pick a type, a day and a time. Calls onPick({type, s, e}) whenever a time is chosen.
   function picker(parent, pg, onPick) {
     var types = pg.types || [], now = Date.now(), tz = tzOf(pg), sel = el('select'), days = el('div', 'subs'), times = el('div'), picked = null;
@@ -135,12 +145,13 @@
       picker(f, pg, function (x) { pick = x; });
       var why = el('textarea'); why.maxLength = 300; why.placeholder = 'A few words about what you need'; field(f, 'Reason for the appointment', why);
       var ph = el('input'); ph.type = 'tel'; ph.maxLength = 30; field(f, 'Your phone (optional)', ph);
+      var getApp = appSection(f, pg);
       var err = el('div', 'note err'); f.appendChild(err); var row = el('div', 'btns'), go = el('button', 'btn', 'Send request'), no = el('button', 'btn ghost', 'Cancel'); go.type = no.type = 'button'; row.appendChild(go); row.appendChild(no); f.appendChild(row);
       no.onclick = function () { parent.className = ''; parent.textContent = ''; parent.parentNode.querySelector('.btn.wide').style.display = ''; };
       go.onclick = function () {
         if (!pick) { err.textContent = 'Choose a day and a time.'; return; } if (!why.value.trim()) { err.textContent = 'Add a few words about the reason.'; return; }
         go.disabled = true; err.textContent = '';
-        db.collection('apptRequests').add({ bizId: p.bizId, portalId: p.id, email: String(u.email).toLowerCase(), name: String(p.custName || u.email).slice(0, 80), phone: ph.value.trim().slice(0, 30), typeId: pick.type.id, typeName: pick.type.name, start: pick.s, end: pick.e, reason: why.value.trim().slice(0, 300), status: 'pending', source: 'portal', uid: u.uid, createdAt: FV.serverTimestamp() })
+        db.collection('apptRequests').add(Object.assign({ bizId: p.bizId, portalId: p.id, email: String(u.email).toLowerCase(), name: String(p.custName || u.email).slice(0, 80), phone: ph.value.trim().slice(0, 30), typeId: pick.type.id, typeName: pick.type.name, start: pick.s, end: pick.e, reason: why.value.trim().slice(0, 300), status: 'pending', source: 'portal', uid: u.uid, createdAt: FV.serverTimestamp() }, (function () { var a = getApp(); return a ? { app: a } : {}; })()))
           .then(function (ref) { notify('areq', ref.id); parent.className = ''; parent.textContent = ''; parent.appendChild(el('div', 'note', 'Sent. You will get an alert and see the answer here.')); }, function (e) { go.disabled = false; err.textContent = friendly(e); });
       };
     }
@@ -163,6 +174,7 @@
       picker(c, pg, function (x) { pick = x; });
       var nm = el('input'); nm.maxLength = 80; field(c, 'Your name', nm); var ph = el('input'); ph.type = 'tel'; ph.maxLength = 30; field(c, 'Your phone', ph, 'How the business reaches you about this request.'); var em = el('input'); em.type = 'email'; em.maxLength = 120; field(c, 'Your email (optional)', em);
       var why = el('textarea'); why.maxLength = 300; why.placeholder = 'A few words about what you need'; field(c, 'Reason for the appointment', why);
+      var getApp = appSection(c, pg);
       var ts = el('div'); ts.style.margin = '12px 0'; c.appendChild(ts);
       if (cfg.turnstileKey) { var s = el('script'); s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.onload = function () { try { window.turnstile.render(ts, { sitekey: cfg.turnstileKey, theme: 'dark', callback: function (t) { token = t; } }); } catch (e) { /* shown below */ } }; document.head.appendChild(s); }
       else token = 'none';
@@ -170,7 +182,7 @@
       go.onclick = function () {
         if (!pick) { err.textContent = 'Choose a day and a time.'; return; } if (!nm.value.trim() || !ph.value.trim()) { err.textContent = 'Add your name and phone.'; return; } if (!why.value.trim()) { err.textContent = 'Add a few words about the reason.'; return; } if (!token) { err.textContent = 'Please complete the spam check.'; return; }
         go.disabled = true; err.textContent = 'Sending...';
-        api('/book', { bizId: bizId, typeId: pick.type.id, start: pick.s, end: pick.e, name: nm.value.trim(), phone: ph.value.trim(), email: em.value.trim(), reason: why.value.trim(), token: token }).then(function (j) {
+        api('/book', { bizId: bizId, typeId: pick.type.id, start: pick.s, end: pick.e, name: nm.value.trim(), phone: ph.value.trim(), email: em.value.trim(), reason: why.value.trim(), app: getApp(), token: token }).then(function (j) {
           if (j.ok && j.id) { location.href = 'book.html?r=' + encodeURIComponent(j.id); return; }
           go.disabled = false; err.textContent = j.detail || (j.error === 'taken' ? 'That time was just taken. Please pick another.' : 'Could not send. Please try again.'); try { window.turnstile.reset(); token = ''; } catch (e) { /* ignore */ }
         }, function () { go.disabled = false; err.textContent = 'No connection. Try again.'; });

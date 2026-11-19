@@ -118,3 +118,11 @@ input,textarea,select{color-scheme:dark}
 .card.lead-new{border-color:#64bcf7!important;background:rgba(100,188,247,.12)!important;box-shadow:0 0 0 1px rgba(100,188,247,.55),0 0 18px rgba(100,188,247,.25)}
 .card.lead-old{background:#04070a!important;border-color:rgba(255,255,255,.06)!important;opacity:.78}
 .card.lead-new b{color:#9fd6fb}
+
+/* Drop-down groups inside forms */
+.vq-drop{margin:12px 0;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03)}
+.vq-drop>summary{cursor:pointer;padding:12px 14px;font-weight:700;color:#fff;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.vq-drop>summary::-webkit-details-marker{display:none}
+.vq-drop>summary::after{content:"\25BE";color:var(--blue)}
+.vq-drop[open]>summary::after{content:"\25B4"}
+.vq-drop>.in{padding:0 14px 12px}
