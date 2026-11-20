@@ -3,7 +3,7 @@
 // Locations are rounded to about 0.7 miles before they are saved, and a request never contains a street address.
 (function () {
   'use strict';
-  var TRADES = ['Plumbing', 'Electrical', 'HVAC (heating and cooling)', 'Roofing', 'Painting', 'Flooring', 'Carpentry', 'Appliance repair', 'Handyman / general repair', 'Locksmith', 'Pest control', 'Landscaping and trees', 'Cleaning and turnover', 'Windows and doors', 'Other']
+  var TRADES = ['Plumbing', 'Electrical', 'HVAC (heating and cooling)', 'Roofing', 'Painting', 'Flooring', 'Carpentry', 'Appliance repair', 'Handyman / general repair', 'Locksmith', 'Pest control', 'Landscaping and trees', 'Cleaning and turnover', 'Windows and doors', 'Other'];
   var SERVICE_TYPES = ['House cleaning', 'Move-out and turnover cleaning', 'Lawn care', 'Landscaping', 'Pool service', 'Pressure washing', 'Window cleaning', 'Gutter cleaning', 'Carpet cleaning', 'Snow removal', 'Junk removal', 'Pest control', 'Pet waste removal', 'Tree trimming', 'Staging', 'Other'];
   var RENTAL_TYPES = ['Apartment', 'House', 'Room', 'Condo or townhome', 'Commercial or office', 'Storage or garage', 'Other'];
   var REALTOR_TYPES = ['Lease a vacant unit', 'Sell a property', 'Buy a property', 'Property management help', 'Commercial', 'Other'];
