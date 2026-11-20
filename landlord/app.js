@@ -718,7 +718,7 @@ window.VQ_APP = {
       { h: 'Community', items: Q.communityMenu ? Q.communityMenu() : [] },
       { h: 'Finances', items: [
         { l: 'Rent ledger', tab: 'payment' }, { l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' },
-        { l: 'Recurring bills', tab: 'bill' }, { l: 'Reports and tax summary', tab: 'reports' }] },
+        { l: 'Recurring bills', tab: 'bill' }, { l: 'Reports and tax summary', tab: 'reports' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] },
       { h: 'People', items: [
         { l: 'Messages', tab: 'messages', badge: function () { return F.unread ? F.unread() : 0; } },
         { l: 'Vendors', tab: 'vendor' },
@@ -837,3 +837,36 @@ window.VQ_APP = {
 
 // Insurance renewals get their own calendar color.
 (function () { var A = window.VQ_APP; A.calColors = [{ m: /insurance/i, c: '#a6e22e' }].concat(A.calColors || []); })();
+
+// ===== Pay with Vyqil for Landlord: pay an invoice or collect rent by QR code (USDC, 2% Vyqil fee paid by the landlord) =====
+(function () {
+  var A = window.VQ_APP;
+  function today() { return Q.u.today(); }
+  function ym(d) { return String(d || today()).slice(0, 7); }
+  function addPay(data) { data.kind = 'payment'; data.by = (Q.S.user.email || '').split('@')[0].slice(0, 30); data.createdAt = Q.FV.serverTimestamp(); data.updatedAt = Q.FV.serverTimestamp(); return Q.recs().add(data); }
+  function seen(sig) { return Q.byKind('payment').some(function (p) { return p.paySig === sig; }); }
+  function note(req, sig) { return ('Pay with Vyqil, USDC' + (req.net === 'mainnet' ? '' : ' (TEST)') + ' · ' + sig.slice(0, 12)).slice(0, 300); }
+  function tenOf(r) { return r.kind === 'tenant' ? r : (r.tenant ? Q.get(r.tenant) : null); }
+  function viaPortal(r, text) { var t = tenOf(r), LL = window.VQ_LL; if (!t || !t.portalId || !LL || !LL.portal) return Promise.reject({ message: 'This tenant has no portal yet.' }); return LL.portal.send(t, '', text).then(function () { try { LL.portal.after(t, 'a payment link'); } catch (e) { /* optional */ } }); }
+  function canPortal(r) { var t = tenOf(r); return !!(t && t.portalId); }
+  function contact(r) { var t = tenOf(r) || {}; return { phone: t.phone, email: t.email }; }
+  A.pay = { items: [
+    { kind: 'invoice', portalSend: viaPortal, canPortal: canPortal, contact: contact, label: function (r) { return 'Invoice ' + (r.number || ''); }, show: function (r) { return r.status !== 'Paid' && r.status !== 'Void' && (+r.amount || 0) >= 50; }, cents: function (r) { return Math.round(+r.amount || 0); },
+      onPaid: async function (r, found, req) {
+        var cur = Q.get(r.id); if ((cur && cur.status === 'Paid') || seen(found.signature)) throw { code: 'vq/already' };
+        await addPay({ tenant: r.tenant || null, date: today(), amount: req.usdCents, forMonth: ym(r.due), method: 'Crypto', notes: note(req, found.signature), paySig: found.signature });
+        await Q.recs().doc(r.id).update({ status: 'Paid', paySig: found.signature, updatedAt: Q.FV.serverTimestamp() });
+      } },
+    { kind: 'tenant', action: 'Collect rent with Pay with Vyqil', linkAction: 'Send a rent pay link', portalSend: viaPortal, canPortal: canPortal, contact: contact, editable: true, label: function () { return 'Rent'; }, show: function (r) { return r.status !== 'Moved out' && (+r.rent || 0) >= 50; }, cents: function (r) { return Math.round(+r.rent || 0); },
+      onPaid: async function (r, found, req) {
+        if (seen(found.signature)) throw { code: 'vq/already' };
+        var od = A.overdueOf ? A.overdueOf(r, Q.S.recs) : [], month = od.length ? od[0].ym : ym();
+        await addPay({ tenant: r.id, date: today(), amount: req.usdCents, forMonth: month, method: 'Crypto', notes: note(req, found.signature), paySig: found.signature });
+      } }
+  ] };
+  var oldStarter = A.starter;
+  A.starter = function () { var st = oldStarter(); st.push({ id: 'pay', t: 'Set up Pay with Vyqil', h: 'Optional. Collect rent and invoices by QR code, paid in dollar coins.', done: function () { return !!(Q.S.biz && Q.S.biz.payWallet); }, run: function () { if (Q.pay) Q.pay.setup(); } }); return st; };
+})();
+
+// Tenants are listed A to Z.
+(function () { window.VQ_APP.kinds.tenant.sort = function (a, b) { return String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase()); }; })();
