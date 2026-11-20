@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<meta name="robots" content="noindex">
+<title>Pay with Vyqil</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#05070a;color:#eef3f8;font:16px/1.45 system-ui,Arial,sans-serif}
+  .wrap{max-width:460px;margin:0 auto;padding:22px 16px 40px}
+  h1{font-size:1.3rem;margin:6px 0 2px}
+  .card{background:#0b1624;border:1px solid #1f2e3f;border-radius:16px;padding:16px;margin:14px 0}
+  .amt{font-size:2rem;font-weight:700;margin:4px 0}
+  .btn{display:block;width:100%;box-sizing:border-box;min-height:46px;margin:10px 0 0;border-radius:12px;border:0;background:#4B9CD3;color:#04121f;font:600 16px system-ui,Arial,sans-serif;cursor:pointer;text-align:center;text-decoration:none;padding:12px}
+  .btn.ghost{background:none;color:#eef3f8;border:1px solid #27405c}
+  .note{color:#9fb0c4;font-size:.9rem;margin-top:10px}.err{color:#ffb4b4}.ok{color:#7fe3b0}
+  .code{word-break:break-all;font-size:.75rem;background:#05070a;border:1px solid #1f2e3f;border-radius:10px;padding:8px;margin-top:8px;color:#9fb0c4}
+  #qr{background:#fff;padding:6px;border-radius:12px;max-width:300px;margin:12px auto}
+  .test{margin:8px 0;padding:6px 12px;border:1px solid #d4af37;border-radius:999px;text-align:center;font-size:.78rem;color:#d4af37}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="test" class="test" style="display:none">TEST MODE: no real money</div>
+  <h1 id="biz">Pay with Vyqil</h1>
+  <div class="note" id="what"></div>
+  <div class="card" id="main" style="display:none">
+    <div class="note">Amount to pay</div><div class="amt" id="amt"></div>
+    <div class="note" id="coin"></div>
+    <div id="qr"></div>
+    <div class="note">1. Open your Vyqil payments app and tap Pay a business.<br>2. Scan this QR code, or tap Copy payment code below and paste it in the app.<br>3. Confirm. This page will show when your payment arrives.</div>
+    <button class="btn" id="copy" type="button">Copy payment code</button>
+    <div class="code" id="codeTxt"></div>
+    <div class="note" id="st">Waiting for your payment...</div>
+  </div>
+  <div class="card" id="done" style="display:none"><h1 class="ok">Payment received</h1><p id="doneTxt"></p><a class="btn ghost" id="ex" target="_blank" rel="noopener" href="#">View on the blockchain explorer</a></div>
+  <div class="note err" id="err"></div>
+</div>
+<script src="/shared/chain-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  var $ = function (i) { return document.getElementById(i); }, CFG = window.VYRO_CHAIN || {}, ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function fail(t) { $('err').textContent = t; }
+  function b58len(s) { var b = [], i, j, c; for (i = 0; i < s.length; i++) { var v = ALPHA.indexOf(s[i]); if (v < 0) return -1; c = v; for (j = 0; j < b.length; j++) { c += b[j] * 58; b[j] = c & 255; c >>= 8; } while (c) { b.push(c & 255); c >>= 8; } } for (var k = 0; k < s.length && s[k] === '1'; k++) b.push(0); return b.length; }
+  var d; try { var h = location.hash.slice(1).replace(/-/g, '+').replace(/_/g, '/'); while (h.length % 4) h += '='; d = JSON.parse(decodeURIComponent(escape(atob(h)))); } catch (e) { d = null; }
+  if (!d || d.v !== 1 || !d.w || !d.r || !(d.u >= 50) || b58len(d.w) !== 32 || b58len(d.fw || '') !== 32 || b58len(d.r) !== 32 || b58len(d.m || '') !== 32) { fail('This payment link is not valid. Ask the business to send it again.'); return; }
+  if (d.n !== 'mainnet') $('test').style.display = 'block';
+  var usd = '$' + (d.u / 100).toFixed(2);
+  $('biz').textContent = d.b || 'Pay with Vyqil'; $('what').textContent = d.l ? d.l : '';
+  $('amt').textContent = usd; $('coin').textContent = 'Paid in USDC (a stable dollar coin). You send exactly ' + (d.a / 1e6).toFixed(2) + ' USDC. Vyqil covers the network fee.';
+  var q = new URLSearchParams({ v: '1', net: d.n, coin: 'USDC', to: d.w, amt: String(d.a), dec: '6', ref: d.r, inv: d.l || '', biz: d.b || '', usd: String(d.u), mint: d.m });
+  var text = 'vyro://pay?' + q.toString(); $('codeTxt').textContent = text; $('main').style.display = 'block';
+  if (window.qrcode) { var qr = window.qrcode(0, 'M'); qr.addData(text); qr.make(); var n = qr.getModuleCount(), m = 4, size = n + m * 2, p = ''; for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (qr.isDark(r, c)) p += 'M' + (c + m) + ' ' + (r + m) + 'h1v1h-1z'; $('qr').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '" width="100%" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="' + p + '" fill="#000"/></svg>'; } else $('qr').style.display = 'none';
+  $('copy').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { $('copy').textContent = 'Copied. Now paste it in the Vyqil app.'; }, function () { window.prompt('Copy this payment code:', text); }); };
+  if (CFG.payAppUrl) { var a = document.createElement('a'); a.className = 'btn ghost'; a.href = CFG.payAppUrl; a.textContent = 'Open the Vyqil payments app'; a.target = '_blank'; a.rel = 'noopener'; $('main').insertBefore(a, $('st')); }
+  async function rpc(method, params) { var url = CFG.rpc && CFG.rpc[d.n]; if (!url || /PUT-YOUR/.test(url)) throw 0; var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: method, params: params }) }); var j = await r.json(); if (j.error) throw 0; return j.result; }
+  function delta(tx, owner) { function sum(l) { var t = 0; (l || []).forEach(function (b) { if (b.owner === owner && b.mint === d.m) t += Number(b.uiTokenAmount.amount); }); return t; } return sum(tx.meta.postTokenBalances) - sum(tx.meta.preTokenBalances); }
+  var timer, busy = false;
+  async function check() {
+    if (busy) return; busy = true;
+    try {
+      var sigs = await rpc('getSignaturesForAddress', [d.r, { limit: 10, commitment: 'finalized' }]);
+      for (var i = 0; i < sigs.length; i++) {
+        if (sigs[i].err) continue;
+        var tx = await rpc('getTransaction', [sigs[i].signature, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 }]);
+        if (tx && tx.meta && !tx.meta.err && delta(tx, d.fw) >= d.f) {
+          clearInterval(timer); $('main').style.display = 'none'; $('done').style.display = 'block'; $('doneTxt').textContent = usd + ' was received by ' + (d.b || 'the business') + '. You can close this page.';
+          $('ex').href = 'https://explorer.solana.com/tx/' + sigs[i].signature + (d.n === 'devnet' ? '?cluster=devnet' : ''); break;
+        }
+      }
+    } catch (e) { /* retry */ }
+    busy = false;
+  }
+  timer = setInterval(check, 8000); check();
+})();
+</script>
+</body>
+</html>
