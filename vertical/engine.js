@@ -411,7 +411,7 @@
     Q.banners.forEach(function (fn) { try { fn(v); } catch (x) { console.error(x); } });
     starterCard(v);
     var q = C.quick || kinds().slice(0, 3).map(function (k) { return { l: 'New ' + K(k).label.toLowerCase(), form: k }; }), qa = el('div', 'qa');
-    q.slice(0, 3).forEach(function (x) { var b = el('button', 'btn', x.l); b.type = 'button'; b.onclick = function () { if (x.run) x.run(); else openForm(x.form); }; qa.appendChild(b); }); v.appendChild(qa);
+    q.slice(0, 3).forEach(function (x) { var b = el('button', 'btn', x.l); b.type = 'button'; b.onclick = function () { if (x.run) x.run(); else if (x.tab) openTab(x.tab)(); else openForm(x.form); }; qa.appendChild(b); }); v.appendChild(qa);
     // Colour notice cards above the calendar: what is past due, and what is due in the next 3 days.
     (function () {
       var soon = addDays(t, 3), groups = {}, order = [];
@@ -481,7 +481,7 @@
       kd.fields.forEach(function (f, fi) {
         // Fields that share a "drop" name sit together in a drop-down. It opens by itself on a new record or when something inside is filled in.
         var host = s;
-        if (f.drop) {
+        if (f.drop && (!f.dropIf || f.dropIf(r))) {
           if (dropName !== f.drop) { var grp = kd.fields.filter(function (g) { return g.drop === f.drop; }); dropName = f.drop; dropEl = el('details', 'vq-drop'); dropEl.appendChild(el('summary', '', f.drop)); dropEl.inner = el('div', 'in'); dropEl.appendChild(dropEl.inner); dropEl.open = (isNew && grp.some(function (g) { return g.dropOpenNew; })) || grp.some(function (g) { return r[g.k] != null && r[g.k] !== '' && r[g.k] !== false && g.t !== 'check' || (g.t === 'check' && r[g.k]); }) && !grp.some(function (g) { return g.dropClosed; }); s.appendChild(dropEl); }
           host = dropEl.inner;
         } else { dropName = ''; dropEl = null; }
