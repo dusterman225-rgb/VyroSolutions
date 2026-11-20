@@ -5,7 +5,7 @@ window.VQ_APP = {
     property: { label: 'Property', plural: 'Properties', icon: '🏢', fields: [{ k: 'name', l: 'Name or address', t: 'text', req: 1, drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'city', l: 'City', t: 'text', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'insuranceDue', l: 'Insurance renews', t: 'date', cal: 1, alert: { hour: 9 }, lbl: 'Insurance renews', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Property details', dropOpenNew: true, dropClosed: true }],
       actions: [{ l: 'New repair order', saveFirst: true, run: function (r) { Q.openForm('repair', null, { property: r.id, status: 'New' }); } }, { l: 'Add a unit', saveFirst: true, run: function (r) { Q.openForm('unit', null, { property: r.id, status: 'Vacant' }); } }],
       sub: function (r, rs) { var n = rs.filter(function (x) { return x.kind === 'unit' && x.property === r.id; }).length; return n + ' unit' + (n === 1 ? '' : 's'); } },
-    unit: { label: 'Unit', plural: 'Units', icon: '🚪', stage: 'status', fields: [{ k: 'name', l: 'Unit name', t: 'text', req: 1, h: 'Apt 2B' }, { k: 'property', l: 'Property', t: 'link', to: 'property' }, { k: 'status', l: 'Status', t: 'select', o: ['Occupied', 'Vacant', 'Turnover'], req: 1 }, { k: 'rent', l: 'Monthly rent', t: 'money' }, { k: 'notes', l: 'Notes', t: 'area' }],
+    unit: { label: 'Unit', plural: 'Units', icon: '🚪', stage: 'status', fields: [{ k: 'name', l: 'Unit name', t: 'text', req: 1, h: 'Apt 2B', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'property', l: 'Property', t: 'link', to: 'property', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'status', l: 'Status', t: 'select', o: ['Occupied', 'Vacant', 'Turnover'], req: 1, drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'rent', l: 'Monthly rent', t: 'money', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }],
       title: function (r) { return (r.property ? Q.title(Q.get(r.property)) + ' · ' : '') + r.name; }, amount: function (r) { return r.rent || ''; } },
     tenant: { label: 'Tenant', plural: 'Tenants', icon: '👤', stage: 'status', closed: function (r) { return r.status === 'Moved out'; }, sort: function (a, b) { return (a.leaseEnd || '9') < (b.leaseEnd || '9') ? -1 : 1; },
       fields: [{ k: 'name', l: 'Name', t: 'text', req: 1 }, { k: 'unit', l: 'Unit', t: 'link', to: 'unit' }, { k: 'status', l: 'Status', t: 'select', o: ['Current', 'Notice given', 'Moved out'], req: 1 }, { k: 'phone', l: 'Phone', t: 'tel' }, { k: 'email', l: 'Email', t: 'email' }, { k: 'rent', l: 'Monthly rent', t: 'money' }, { k: 'dueDay', l: 'Rent due day of month', t: 'number', d: 1, hint: '1 to 28.' },
@@ -532,7 +532,7 @@ window.VQ_APP = {
     function group(h, rows) { v.appendChild(el('h2', '', h)); var c = el('div', 'card'); rows.forEach(function (x) { var r = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', x[0])); if (x[1]) m.appendChild(el('span', '', x[1])); r.appendChild(m); if (x[3]) r.appendChild(el('span', 'pill bad', String(x[3]))); r.onclick = x[2]; c.appendChild(r); }); v.appendChild(c); }
     var n = function (k) { return Q.byKind(k).length + ' total'; }, newApps = Q.byKind('applicant').filter(function (a) { return a.status === 'New'; }).length, unp = Q.byKind('invoice').filter(function (r) { return r.status === 'Sent'; }).length;
     group('Rentals', [['Properties', n('property'), open('property')], ['Units', n('unit'), open('unit')], ['Applications', n('applicant'), open('applicant'), newApps ? newApps + ' new' : ''], ['Leases', n('lease'), open('lease')], ['Inspections', n('inspection'), open('inspection')]]);
-    group('Money', [['Rent ledger', n('payment'), open('payment')], ['Invoices', n('invoice'), open('invoice'), unp ? unp + ' open' : ''], ['Expenses', n('expense'), open('expense')], ['Recurring bills', n('bill'), open('bill')], ['Reports and tax summary', 'Income, expenses, by property', open('reports')]]);
+    group('Finances', [['Rent ledger', n('payment'), open('payment')], ['Invoices', n('invoice'), open('invoice'), unp ? unp + ' open' : ''], ['Expenses', n('expense'), open('expense')], ['Recurring bills', n('bill'), open('bill')], ['Reports and tax summary', 'Income, expenses, by property', open('reports')]]);
     var un = unread();
     group('People', [['Messages', 'Talk with your tenants', open('messages'), un ? un + ' new' : ''], ['Vendors', n('vendor'), open('vendor')], ['Letters and notices', 'Late rent, rent increase, entry, renewal', function () { letters(); }]]);
   };
@@ -669,7 +669,7 @@ window.VQ_APP = {
   A.hub = function (v) {
     oldHub(v); var n = dueList().length; if (!n) { return; }
     var c = el('div', 'card'), r = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', 'Rent reminders')); m.appendChild(el('span', '', 'Send a reminder to tenants who are late or due soon')); r.appendChild(m); r.appendChild(el('span', 'pill bad', String(n))); r.onclick = remindersModal; c.appendChild(r);
-    var first = v.querySelector('h2'); var hs = v.querySelectorAll('h2'); var money2 = null; for (var i = 0; i < hs.length; i++) if (hs[i].textContent === 'Money') money2 = hs[i]; if (money2 && money2.nextSibling) { v.insertBefore(el('h2', '', 'Needs attention'), money2); v.insertBefore(c, money2); }
+    var first = v.querySelector('h2'); var hs = v.querySelectorAll('h2'); var money2 = null; for (var i = 0; i < hs.length; i++) if (hs[i].textContent === 'Finances') money2 = hs[i]; if (money2 && money2.nextSibling) { v.insertBefore(el('h2', '', 'Needs attention'), money2); v.insertBefore(c, money2); }
   };
   function bootR() {
     Q.banners = Q.banners || [];
@@ -716,7 +716,7 @@ window.VQ_APP = {
         { l: 'Properties', tab: 'property' }, { l: 'Units', tab: 'unit' }, { l: 'Tenants', tab: 'tenant' },
         { l: 'Repairs', tab: 'repair' }, { l: 'Leases', tab: 'lease' }, { l: 'Inspections', tab: 'inspection' }] },
       { h: 'Community', items: Q.communityMenu ? Q.communityMenu() : [] },
-      { h: 'Money', items: [
+      { h: 'Finances', items: [
         { l: 'Rent ledger', tab: 'payment' }, { l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' },
         { l: 'Recurring bills', tab: 'bill' }, { l: 'Reports and tax summary', tab: 'reports' }] },
       { h: 'People', items: [
@@ -728,7 +728,7 @@ window.VQ_APP = {
     ];
   };
   A.quick = [
-    { l: 'New tenant', form: 'tenant' }, { l: 'New repair', form: 'repair' }, { l: 'Rent payment', form: 'payment' }
+    { l: 'Tenants', tab: 'tenant' }, { l: 'Properties', tab: 'property' }, { l: 'Messages', tab: 'messages' }
   ];
   A.starter = function () {
     var F = A.fn || {};
@@ -834,3 +834,6 @@ window.VQ_APP = {
   var first = ta.filter(function (a) { return a.group; });
   A.kinds.tenant.actions = ta.filter(function (a) { return !a.group; }).concat(first);
 })();
+
+// Insurance renewals get their own calendar color.
+(function () { var A = window.VQ_APP; A.calColors = [{ m: /insurance/i, c: '#a6e22e' }].concat(A.calColors || []); })();
