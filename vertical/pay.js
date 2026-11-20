@@ -69,6 +69,67 @@
   function bizRef() { return Q.db.collection('businesses').doc(Q.S.biz.id); }
   function isOwner() { return Q.S.biz && Q.S.biz.role === 'owner'; }
 
+  // ---------- Pay links: a customer opens the link, sees the amount and the QR / payment code, and the page watches for the payment ----------
+  function b64(o) { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function newReq(cents, wallet) {
+    var base = cents * 10000, fee = Math.ceil(base * (CFG.feeBps || 200) / 10000);
+    return { reference: makeReference(), net: CFG.network, coin: 'USDC', usdCents: cents, amountBase: base, feeBase: fee, bizBase: base - fee, decimals: 6, wallet: wallet, feeWallet: CFG.feeWallet, mint: CFG.usdcMint[CFG.network], at: Date.now() };
+  }
+  function pack(q) { return { r: q.reference, u: q.usdCents, a: q.amountBase, f: q.feeBase, n: q.net, w: q.wallet, fw: q.feeWallet, m: q.mint, at: q.at }; }
+  function unpack(p) { return { reference: p.r, net: p.n, coin: 'USDC', usdCents: p.u, amountBase: p.a, feeBase: p.f, bizBase: p.a - p.f, decimals: 6, wallet: p.w, feeWallet: p.fw, mint: p.m, at: p.at }; }
+  function payLink(q, label) { return location.origin + '/pay.html#' + b64({ v: 1, n: q.net, w: q.wallet, fw: q.feeWallet, m: q.mint, a: q.amountBase, f: q.feeBase, d: 6, r: q.reference, u: q.usdCents, l: label || '', b: (Q.S.biz && Q.S.biz.name) || '' }); }
+  function msgText(it, r, q, link) { return 'Hi, here is your payment link for ' + ((it.label && it.label(r)) || 'your balance') + ' (' + usd(q.usdCents) + ') from ' + ((Q.S.biz && Q.S.biz.name) || 'us') + ':\n' + link; }
+  function clearReq(it, r) { return Q.recs().doc(r.id).update({ payReq: Q.FV.delete() }).catch(function () { /* ignore */ }); }
+
+  // Share window: send to the portal (when the app has one), copy, text or email the link.
+  function share(it, r, q) {
+    var link = payLink(q, (it.label && it.label(r)) || ''), text = msgText(it, r, q, link), who = it.contact ? (it.contact(r) || {}) : {};
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', 'Send the pay link'));
+      s.appendChild(el('p', 'hint', 'The customer opens the link, sees ' + usd(q.usdCents) + ' and a QR code, and pays with the Vyqil app. When it is paid, this app records it by itself the next time it checks (it checks every minute while it is open).'));
+      function btn(label, fn, cls) { var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0'; b.onclick = fn; s.appendChild(b); return b; }
+      if (it.portalSend && (!it.canPortal || it.canPortal(r))) btn('Send to their portal', function () { Promise.resolve(it.portalSend(r, text, link)).then(function () { Q.toast('Sent to the portal.'); close(); }, function (e) { Q.toast(Q.friendly(e)); }); });
+      btn('Copy the link only', function () { (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { Q.toast('Link copied.'); }, function () { window.prompt('Copy this link:', link); }); }, 'ghost');
+      var ph = String(who.phone || '').replace(/[^0-9+]/g, ''); btn('Text message', function () { location.href = 'sms:' + ph + (/iPhone|iPad|iOS/.test(navigator.userAgent) ? '&' : '?') + 'body=' + encodeURIComponent(text); }, 'ghost');
+      btn('Email', function () { location.href = 'mailto:' + (who.email ? String(who.email).replace(/[^\w.@+-]/g, '') : '') + '?subject=' + encodeURIComponent('Payment link: ' + ((it.label && it.label(r)) || '')) + '&body=' + encodeURIComponent(text); }, 'ghost');
+      btn('Show the QR code here instead', function () { close(); collect({ key: it.kind + '_' + r.id, title: 'Pay with Vyqil', label: (it.label && it.label(r)) || 'Amount due', cents: q.usdCents, onPaid: function (f, rq) { return it.onPaid(r, f, rq).then(function () { return clearReq(it, r); }); } }); }, 'ghost');
+      btn('Close', close, 'ghost');
+    });
+  }
+  function startLink(it, r) {
+    var bad = cfgProblem(); if (bad) { Q.toast(bad); return; }
+    var wallet = Q.S.biz && Q.S.biz.payWallet; if (!wallet) { Q.toast(isOwner() ? 'Add your wallet address first.' : 'The owner needs to add the business wallet first.'); if (isOwner()) setup(); return; }
+    function go(cents) {
+      var p = r.payReq, q = (p && p.u === cents && p.w === wallet && p.n === CFG.network && Date.now() - p.at < 14 * 86400000) ? unpack(p) : newReq(cents, wallet);
+      Q.recs().doc(r.id).update({ payReq: pack(q), updatedAt: Q.FV.serverTimestamp() }).then(function () { share(it, r, q); }, function (e) { Q.toast(Q.friendly(e)); });
+    }
+    if (it.editable) {
+      Q.modal(function (s, close) {
+        s.appendChild(el('h3', '', 'How much should the link ask for?')); var inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0.5'; inp.inputMode = 'decimal'; inp.value = ((it.cents(r) || 0) / 100).toFixed(2); s.appendChild(inp);
+        var m = el('div', 'note'), b = el('button', 'btn', 'Make the link'); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin-top:10px'; s.appendChild(b); s.appendChild(m);
+        b.onclick = function () { var c = Math.round(parseFloat(inp.value) * 100); if (!(c >= 50)) { m.className = 'note err'; m.textContent = 'The smallest payment is $0.50.'; return; } close(); go(c); };
+      });
+    } else go(it.cents(r));
+  }
+
+  // Looks for payments on links that were sent out, even when nobody has the QR window open.
+  var busy = {};
+  function scan() {
+    if (!Q.S.biz || document.hidden || cfgProblem()) return; var n = 0;
+    (A.pay.items || []).forEach(function (it) {
+      Q.byKind(it.kind).forEach(function (r) {
+        var p = r.payReq; if (!p || busy[r.id] || n >= 8) return;
+        if (Date.now() - (p.at || 0) > 14 * 86400000) { clearReq(it, r); return; }
+        n++; busy[r.id] = 1; var q = unpack(p);
+        findPayment(q).then(function (found) {
+          if (!found) return;
+          return it.onPaid(r, found, q).catch(function (e) { if (!(e && e.code === 'vq/already')) throw e; }).then(function () { return clearReq(it, r); }).then(function () { Q.toast('Payment received: ' + usd(q.usdCents) + ' ' + ((it.label && it.label(r)) || '')); });
+        }).catch(function () { /* try again next time */ }).then(function () { delete busy[r.id]; });
+      });
+    });
+  }
+  setTimeout(scan, 4000); setInterval(scan, 60000);
+
   // ---------- Setup: where the business gets paid ----------
   function setup() {
     Q.modal(function (s, close) {
@@ -116,8 +177,7 @@
         body.appendChild(go); body.appendChild(m);
       }
       function make(cents) {
-        var base = cents * 10000, fee = Math.ceil(base * (CFG.feeBps || 200) / 10000), ref = makeReference();
-        var req = { reference: ref, net: CFG.network, coin: 'USDC', usdCents: cents, amountBase: base, feeBase: fee, bizBase: base - fee, decimals: 6, wallet: wallet, feeWallet: CFG.feeWallet, mint: CFG.usdcMint[CFG.network], at: Date.now() };
+        var req = newReq(cents, wallet);
         ls(storeKey, JSON.stringify(req)); show(req);
       }
       function show(req) {
@@ -160,13 +220,14 @@
     });
   }
 
-  Q.pay = { setup: setup, collect: collect, isAddress: isAddress };
+  Q.pay = { setup: setup, collect: collect, isAddress: isAddress, scan: scan };
 
   // ---------- Hook the "Pay with Vyqil" button into each kind the app lists ----------
   (A.pay.items || []).forEach(function (it) {
     var kd = A.kinds[it.kind]; if (!kd) return; kd.actions = kd.actions || [];
     kd.actions.unshift({ l: it.action || 'Pay with Vyqil (QR code)', show: function (r) { return !it.show || it.show(r); }, run: function (r) {
-      collect({ key: it.kind + '_' + r.id, title: 'Pay with Vyqil', label: it.label ? it.label(r) : 'Amount due', cents: it.cents ? it.cents(r) : 0, editable: !!it.editable, onPaid: function (found, req) { return it.onPaid(r, found, req); } });
+      collect({ key: it.kind + '_' + r.id, title: 'Pay with Vyqil', label: it.label ? it.label(r) : 'Amount due', cents: it.cents ? it.cents(r) : 0, editable: !!it.editable, onPaid: function (found, req) { return it.onPaid(r, found, req).then(function () { if (r.payReq) return clearReq(it, r); }); } });
     } });
+    kd.actions.unshift({ l: it.linkAction || 'Send a pay link to the customer', show: function (r) { return !it.show || it.show(r); }, run: function (r) { startLink(it, r); } });
   });
 })();
