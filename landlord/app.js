@@ -24,7 +24,7 @@ window.VQ_APP = {
     var out = [], u = Q.u, t = u.today(), now = new Date();
     rs.forEach(function (r) {
       if (r.kind !== 'tenant' || r.status === 'Moved out' || !r.rent) return; var day = Math.min(28, Math.max(1, +r.dueDay || 1));
-      for (var m = -1; m <= 1; m++) { var d = new Date(now.getFullYear(), now.getMonth() + m, day), ds = u.ymd(d), ym = ds.slice(0, 7);
+      for (var m = (r.leaseStart ? -6 : -1); m <= 1; m++) { var d = new Date(now.getFullYear(), now.getMonth() + m, day), ds = u.ymd(d), ym = ds.slice(0, 7);
         if (ds < from || ds > to) continue; if (r.leaseStart && ds < r.leaseStart) continue;
         var paid = rs.some(function (p) { return p.kind === 'payment' && p.tenant === r.id && (p.forMonth === ym || (!p.forMonth && (p.date || '').slice(0, 7) === ym)); }); if (paid) continue;
         out.push({ date: ds, label: 'Rent due', title: r.name + ' ' + u.money(r.rent), rec: r, kind: 'tenant', alert: { hour: 9 }, key: 'rent' + ym }); }
@@ -91,6 +91,7 @@ window.VQ_APP = {
   var extra = [{ k: 'graceDays', l: 'Grace days after due day', t: 'number', hint: 'Rent is late after the due day plus these days. Leave empty for none.' }, { k: 'lateFee', l: 'Late fee', t: 'money', hint: 'A flat fee you charge when rent is late.' },
     { k: 'leaseSigned', l: 'Lease signed', t: 'check' }, { k: 'moveInDone', l: 'Move-in inspection done', t: 'check' }, { k: 'keysGiven', l: 'Keys given', t: 'check' },
     { k: 'finalInspection', l: 'Move-out inspection done', t: 'check' }, { k: 'keysBack', l: 'Keys returned', t: 'check' }, { k: 'depositBack', l: 'Deposit returned', t: 'money' }, { k: 'depositBackOn', l: 'Deposit returned on', t: 'date' }, { k: 'forwardAddr', l: 'Forwarding address', t: 'text' }];
+  extra.push({ k: 'employer', l: 'Employer', t: 'text' }, { k: 'income', l: 'Monthly income', t: 'money' }, { k: 'prevAddr', l: 'Previous address', t: 'text' }, { k: 'occupants', l: 'People living there', t: 'number' }, { k: 'pets', l: 'Pets', t: 'text' });
   tf.splice.apply(tf, [at, 0].concat(extra));
   K.repair.fields.splice(K.repair.fields.length - 1, 0, { k: 'doneOn', l: 'Finished on', t: 'date' });
   K.tenant.sub = function (r, rs) {
@@ -284,16 +285,24 @@ window.VQ_APP = {
 
   // ---------- applications: approve and make a tenant ----------
   var AP = K.applicant;
+  // Approving an application creates the tenant from what the applicant filled in, then opens the tenant page so it can be reviewed.
+  async function approveApplicant(r) {
+    try {
+      var ex = Q.byKind('tenant').filter(function (t) { return t.fromApp === r.id; })[0];
+      if (ex) { Q.openForm('tenant', ex); return; }
+      var un = r.unit ? Q.get(r.unit) : null, t = { name: r.name, status: 'Current', phone: r.phone || '', email: r.email || '', dueDay: 1, leaseStart: r.moveIn || today(), fromApp: r.id };
+      if (r.unit) t.unit = r.unit; if (un && un.rent) t.rent = un.rent;
+      if (r.employer) t.employer = r.employer; if (r.income != null && r.income !== '') t.income = r.income; if (r.curAddr) t.prevAddr = r.curAddr; if (r.occupants != null && r.occupants !== '') t.occupants = r.occupants; if (r.pets) t.pets = r.pets;
+      var nt = [r.refs ? 'References: ' + r.refs : '', r.notes || ''].filter(Boolean).join('\n').slice(0, 1400); if (nt) t.notes = nt;
+      var shown = JSON.parse(JSON.stringify(t)), ref = await add('tenant', t); await upd(r.id, { status: 'Moved in' }); if (un) await upd(un.id, { status: 'Occupied' });
+      Q.toast('Tenant page opened with the application details. Check it and save.');
+      setTimeout(function () { Q.openForm('tenant', Object.assign({ id: ref.id, kind: 'tenant' }, shown)); }, 200);
+    } catch (e) { Q.toast(Q.friendly(e)); }
+  }
+  AP.onSaved = function (r, prev) { if (r.status === 'Approved' && (!prev || prev.status !== 'Approved')) approveApplicant(r); };
   AP.actions = [
     { l: 'Approve and make a tenant', show: function (r) { return r.status !== 'Moved in' && r.status !== 'Declined'; }, run: function (r) {
-      Q.ask('Approve ' + r.name + ' and create a tenant record' + (r.unit ? ' for ' + title(r.unit) : '') + '? You can edit the tenant afterwards.', 'Approve', async function () {
-        try {
-          var un = r.unit ? Q.get(r.unit) : null, t = { name: r.name, status: 'Current', phone: r.phone || '', email: r.email || '', dueDay: 1, leaseStart: r.moveIn || today() };
-          if (r.unit) t.unit = r.unit; if (un && un.rent) t.rent = un.rent;
-          await add('tenant', t); await upd(r.id, { status: 'Moved in' }); if (un) await upd(un.id, { status: 'Occupied' });
-          Q.toast('Tenant created. Next: write the lease.');
-        } catch (e) { Q.toast(Q.friendly(e)); }
-      });
+      Q.ask('Approve ' + r.name + ' and open a new tenant page filled in from the application' + (r.unit ? ' for ' + title(r.unit) : '') + '?', 'Approve', function () { approveApplicant(r); });
     } },
     { l: 'Write a decline letter', run: function (r) {
       showText('Letter to ' + r.name, letterhead() + '\n\n' + fmt(today()) + '\n\nDear ' + (r.name || 'Applicant').split(/\s+/)[0] + ',\n\nThank you for applying to rent' + (r.unit ? ' ' + title(r.unit) : '') + '. After reviewing your application, we are not able to offer you the rental at this time.\n\nIf we used a credit or background report in this decision, federal law may require us to give you the name of the reporting company and your rights to a free copy and to dispute it. Please contact us if you would like that information.\n\nWe wish you the best in your search.\n\n' + (biz().name || '') + '\n\n(Check your state and local rules for required wording before sending.)');
@@ -816,4 +825,12 @@ window.VQ_APP = {
     var go = function () { LL.syncOne(t, true).catch(function () { /* the message still goes */ }); send(t, '', txt).then(function () { Q.toast('Invoice sent to the tenant portal.'); after(t, 'an invoice'); }, function (e) { Q.toast(Q.friendly(e)); }); };
     if (r.status === 'Draft') Q.recs().doc(r.id).update({ status: 'Sent', updatedAt: Q.FV.serverTimestamp() }).then(go, function (e) { Q.toast(Q.friendly(e)); }); else go();
   } });
+})();
+
+// Every tenant portal option sits in one drop-down on the tenant page.
+(function () {
+  var A = window.VQ_APP, ta = A.kinds.tenant.actions || [];
+  ta.forEach(function (a) { if (/portal/i.test(a.l)) a.group = 'Tenant portal'; });
+  var first = ta.filter(function (a) { return a.group; });
+  A.kinds.tenant.actions = ta.filter(function (a) { return !a.group; }).concat(first);
 })();
