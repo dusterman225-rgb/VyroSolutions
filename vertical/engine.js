@@ -298,8 +298,9 @@
     item(menu, 'Sign out', function () { signOutNow(); }, 'out');
   }
   function shell() {
-    root.textContent = ''; var wrap = el('div', 'wrap'), top = el('div', 'topbar'), lg = el('img', 'mark'); lg.src = C.logo || '/icons/icon-192.png'; lg.alt = ''; top.appendChild(lg);
-    var mw = el('div', 'mwrap'), btn = el('button', 'menu-btn', 'Menu ▾'); btn.type = 'button'; btn.setAttribute('aria-expanded', 'false'); var menu = el('div', 'menu'); mw.appendChild(btn); mw.appendChild(menu); top.appendChild(mw); wrap.appendChild(top);
+    root.textContent = ''; var wrap = el('div', 'wrap'), top = el('div', 'topbar'), lg = el('img', 'mark'); lg.src = C.logo || '/icons/icon-192.png'; lg.alt = 'Go to dashboard'; lg.style.cursor = 'pointer'; lg.setAttribute('role', 'link'); lg.tabIndex = 0; lg.onclick = function () { openTab('today')(); window.scrollTo(0, 0); }; lg.onkeydown = function (e) { if (e.key === 'Enter') lg.onclick(); }; top.appendChild(lg);
+    var mw = el('div', 'mwrap'), btn = el('button', 'menu-btn', 'Menu ▾'); btn.type = 'button'; btn.setAttribute('aria-expanded', 'false'); var menu = el('div', 'menu'); mw.appendChild(btn); mw.appendChild(menu);
+    var rw = el('div', 'toprt'), lo = el('button', 'logout-sm', 'Log out'); lo.type = 'button'; lo.onclick = function () { signOutNow(); }; rw.appendChild(lo); rw.appendChild(mw); top.appendChild(rw); wrap.appendChild(top);
     function setOpen(o) { if (o) buildMenu(menu, setOpen); menu.classList.toggle('open', o); btn.setAttribute('aria-expanded', o ? 'true' : 'false'); }
     btn.onclick = function (e) { e.stopPropagation(); setOpen(!menu.classList.contains('open')); }; document.addEventListener('click', function (e) { if (!menu.contains(e.target)) setOpen(false); }); document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
     wrap.appendChild(el('div', 'bizname', S.biz.name)); var main = el('main'); main.id = 'view'; wrap.appendChild(main); root.appendChild(wrap);
@@ -411,6 +412,20 @@
     starterCard(v);
     var q = C.quick || kinds().slice(0, 3).map(function (k) { return { l: 'New ' + K(k).label.toLowerCase(), form: k }; }), qa = el('div', 'qa');
     q.slice(0, 3).forEach(function (x) { var b = el('button', 'btn', x.l); b.type = 'button'; b.onclick = function () { if (x.run) x.run(); else openForm(x.form); }; qa.appendChild(b); }); v.appendChild(qa);
+    // Colour notice cards above the calendar: what is past due, and what is due in the next 3 days.
+    (function () {
+      var soon = addDays(t, 3), groups = {}, order = [];
+      evs.forEach(function (e) { var kind = e.over ? 'late' : (e.date <= soon ? 'soon' : ''); if (!kind) return; var key = kind + '|' + e.label; if (!groups[key]) { groups[key] = { kind: kind, label: e.label, list: [] }; order.push(key); } groups[key].list.push(e); });
+      order.sort(function (a, b) { return groups[a].kind === groups[b].kind ? 0 : groups[a].kind === 'late' ? -1 : 1; });
+      order.forEach(function (key) {
+        var g = groups[key], col = g.kind === 'late' ? '#ff5d5d' : dotColor(g.label), first = g.list[0], n = g.list.length;
+        var card = el('button', 'card vq-note'); card.type = 'button'; card.style.cssText = 'display:block;width:100%;text-align:left;border-left:5px solid ' + col + ';background:' + col + '1c;margin:0 0 8px;color:inherit;cursor:pointer';
+        card.appendChild(el('b', '', g.kind === 'late' ? n + ' past due: ' + g.label : n + ' due soon: ' + g.label));
+        var who = first.title || (first.rec ? title(first.rec) : ''); card.appendChild(el('div', 'hint', (g.kind === 'late' ? 'Oldest ' : 'Next ') + fmtDate(first.date) + (who ? ' · ' + who : '') + (n > 1 ? ' and ' + (n - 1) + ' more' : '')));
+        card.onclick = function () { var d = parse(first.date); S.cal = { y: d.getFullYear(), m: d.getMonth() }; S.calSel = first.date; render(); };
+        v.appendChild(card);
+      });
+    })();
     calendarCard(v);
     if (C.stats) { var st = el('div', 'stat'); C.stats.forEach(function (s) { var d = el('div'); d.appendChild(el('b', '', s.fn(S.recs, t))); d.appendChild(el('span', '', s.l)); st.appendChild(d); }); v.appendChild(st); }
     var over = evs.filter(function (e) { return e.over; });
@@ -517,7 +532,9 @@
         rel2.forEach(function (x) { var rw = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(x))); var sub = K(ok).sub ? K(ok).sub(x, S.recs) : ''; if (sub) m.appendChild(el('span', '', sub)); rw.appendChild(m); rw.onclick = function () { close(); openForm(ok, x); }; s.appendChild(rw); });
         var pr = {}; pr[lf.k] = rec.id; var nb = el('button', 'btn ghost sm', '+ Add ' + K(ok).label.toLowerCase()); nb.type = 'button'; nb.style.marginTop = '6px'; nb.onclick = function () { close(); openForm(ok, null, pr); }; s.appendChild(nb);
       });
-      if (!isNew && kd.actions) kd.actions.forEach(function (a) { if (a.show && !a.show(rec)) return; var ab = el('button', 'btn ghost', a.l); ab.type = 'button'; ab.style.cssText = 'display:block;width:100%;margin:8px 0'; ab.onclick = function () { close(); a.run(rec); }; s.appendChild(ab); if (a.note) s.appendChild(el('div', 'note', a.note)); });
+      if (!isNew && kd.actions) { var grpEls = {}; kd.actions.forEach(function (a) { if (a.show && !a.show(rec)) return; var ab = el('button', 'btn ghost', a.l); ab.type = 'button'; ab.style.cssText = 'display:block;width:100%;margin:8px 0'; ab.onclick = function () { close(); a.run(rec); }; var hostA = s;
+        if (a.group) { if (!grpEls[a.group]) { var gd = el('details', 'vq-drop'); gd.appendChild(el('summary', '', a.group)); gd.inner = el('div', 'in'); gd.appendChild(gd.inner); grpEls[a.group] = gd; s.appendChild(gd); } hostA = grpEls[a.group].inner; }
+        hostA.appendChild(ab); if (a.note) hostA.appendChild(el('div', 'note', a.note)); }); }
       var afterSave = null;
       if (isNew && kd.actions) kd.actions.forEach(function (a) { if (!a.saveFirst) return; var sb = el('button', 'btn ghost', a.saveFirst === true ? 'Save and ' + a.l.charAt(0).toLowerCase() + a.l.slice(1) : a.saveFirst); sb.type = 'button'; sb.style.cssText = 'display:block;width:100%;margin:8px 0'; sb.onclick = function () { afterSave = a; save.click(); }; s.appendChild(sb); if (a.note) s.appendChild(el('div', 'note', a.note)); });
       if (!isNew && rec.by) s.appendChild(el('div', 'note', 'Last edited by ' + rec.by));
@@ -529,7 +546,7 @@
         var data = Object.assign({}, c.o); if (kd.checklist) data.cl = cl || []; data.kind = k; data.by = (S.user.email || '').split('@')[0].slice(0, 30); data.updatedAt = FV.serverTimestamp(); if (isNew) data.createdAt = FV.serverTimestamp();
         Object.keys(data).forEach(function (key) { if (data[key] === undefined) delete data[key]; });
         save.disabled = true;
-        try { var nref = null; if (isNew) { nref = await recs().add(data); } else { await recs().doc(rec.id).update(data); } close(); toast('Saved.'); if (afterSave && nref) { var act = afterSave, nr = Object.assign({}, data, { id: nref.id }); setTimeout(function () { act.run(nr); }, 60); } }
+        try { var nref = null; if (isNew) { nref = await recs().add(data); } else { await recs().doc(rec.id).update(data); } close(); toast('Saved.'); if (kd.onSaved) { var nr2 = Object.assign({}, rec || {}, data, { id: isNew ? nref.id : rec.id }), prev2 = rec; setTimeout(function () { try { kd.onSaved(nr2, prev2); } catch (x2) { console.error(x2); } }, 120); } if (afterSave && nref) { var act = afterSave, nr = Object.assign({}, data, { id: nref.id }); setTimeout(function () { act.run(nr); }, 60); } }
         catch (e) { msg.textContent = friendly(e); save.disabled = false; afterSave = null; }
       };
     });
