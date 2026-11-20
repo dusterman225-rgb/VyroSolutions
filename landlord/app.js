@@ -211,6 +211,15 @@ window.VQ_APP = {
     });
   }
 
+  async function quietInvite(t) {
+    var email = String(t.email || '').trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { skip: true };
+    var res = await makeLogin(email); if (res.error) return { error: res.error };
+    var ref = Q.db.collection('tenantPortals').doc(), d = portalData(t); d.updatedAt = Q.FV.serverTimestamp();
+    try { await ref.set(d); await Q.recs().doc(t.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { return { error: Q.friendly(e) }; }
+    t.portalId = ref.id; return { ok: true, existing: res.existing, mailError: res.mailError };
+  }
+  window.VQ_APP.portalInvite = { kind: 'tenant', coll: 'tenantPortals', noun: 'tenant', skip: function (t) { return t.status === 'Moved out'; }, quiet: quietInvite, after: function (t) { shareLink(t); } };
+
   // ----- repair requests sent by tenants
   var reqCount = 0, reqs = [];
   function listenRequests() {
@@ -227,8 +236,15 @@ window.VQ_APP = {
         reqs.forEach(function (q) {
           var c = U().el('div', 'card'); c.appendChild(U().el('b', '', (q.urgent ? '[Urgent] ' : '') + q.issue)); c.appendChild(U().el('div', 'hint', q.tenantName + (q.unit ? ' · ' + q.unit : '') + (q.phone ? ' · ' + q.phone : ''))); if (q.details) c.appendChild(U().el('div', '', q.details));
           var b = U().el('div', 'btns'), mk = U().el('button', 'btn', 'Make a repair'), no = U().el('button', 'btn ghost', 'Dismiss'); mk.type = no.type = 'button'; b.appendChild(mk); b.appendChild(no); c.appendChild(b);
-          mk.onclick = function () { mk.disabled = true; var t = Q.get(q.recId), data = { kind: 'repair', issue: q.issue.slice(0, 120), status: 'New', urgent: !!q.urgent, notes: ('From tenant ' + q.tenantName + (q.phone ? ' (' + q.phone + ')' : '') + (q.details ? '. ' + q.details : '')).slice(0, 900), by: 'tenant', createdAt: Q.FV.serverTimestamp(), updatedAt: Q.FV.serverTimestamp() }; if (t && t.unit) data.unit = t.unit;
-            Q.recs().add(data).then(function (ref) { return Q.db.collection('tenantRequests').doc(q.id).update({ status: 'seen', repairId: ref.id }); }).then(function () { Q.toast('Repair created.'); }, function (e) { mk.disabled = false; Q.toast(Q.friendly(e)); }); };
+          mk.onclick = function () {
+            mk.disabled = true; var t = Q.get(q.recId) || null, un = t && t.unit ? Q.get(t.unit) : null, txt = (q.issue + ' ' + (q.details || '')).toLowerCase(), trade = '';
+            [['Plumbing', /leak|faucet|sink|toilet|drain|pipe|water|clog|shower|plumb/], ['Electrical', /electric|outlet|power|light|breaker|switch|wiring|spark/], ['HVAC (heating and cooling)', /heat|furnace|\bac\b|a\/c|air condition|cooling|thermostat|hvac/], ['Roofing', /roof|ceiling leak|shingle/], ['Appliance repair', /fridge|refrigerator|stove|oven|dishwasher|washer|dryer|microwave|appliance/], ['Locksmith', /lock|key|deadbolt/], ['Pest control', /pest|roach|mice|mouse|rat\b|ants|bed ?bug|termite/], ['Windows and doors', /window|door|screen/], ['Painting', /paint|wall|stain/], ['Flooring', /floor|carpet|tile/]].some(function (x) { if (x[1].test(txt)) { trade = x[0]; return true; } return false; });
+            var who = (q.tenantName || (t && t.name) || 'Tenant'), phone = q.phone || (t && t.phone) || '', mail = (t && t.email) || q.tenantEmail || '';
+            var notes = ['Reported by tenant ' + who + (un ? ' in ' + Q.title(un) : (q.unit ? ' in ' + q.unit : '')), phone ? 'Phone: ' + phone : '', mail ? 'Email: ' + mail : '', q.details ? 'Details: ' + q.details : ''].filter(Boolean).join('\n').slice(0, 900);
+            var data = { kind: 'repair', issue: String(q.issue || 'Tenant repair request').slice(0, 120), status: 'New', urgent: !!q.urgent, notes: notes, by: 'tenant', createdAt: Q.FV.serverTimestamp(), updatedAt: Q.FV.serverTimestamp() };
+            if (t && t.unit) data.unit = t.unit; var pr = (un && un.property) || (t && t.property) || ''; if (pr) data.property = pr; if (trade) data.trade = trade;
+            Q.recs().add(data).then(function (ref) { return Q.db.collection('tenantRequests').doc(q.id).update({ status: 'seen', repairId: ref.id }).then(function () { return ref.id; }); }).then(function (id) { Q.toast('Repair order created.'); var shown = Object.assign({}, data, { id: id }); delete shown.createdAt; delete shown.updatedAt; shown.id = id; close(); if (Q.openForm) Q.openForm('repair', shown); }, function (e) { mk.disabled = false; Q.toast(Q.friendly(e)); });
+          };
           no.onclick = function () { no.disabled = true; Q.db.collection('tenantRequests').doc(q.id).update({ status: 'dismissed' }).catch(function (e) { no.disabled = false; Q.toast(Q.friendly(e)); }); };
           body.appendChild(c);
         });
@@ -238,7 +254,7 @@ window.VQ_APP = {
   }
   function boot() {
     Q.extras.push(function (v) { v.appendChild(U().el('h2', '', 'Tenants')); var card = U().el('div', 'card'); v.appendChild(card); card.appendChild(U().el('div', 'hint', 'Invite a tenant from their tenant record. They sign in to see rent and payments and to send you repair requests.')); var b = U().el('button', 'btn ghost', 'Tenant repair requests' + (reqCount ? ' (' + reqCount + ' new)' : '')); b.type = 'button'; b.onclick = requestsModal; card.appendChild(b); });
-    Q.onStart.push(function () { listenRequests(); setTimeout(syncAll, 6000); setInterval(syncAll, 45000); });
+    Q.onStart.push(function () { listenRequests(); setTimeout(syncAll, 6000); setInterval(syncAll, 45000); }); if (Q.S.biz) listenRequests();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   window.VQ_LL = window.VQ_LL || {}; window.VQ_LL.reqCount = function () { return reqCount; }; window.VQ_LL.requests = requestsModal; window.VQ_LL.syncOne = syncOne;
@@ -471,13 +487,25 @@ window.VQ_APP = {
       var iv = setInterval(function () { if (!document.body.contains(s)) { clearInterval(iv); return; } draw(); }, 2500);
     });
   }
+  function convos() {
+    var ts = Q.byKind('tenant'), out = [], seen = {};
+    function emailOfT(t) { return String(t.email || '').trim().toLowerCase(); }
+    ts.forEach(function (t) { if (t.portalId && t.status !== 'Moved out') { seen[t.portalId] = 1; out.push({ t: t, pid: t.portalId }); } });
+    var byPid = {}; msgs.forEach(function (m) { if (m.portalId && !seen[m.portalId]) (byPid[m.portalId] = byPid[m.portalId] || []).push(m); });
+    Object.keys(byPid).forEach(function (pid) {
+      var m0 = byPid[pid][0], em = String(m0.tenantEmail || '').trim().toLowerCase(), t = ts.filter(function (x) { return (em && emailOfT(x) === em) || x.portalId === pid; })[0];
+      if (t && !t.portalId && Q.recs) { try { Q.recs().doc(t.id).update({ portalId: pid, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { /* optional */ } }
+      out.push({ t: { id: t ? t.id : '', name: t ? t.name : (m0.tenantName || em || 'Tenant'), email: em || (t && t.email) || '', phone: t ? t.phone : '', portalId: pid }, pid: pid });
+    });
+    return out;
+  }
   function messagesView(v) {
-    var h = el('h2', '', 'Messages'); v.appendChild(h); var c = el('div', 'card'); v.appendChild(c);
-    var ts = Q.byKind('tenant').filter(function (t) { return t.portalId && t.status !== 'Moved out'; });
-    if (!ts.length) { c.appendChild(el('div', 'empty', 'Invite a tenant to the tenant portal first (open the tenant, then Invite to tenant portal). Then you can message each other here.')); return; }
-    ts.sort(function (a, b) { var ta = threadOf(a.portalId), tb = threadOf(b.portalId); return (tb.length ? ms(tb[tb.length - 1]) : 0) - (ta.length ? ms(ta[ta.length - 1]) : 0); });
-    ts.forEach(function (t) {
-      var th = threadOf(t.portalId), last = th[th.length - 1], n = th.filter(function (m) { return m.from === 'tenant' && m.status === 'new'; }).length, row = el('div', 'row tap'), m = el('div', 'm');
+    bindMessages();     var h = el('h2', '', 'Messages'); v.appendChild(h); var c = el('div', 'card'); v.appendChild(c);
+    var cs = convos();
+    if (!cs.length) { c.appendChild(el('div', 'empty', 'No tenant is in the tenant portal yet. Invite your tenants from the Tenants page. Then you can message each other here.')); return; }
+    cs.sort(function (a, b) { var ta = threadOf(a.pid), tb = threadOf(b.pid); return (tb.length ? ms(tb[tb.length - 1]) : 0) - (ta.length ? ms(ta[ta.length - 1]) : 0); });
+    cs.forEach(function (x) {
+      var t = x.t, th = threadOf(x.pid), last = th[th.length - 1], n = th.filter(function (m) { return m.from === 'tenant' && m.status === 'new'; }).length, row = el('div', 'row tap'), m = el('div', 'm');
       m.appendChild(el('b', '', t.name)); m.appendChild(el('span', '', last ? (last.from === 'landlord' ? 'You: ' : '') + String(last.body).slice(0, 70) : 'No messages yet')); row.appendChild(m); if (n) row.appendChild(el('span', 'pill bad', n + ' new')); row.onclick = function () { thread(t); }; c.appendChild(row);
     });
     v.appendChild(el('div', 'note', 'Tenants write to you from their tenant portal page. These messages stay in Vyqil. They are not sent by email or text, but you get a phone alert when one arrives.'));
@@ -544,7 +572,7 @@ window.VQ_APP = {
   function boot() {
     Q.views.messages = messagesView; Q.views.reports = reportsView;
     Q.extras.push(function (v) { v.appendChild(el('h2', '', 'Business profile')); var c = el('div', 'card'); v.appendChild(c); var p = prof(); c.appendChild(el('div', 'hint', [p.phone, p.email, p.address].filter(Boolean).join(' · ') || 'Add your phone, address and how tenants pay you. It appears on leases, invoices and letters.')); var b = el('button', 'btn ghost', 'Edit business profile'); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin-top:8px'; b.onclick = profileModal; c.appendChild(b); });
-    Q.onStart.push(function () { bindMessages(); });
+    Q.onStart.push(function () { bindMessages(); }); if (Q.S.biz) bindMessages();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   A.fn = { letters: letters, profileModal: profileModal, unread: unread };
@@ -673,7 +701,7 @@ window.VQ_APP = {
   };
   function bootR() {
     Q.banners = Q.banners || [];
-    Q.banners.push(function (v) {
+    if (false) Q.banners.push(function (v) {
       var n = dueList().length; if (!n) return; var b = el('button', 'vq-note blue'); b.type = 'button'; var d = el('span', 'dot', String(n)), t = el('div', 't'); t.appendChild(el('b', '', n + (n === 1 ? ' tenant needs' : ' tenants need') + ' a rent reminder')); t.appendChild(el('span', '', 'Late or due in the next 5 days')); b.appendChild(d); b.appendChild(t); b.appendChild(el('span', 'go', '\u203a')); b.onclick = remindersModal; v.appendChild(b);
     });
   }
@@ -738,7 +766,7 @@ window.VQ_APP = {
       { id: 'unit', t: 'Next, add a unit', h: 'An apartment or house inside that property.', kind: 'unit', form: 'unit' },
       { id: 'ten', t: 'Add your tenants', h: 'Who lives in each unit, their rent and due day.', kind: 'tenant', form: 'tenant' },
       { id: 'lease', t: 'Write a lease', h: 'Create a lease from the tenant details.', kind: 'lease', form: 'lease' },
-      { id: 'inv', t: 'Invite a tenant to the portal', h: 'They see rent, pay history and send repair requests.', done: function (rs) { return rs.some(function (r) { return r.kind === 'tenant' && r.portalId; }); }, run: go('tenant') },
+      { id: 'inv', t: 'Invite your tenants to the portal', h: 'One tap emails an invite to every tenant who is not in yet.', done: function (rs) { var ts = rs.filter(function (r) { return r.kind === 'tenant' && r.status !== 'Moved out'; }); return ts.some(function (r) { return r.portalId; }) && !(Q.portalPending && Q.portalPending()); }, run: function () { if (Q.portalPending && Q.portalPending()) Q.portalInviteAll(); else go('tenant')(); } },
       { id: 'comm', t: 'Set up Vyqil Community', h: 'Be found by nearby Vyqil businesses, and find them.', manual: true, run: function () { if (Q.community) Q.community.listing(); } },
       { id: 'alerts', t: 'Turn on phone alerts', h: 'Get rent and repair alerts when the app is closed.', manual: true, run: function () { Q.push.panel(); } }
     ];
