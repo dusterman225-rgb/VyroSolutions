@@ -84,9 +84,10 @@
   <div id="vTiles" style="display:none"></div>
 
   <div class="qa">
-    <a class="btn" href="leads.html?new=1">New lead</a>
+    <a class="btn" href="customers.html">Customers</a>
+    <a class="btn" href="jobs.html">Active jobs</a>
     <a class="btn" href="estimate.html">New estimate</a>
-    <a class="btn" href="invoice.html">New invoice</a>
+    <a class="btn" href="messages.html">Messages</a>
   </div>
 
   <details class="sec" id="calSec" open>
@@ -150,6 +151,7 @@
       { t: 'Create your first estimate', d: 'Start from a template and add your line items.', href: 'estimate.html', done: false, q: 'estimates' },
       { t: 'Send an estimate to a customer portal', d: 'They approve it online and you get a notice with a Create contract button.', href: 'estimates.html', done: false, q: 'portal' },
       { t: 'Join the Vyqil community', d: 'Set your trades and how far you travel to get nearby requests.', href: 'community.html', done: false, q: 'community' },
+      { t: 'Set up Pay with Vyqil', d: 'Optional. Get paid by QR code in dollar coins.', href: 'paysettings.html', done: !!(ctx.biz && ctx.biz.payWallet) },
       { t: 'Turn on phone alerts', d: 'Get a ping for new messages, approvals and requests.', href: '#alerts', done: !!(window.Notification && Notification.permission === 'granted') }
     ];
     async function has(c) { try { return !(await ctx.bizRef.collection(c).limit(1).get()).empty; } catch (e) { return false; } }
@@ -201,7 +203,7 @@
     if (!canMoney) $('miSub').style.display = 'none';
     var recurDone = Promise.resolve();
     if (canMoney && window.vrecur) recurDone = vrecur.run(ctx).catch(function () { /* optional */ });
-    recurDone.then(function () { try { vcal.mount(ctx, $('calBox')); } catch (e) { $('calSec').style.display = 'none'; } });
+    recurDone.then(function () { function calFail(e) { $('calBox').textContent = 'The calendar could not load (' + ((e && (e.code || e.message)) || 'unknown error') + '). Reload the page; if it keeps happening, tell support this message.'; } try { var cp = vcal.mount(ctx, $('calBox')); if (cp && cp.catch) cp.catch(calFail); } catch (e) { calFail(e); } });
     if (ctx.role === 'employee') {
       var qa = document.querySelector('.qa');
       if (qa) { qa.textContent = ''; [['New lead', 'leads.html?new=1'], ['Jobs', 'jobs.html'], ['Messages', 'messages.html']].forEach(function (x) { var a = vyro.el('a', 'btn', x[0]); a.href = x[1]; qa.appendChild(a); }); }
@@ -256,15 +258,15 @@
             }
             if (l.followUpOn && l.followUpOn <= today && l.status !== 'Won' && l.status !== 'Lost') n.due++;
           });
-        } catch (e) { failed = true; }
+        } catch (e) { failed = (e && e.code) || true; }
       })(),
-      (async function () { try { n.sent = (await ctx.bizRef.collection('estimates').where('status', '==', 'Sent').get()).size; } catch (e) { failed = true; } })(),
+      (async function () { try { n.sent = (await ctx.bizRef.collection('estimates').where('status', '==', 'Sent').get()).size; } catch (e) { failed = (e && e.code) || true; } })(),
       (async function () {
         try {
           (await ctx.bizRef.collection('jobs').get()).forEach(function (d) {
             var s = d.data().status; if (s === 'Not Started' || s === 'In Progress' || s === 'On Hold') { n.jobs++; var jj = d.data(); jj.id = d.id; activeJobs.push(jj); }
           });
-        } catch (e) { failed = true; }
+        } catch (e) { failed = (e && e.code) || true; }
       })(),
       (async function () {
         try {
@@ -275,7 +277,7 @@
               if (i.dueDate && i.dueDate < today) n.over++;
             }
           });
-        } catch (e) { failed = true; }
+        } catch (e) { failed = (e && e.code) || true; }
       })(),
       (async function () {
         if (!canMoney) return;
@@ -285,7 +287,7 @@
             if (x.status === 'Unpaid') { n.bills += x.amountCents || 0; if (x.dueDate && x.dueDate < today) n.billsOver++; }
             if (x.jobId) jobCost[x.jobId] = (jobCost[x.jobId] || 0) + (x.amountCents || 0);
           });
-        } catch (e) { failed = true; }
+        } catch (e) { failed = (e && e.code) || true; }
       })(),
       (async function () {
         try { (await vyro.db.collection('portals').where('bizId', '==', ctx.bizId).get()).forEach(function (d) { n.unread += d.data().unreadCount || 0; }); } catch (e) { /* no portals yet */ }
@@ -334,8 +336,8 @@
         box.appendChild(a);
       });
     });
-    if (!any) box.appendChild(vyro.el('div', 'ok', failed ? 'Some numbers could not load. Check the Firestore rules were published.' : 'You\'re all caught up.'));
-    else if (failed) $('err').textContent = 'Some numbers could not load. Check the Firestore rules were published.';
+    if (!any) box.appendChild(vyro.el('div', 'ok', failed ? 'Some numbers could not load (' + (failed === true ? 'unknown error' : failed) + '). Check the Firestore rules were published.' : 'You\'re all caught up.'));
+    else if (failed) $('err').textContent = 'Some numbers could not load (' + (failed === true ? 'unknown error' : failed) + '). Check the Firestore rules were published.';
   });
 </script>
 </body>
