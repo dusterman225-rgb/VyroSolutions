@@ -58,7 +58,35 @@
   function signIn(email, pw) { return auth.signInWithEmailAndPassword(email.trim(), pw); }
   function resetPassword(email) { return auth.sendPasswordResetEmail(email.trim()); }
   function signOut() { try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('vyroConsentS_') === 0) sessionStorage.removeItem(k); }); } catch (e) { /* ignore */ } return auth.signOut(); }
-  function requireAuth(cb) { auth.onAuthStateChanged(function (u) { if (!u) { location.replace('login.html'); } else { cb(u); } }); }
+  // ---- The email must be confirmed before the app opens. Accounts made before 18 Nov 2026 are exempt so nobody is locked out. ----
+  function vqGate(u, done) {
+    var made = u && u.metadata && u.metadata.creationTime ? Date.parse(u.metadata.creationTime) : 0;
+    if (!u || u.emailVerified || u.isAnonymous || !u.email || (made && made < Date.parse('2026-11-18T00:00:00Z'))) { done(u); return; }
+    if (document.getElementById('vqVerify')) return;
+    var o = document.createElement('div'); o.id = 'vqVerify'; o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#05070a;color:#eef3f8;overflow:auto;font-family:system-ui,Arial,sans-serif';
+    var w = document.createElement('div'); w.style.cssText = 'max-width:440px;margin:0 auto;padding:48px 20px;text-align:center'; o.appendChild(w);
+    function mk(t, x, s) { var n = document.createElement(t); if (x) n.textContent = x; if (s) n.style.cssText = s; return n; }
+    w.appendChild(mk('h1', 'Confirm your email', 'font-size:1.5rem;margin:0 0 10px'));
+    w.appendChild(mk('p', 'We sent a link to ' + u.email + '. Open it, then come back here and tap the button below. Check your spam folder if you cannot find it.', 'color:#9fb0c4;line-height:1.5'));
+    var msg = mk('div', '', 'min-height:22px;margin:14px 0;color:#9fd6fb;font-size:.9rem');
+    var bs = 'display:block;width:100%;box-sizing:border-box;min-height:46px;margin:10px 0;border-radius:12px;font:600 16px system-ui,Arial,sans-serif;cursor:pointer;';
+    var ok = mk('button', 'I have confirmed my email', bs + 'background:#4B9CD3;color:#04121f;border:0'), again = mk('button', 'Send the email again', bs + 'background:none;color:#eef3f8;border:1px solid #27405c'), out = mk('button', 'Sign out', bs + 'background:none;color:#9fb0c4;border:0');
+    ok.type = again.type = out.type = 'button'; w.appendChild(msg); w.appendChild(ok); w.appendChild(again); w.appendChild(out); document.body.appendChild(o);
+    var finished = false;
+    function check(quiet) {
+      return u.reload().then(function () {
+        var cu = auth.currentUser || u;
+        if (cu.emailVerified) { if (finished) return; finished = true; document.removeEventListener('visibilitychange', onVis); o.remove(); done(cu); }
+        else if (!quiet) { msg.style.color = '#ffb4b4'; msg.textContent = 'Not confirmed yet. Open the link in the email first.'; }
+      }, function () { if (!quiet) { msg.style.color = '#ffb4b4'; msg.textContent = 'Could not check. Try again.'; } });
+    }
+    function onVis() { if (!document.hidden) check(true); }
+    document.addEventListener('visibilitychange', onVis);
+    ok.onclick = function () { msg.style.color = '#9fd6fb'; msg.textContent = 'Checking...'; check(false); };
+    again.onclick = function () { again.disabled = true; u.sendEmailVerification().then(function () { msg.style.color = '#9fd6fb'; msg.textContent = 'Sent. It can take a minute to arrive.'; }, function (e) { msg.style.color = '#ffb4b4'; msg.textContent = e && e.code === 'auth/too-many-requests' ? 'Too many tries. Wait a few minutes.' : 'Could not send. Try again.'; }).then(function () { setTimeout(function () { again.disabled = false; }, 30000); }); };
+    out.onclick = function () { finished = true; document.removeEventListener('visibilitychange', onVis); o.remove(); try { auth.signOut(); } catch (x) { /* ignore */ } };
+  }
+  function requireAuth(cb) { auth.onAuthStateChanged(function (u) { if (!u) { location.replace('login.html'); } else { vqGate(u, cb); } }); }
   async function me(uid) { var d = await db.collection('users').doc(uid).get(); return d.exists ? d.data() : {}; }
 
   // ---- businesses (workspaces) ----
@@ -111,7 +139,7 @@
     await ws.ref.update(p); await audit(ws.id, on ? 'app.activate' : 'app.deactivate', appId);
     ws.biz.apps = ws.biz.apps || {}; ws.biz.apps[appId] = !!on;
   }
-  async function closeWorkspace(ws) { await ws.ref.update({ status: 'closed', closedAt: stamp() }); await audit(ws.id, 'workspace.close', ws.biz.name); }
+  async function closeWorkspace(ws) { await ws.ref.update({ status: 'closed', closedAt: stamp() }); try { await db.collection('directory').doc(ws.id).update({ listed: false }); } catch (_) { /* no listing */ } await audit(ws.id, 'workspace.close', ws.biz.name); }
   // Permanent delete. Firestore has no cascade, so this removes the business's data one collection at a time, then the business itself.
   // Anything the rules do not let it remove is left behind unreachable: once the business and its members are gone, nobody can open it.
   var DELETE_ORDER = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'quotePrices', 'settings', 'subs', 'timelog', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'stockLog', 'vendors', 'purchases', 'shifts', 'waste', 'overtime', 'swaps', 'coupons', 'closes', 'counters', 'consents', 'errors', 'usage', 'audit'];
