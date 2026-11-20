@@ -442,6 +442,7 @@ window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
   A.starter = function () {
     var st = oldStarter();
     st.unshift({ id: 'svc', t: 'Choose your services', h: 'Pool, lawn, cleaning... everything else is built around this.', done: function () { return mySvc().length > 0; }, run: function () { myServices(true); } });
+    if (Q.portalInvite) { var ci = st.map(function (x) { return x.id; }).indexOf('comm'); st.splice(ci < 0 ? st.length : ci, 0, { id: 'cinv', t: 'Invite your customers to the portal', h: 'One tap emails an invite to every customer who is not in yet.', done: function (rs) { var k = Q.portalInvite.kind; return rs.some(function (r) { return r.kind === k && r.portalId; }) && !(Q.portalPending && Q.portalPending()); }, run: function () { if (Q.portalPending && Q.portalPending()) Q.portalInviteAll(); else { Q.S.tab = Q.portalInvite.kind; Q.S.q = ''; Q.render(); window.scrollTo(0, 0); } } }); }
     return st;
   };
 })();
