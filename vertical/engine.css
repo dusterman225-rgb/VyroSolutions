@@ -128,3 +128,5 @@ input,textarea,select{color-scheme:dark}
 .vq-drop>.in{padding:0 14px 12px}
 
 .toprt{display:flex;align-items:center;gap:8px}.logout-sm{background:none;border:1px solid var(--line,#27405c);color:inherit;border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px;cursor:pointer;opacity:.85}.topbar .mark{cursor:pointer}
+
+.lnk{background:none;border:0;padding:4px 0 0;margin:0;color:#4B9CD3;font:inherit;font-size:.82rem;text-align:left;cursor:pointer;text-decoration:underline;display:block}

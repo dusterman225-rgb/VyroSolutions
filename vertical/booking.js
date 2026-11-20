@@ -86,7 +86,15 @@
       Q.db.collection('custPortals').doc(r.portalId).set(d).then(function () { try { localStorage.setItem(key, h); } catch (e) { /* ignore */ } }, function () { /* try again later */ });
     });
   }
+  async function quietInvite(r) {
+    var email = emailOf(r); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { skip: true };
+    var res = await makeLogin(email); if (res.error) return { error: res.error };
+    var ref = Q.db.collection('custPortals').doc();
+    try { await ref.set(portalDoc(r)); await Q.recs().doc(r.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { return { error: Q.friendly(e) }; }
+    r.portalId = ref.id; return { ok: true, existing: res.existing, mailError: res.mailError };
+  }
   function addPortalActions() {
+    if (P && C.kinds && C.kinds[P.kind]) Q.portalInvite = { kind: P.kind, coll: 'custPortals', noun: 'customer', emailOf: emailOf, quiet: quietInvite, after: function (r) { portalLink(r); } };
     if (!P || !C.kinds || !C.kinds[P.kind]) return; var kd = C.kinds[P.kind]; kd.actions = kd.actions || [];
     kd.actions.push({ l: 'Invite to customer portal', show: function (r) { return !r.portalId; }, run: function (r) { invite(r); } });
     kd.actions.push({ l: 'Customer portal link', show: function (r) { return !!r.portalId; }, run: function (r) { portalLink(r); } });

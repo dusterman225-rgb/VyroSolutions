@@ -350,7 +350,7 @@
   function evRow(e, big) {
     var r = el('div', 'row tap'), m = el('div', 'm'), b = el('b', '', e.label + ': ' + (e.title || title(e.rec)));
     m.appendChild(b); var sp = el('span', '', fmtDate(e.date) + (e.time ? ' · ' + fmtTime(e.time) : '') + ' · ' + rel(e.date)); m.appendChild(sp); r.appendChild(m);
-    if (e.over) r.appendChild(el('span', 'pill bad', 'Overdue'));
+    if (e.over) { var oc = dotColor(e.label); r.style.borderLeft = '4px solid ' + oc; b.style.color = oc; }
     if (e.act) { var a = el('button', 'btn sm', e.act.label); a.type = 'button'; a.onclick = function (ev) { ev.stopPropagation(); e.act.run(); }; r.appendChild(a); }
     r.onclick = function () { if (e.rec && e.rec.id) openForm(e.rec.kind, e.rec); }; return r;
   }
@@ -385,7 +385,7 @@
   // Month calendar on the home screen, with a colored dot for each kind of dated item.
   var DOT = ['#4B9CD3', '#e0b04c', '#44c7a8', '#e5736f', '#a07af0', '#e08fc0', '#7fe3b0', '#f0a05a'], dotMap = {};
   // Colours by meaning: money due is amber, repairs red, leases purple, and so on. An app can add its own in C.calColors = [{ m: /regex/i, c: '#hex' }].
-  var CALCOL = [{ m: /overdue|late/i, c: '#ff5d5d' }, { m: /rent|payment/i, c: '#f0c36d' }, { m: /invoice|bill|due|fee/i, c: '#f0a05a' }, { m: /repair|visit|fix|service/i, c: '#ff8a8a' }, { m: /lease|renew|insurance|licen[sc]e|expire/i, c: '#b48cff' }, { m: /inspect|showing|viewing|appointment|meeting/i, c: '#4B9CD3' }, { m: /move|start|begin|open/i, c: '#7fe3b0' }, { m: /follow|call|lead/i, c: '#4fd6d0' }, { m: /my date/i, c: '#ff7ad9' }];
+  var CALCOL = [{ m: /rent|payment/i, c: '#f0c36d' }, { m: /invoice|bill|due|fee/i, c: '#f0a05a' }, { m: /repair|visit|fix|service/i, c: '#ff8a8a' }, { m: /lease|renew|insurance|licen[sc]e|expire/i, c: '#b48cff' }, { m: /inspect|showing|viewing|appointment|meeting/i, c: '#4B9CD3' }, { m: /move|start|begin|open/i, c: '#7fe3b0' }, { m: /follow|call|lead/i, c: '#4fd6d0' }, { m: /my date/i, c: '#ff7ad9' }];
   function dotColor(label) {
     var list = (C.calColors || []).concat(CALCOL); for (var i = 0; i < list.length; i++) if (list[i].m.test(String(label))) return list[i].c;
     if (!dotMap[label]) dotMap[label] = DOT[Object.keys(dotMap).length % DOT.length]; return dotMap[label];
@@ -405,7 +405,7 @@
     for (var d = 1; d <= days; d++) {
       (function (d) {
         var ds = ymd(new Date(y, m, d)), b = el('button', 'cal-cell' + (ds === t ? ' today' : '') + (ds === sel ? ' sel' : '')); b.type = 'button'; b.appendChild(el('span', 'cal-num', String(d)));
-        var dots = el('span', 'cal-dots'), cols = []; (by[ds] || []).forEach(function (e) { var cc = e.over ? '#ff5d5d' : dotColor(e.label); if (cols.indexOf(cc) < 0) cols.push(cc); legend[e.over ? 'Overdue' : e.label] = e.over ? '#ff5d5d' : dotColor(e.label); }); cols.slice(0, 4).forEach(function (cc) { var i = el('i'); i.style.background = cc; dots.appendChild(i); }); b.appendChild(dots); if (cols.length) b.style.boxShadow = dayGlow(cols);
+        var dots = el('span', 'cal-dots'), cols = []; (by[ds] || []).forEach(function (e) { var cc = dotColor(e.label); if (cols.indexOf(cc) < 0) cols.push(cc); legend[e.label] = cc; }); cols.slice(0, 4).forEach(function (cc) { var i = el('i'); i.style.background = cc; dots.appendChild(i); }); b.appendChild(dots); if (cols.length) b.style.boxShadow = dayGlow(cols);
         b.onclick = function () { S.calSel = ds; render(); }; g.appendChild(b);
       })(d);
     }
@@ -426,7 +426,7 @@
       evs.forEach(function (e) { var kind = e.over ? 'late' : (e.date <= soon ? 'soon' : ''); if (!kind) return; var key = kind + '|' + e.label; if (!groups[key]) { groups[key] = { kind: kind, label: e.label, list: [] }; order.push(key); } groups[key].list.push(e); });
       order.sort(function (a, b) { return groups[a].kind === groups[b].kind ? 0 : groups[a].kind === 'late' ? -1 : 1; });
       order.forEach(function (key) {
-        var g = groups[key], col = g.kind === 'late' ? '#ff5d5d' : dotColor(g.label), first = g.list[0], n = g.list.length;
+        var g = groups[key], col = dotColor(g.label), first = g.list[0], n = g.list.length;
         var card = el('button', 'card vq-note'); card.type = 'button'; card.style.cssText = 'display:block;width:100%;text-align:left;border-left:5px solid ' + col + ';background:' + col + '1c;margin:0 0 8px;color:inherit;cursor:pointer';
         card.appendChild(el('b', '', g.kind === 'late' ? n + ' past due: ' + g.label : n + ' due soon: ' + g.label));
         var who = first.title || (first.rec ? title(first.rec) : ''); card.appendChild(el('div', 'hint', (g.kind === 'late' ? 'Oldest ' : 'Next ') + fmtDate(first.date) + (who ? ' · ' + who : '') + (n > 1 ? ' and ' + (n - 1) + ' more' : '')));
@@ -449,10 +449,41 @@
   }
 
   // ---------- lists ----------
+  // ---------- portal invites (tenants / customers) ----------
+  function PI() { return C.portalInvite || Q.portalInvite || null; }
+  function piTodo() { var p = PI(); if (!p) return []; return byKind(p.kind).filter(function (r) { return !r.portalId && !(p.skip && p.skip(r)); }); }
+  function inviteOne(r) {
+    var p = PI(); if (!p) return;
+    Q.ask('Create a ' + p.noun + ' portal login for ' + ((p.emailOf ? p.emailOf(r) : r.email) || 'this ' + p.noun) + ' and email them a link to set a password?', 'Invite', function () {
+      Q.toast('Inviting...'); return p.quiet(r).then(function (x) {
+        if (x.skip) { Q.toast('Add ' + (r.name || 'the ' + p.noun) + '\'s email first, then try again.'); return; }
+        if (x.error) { Q.toast(x.error); return; }
+        Q.toast(x.existing ? 'They already have a login. Send them the link.' : 'Invitation emailed.'); if (p.after) p.after(r);
+      });
+    });
+  }
+  function inviteAll() {
+    var p = PI(); if (!p) return; var todo = piTodo(), ok = todo.filter(function (r) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((PI().emailOf ? PI().emailOf(r) : r.email) || '').trim()); }), noMail = todo.length - ok.length;
+    if (!todo.length) { Q.toast('Everyone already has a portal.'); return; }
+    if (!ok.length) { Q.toast('None of your ' + p.noun + 's have an email on file. Add emails first.'); return; }
+    Q.ask('Create portal logins and email an invite to ' + ok.length + ' ' + p.noun + (ok.length === 1 ? '' : 's') + ' who do not have one yet?' + (noMail ? ' ' + noMail + ' without an email will be skipped.' : ''), 'Invite all', async function () {
+      var done = 0, failed = 0, last = '';
+      for (var i = 0; i < ok.length; i++) { Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); try { var x = await p.quiet(ok[i]); if (x.ok) done++; else { failed++; last = x.error || ''; } } catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; } }
+      Q.toast('Invited ' + done + (failed ? ', ' + failed + ' failed' + (last ? ' (' + last + ')' : '') : '') + (noMail ? ', ' + noMail + ' skipped (no email)' : '') + '.');
+      render();
+    });
+  }
+  Q.portalInviteAll = inviteAll; Q.portalPending = function () { return piTodo().filter(function (r) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((PI().emailOf ? PI().emailOf(r) : r.email) || '').trim()); }).length; };
+  function portalBar(v, k) {
+    var p = PI(); if (!p || p.kind !== k) return; var n = Q.portalPending(); if (!n) return;
+    var b = el('button', 'btn wide ghost', 'Invite all ' + n + ' ' + p.noun + (n === 1 ? '' : 's') + ' to portal'); b.type = 'button'; b.onclick = inviteAll; v.appendChild(b);
+  }
+
   function listView(v, k) {
     var kd = K(k), all = byKind(k), q = (S.q || '').toLowerCase(), flt = S.filter[k] || '';
     var h = el('h2', '', kd.plural); h.appendChild(el('small', '', all.length + ' total')); v.appendChild(h);
     var nb = el('button', 'btn wide', 'New ' + kd.label.toLowerCase()); nb.type = 'button'; nb.onclick = function () { openForm(k); }; v.appendChild(nb);
+    portalBar(v, k);
     var s = el('input', 'search'); s.type = 'search'; s.placeholder = 'Search ' + kd.plural.toLowerCase(); s.value = S.q || ''; s.oninput = function () { S.q = s.value; var pos = s.selectionStart; listBody(); }; v.appendChild(s);
     if (kd.stage && fieldOf(k, kd.stage) && fieldOf(k, kd.stage).o) {
       var chips = el('div', 'subs'); [''].concat(fieldOf(k, kd.stage).o).forEach(function (o) { var b = el('button', flt === o ? 'on' : '', o || 'All'); b.type = 'button'; b.onclick = function () { S.filter[k] = o; render(); }; chips.appendChild(b); }); v.appendChild(chips);
@@ -467,8 +498,9 @@
         var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(r)));
         var sub = kd.sub ? kd.sub(r, S.recs) : (kd.show || []).map(function (key) { var f = fieldOf(k, key); return f ? showVal(f, r[key], r) : ''; }).filter(Boolean).join(' · ');
         if (sub) m.appendChild(el('span', '', sub)); row.appendChild(m);
+        var PIx = PI(); if (PIx && PIx.kind === k && !r.portalId && !(PIx.skip && PIx.skip(r))) { var il = el('button', 'lnk', 'Invite to portal'); il.type = 'button'; il.onclick = function (ev) { ev.stopPropagation(); inviteOne(r); }; m.appendChild(il); }
         if (kd.amount) { var a = kd.amount(r, S.recs); if (a != null && a !== '') row.appendChild(el('span', 'amt', typeof a === 'number' ? money(a) : a)); }
-        if (kd.stage && r[kd.stage]) { var p = el('span', 'pill' + (isClosed(r) ? ' ok' : ''), r[kd.stage]); row.appendChild(p); }
+        if (kd.stage && r[kd.stage]) { var sv = String(r[kd.stage]), p = el('span', 'pill' + (isClosed(r) ? ' ok' : ''), sv); if (sv.length > 12) { p.style.cssText = 'margin:4px 0 0;display:inline-block;max-width:100%'; m.appendChild(p); } else row.appendChild(p); }
         row.onclick = function () { openForm(k, r); }; body.appendChild(row);
       });
     }
@@ -547,7 +579,7 @@
       if (isNew && kd.actions) kd.actions.forEach(function (a) { if (!a.saveFirst) return; var sb = el('button', 'btn ghost', a.saveFirst === true ? 'Save and ' + a.l.charAt(0).toLowerCase() + a.l.slice(1) : a.saveFirst); sb.type = 'button'; sb.style.cssText = 'display:block;width:100%;margin:8px 0'; sb.onclick = function () { afterSave = a; save.click(); }; s.appendChild(sb); if (a.note) s.appendChild(el('div', 'note', a.note)); });
       if (!isNew && rec.by) s.appendChild(el('div', 'note', 'Last edited by ' + rec.by));
       var btns = el('div', 'btns'), save = el('button', 'btn', 'Save'), cancel = el('button', 'btn ghost', 'Cancel'); save.type = cancel.type = 'button'; btns.appendChild(save); btns.appendChild(cancel);
-      if (!isNew && isAdmin()) { var del = el('button', 'btn danger', 'Delete'); del.type = 'button'; btns.appendChild(del); del.onclick = function () { ask('Delete this ' + kd.label.toLowerCase() + '? This cannot be undone.', 'Delete', async function () { var copy = JSON.parse(JSON.stringify(rec)); try { await recs().doc(rec.id).delete(); close(); toast('Deleted.', 'Undo', function () { var id = copy.id; delete copy.id; recs().doc(id).set(copy); }); } catch (e) { toast(friendly(e)); } }); }; }
+      if (!isNew && isAdmin()) { var del = el('button', 'btn danger', 'Delete'); del.type = 'button'; btns.appendChild(del); del.onclick = function () { ask('Delete this ' + kd.label.toLowerCase() + '? This cannot be undone.', 'Delete', async function () { var copy = JSON.parse(JSON.stringify(rec)); try { await recs().doc(rec.id).delete(); var pix = PI(); if (pix && pix.coll && pix.kind === rec.kind && rec.portalId) { try { await db.collection(pix.coll).doc(rec.portalId).delete(); delete copy.portalId; } catch (e0) { /* portal stays */ } } close(); toast('Deleted.', 'Undo', function () { var id = copy.id; delete copy.id; recs().doc(id).set(copy); }); } catch (e) { toast(friendly(e)); } }); }; }
       cancel.onclick = close; s.appendChild(btns);
       save.onclick = async function () {
         var c = collect(); if (c.bad) { msg.textContent = c.bad; afterSave = null; return; } msg.textContent = '';
