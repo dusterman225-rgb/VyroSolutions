@@ -118,6 +118,14 @@
   }
 
   // ---------- find or create this app's business ----------
+  // Pay with Vyqil: an app that sets VQ_APP.pay gets the shared payment module. It loads after sign-in so the page stays quick.
+  var payLoaded = false;
+  function loadPay() {
+    if (payLoaded || !C.pay) return; payLoaded = true;
+    function add(src, next, optional) { var sc = document.createElement('script'); sc.src = src; sc.onload = next; sc.onerror = function () { if (optional) next(); else console.error('Could not load ' + src); }; document.head.appendChild(sc); }
+    add('/shared/chain-config.js', function () { add('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js', function () { add('/vertical/pay.js', function () { render(); }); }, true); }, true);
+  }
+  Q.payMenu = function () { return C.pay ? [{ l: 'Pay with Vyqil setup', run: function () { if (Q.pay) Q.pay.setup(); else toast('Pay with Vyqil is still loading. Try again in a moment.'); } }] : []; };
   async function boot(user) {
     S.user = user; root.textContent = ''; root.appendChild(el('div', 'empty', 'Loading...'));
     try {
@@ -132,7 +140,7 @@
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
-      S.biz = found; startApp();
+      S.biz = found; startApp(); loadPay();
     } catch (e) { root.textContent = ''; var w = el('div', 'auth'); w.appendChild(el('p', 'err', friendly(e))); var o = el('button', 'btn ghost', 'Sign out'); o.onclick = function () { auth.signOut(); }; w.appendChild(o); root.appendChild(w); }
   }
   async function pendingInvites(user) {
@@ -284,7 +292,7 @@
   function menuGroups() {
     if (C.menu) return typeof C.menu === 'function' ? C.menu() : C.menu;
     var work = []; if (!Q.communityMenu) Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
-    var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports) g.push({ h: 'Money', items: [{ l: 'Reports', tab: 'reports' }] }); return g;
+    var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports || C.pay) g.push({ h: 'Money', items: (Q.views.reports ? [{ l: 'Reports', tab: 'reports' }] : []).concat(Q.payMenu()) }); return g;
   }
   function openTab(id) { return function () { S.tab = id; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0); }; }
   function buildMenu(menu, setOpen) {
