@@ -251,7 +251,7 @@ window.VQ_APP = {
   A.hub = function (v) {
     var n = function (k) { return Q.byKind(k).length + ' total'; }, unp = Q.byKind('invoice').filter(function (i) { return i.status === 'Unpaid'; }).length, low = lowSupplies().length, tom = tomorrowVisits().length, open = TL().open;
     TL().hubGroup(v, 'Work', [['Visits', n('visit'), open('visit')], ['Route and map', 'A day’s stops, in order', open('route')], ['Visit reminders', 'Text tomorrow’s customers', remindersModal, tom ? tom + ' tomorrow' : ''], ['Quotes', n('quote'), open('quote')], ['Customers', n('customer'), open('customer')], ['Crew', n('crew'), open('crew')], ['Supplies', n('supply'), open('supply'), low ? low + ' low' : '']]);
-    TL().hubGroup(v, 'Money', [['Invoices', n('invoice'), open('invoice'), unp ? unp + ' unpaid' : ''], ['Expenses', n('expense'), open('expense')], ['Reports and tax summary', 'Income, who owes you, top customers', open('reports')]]);
+    TL().hubGroup(v, 'Finances', [['Invoices', n('invoice'), open('invoice'), unp ? unp + ' unpaid' : ''], ['Expenses', n('expense'), open('expense')], ['Reports and tax summary', 'Income, who owes you, top customers', open('reports')]]);
     TL().hubGroup(v, 'People', [['Texts to customers', 'Reminder, on my way, running late, thank you', function () { textsModal(null); }]]);
   };
   function lowSupplies() { return Q.byKind('supply').filter(function (r) { return r.reorderAt != null && r.reorderAt !== '' && +r.qty <= +r.reorderAt; }); }
@@ -281,7 +281,7 @@ window.VQ_APP = {
         { l: 'Leads', tab: 'leads' }, { l: 'Visits', tab: 'visit' }, { l: 'Route and map', tab: 'route' },
         { l: 'Visit reminders', run: function () { F.reminders && F.reminders(); }, badge: function () { return F.tomorrow ? F.tomorrow() : 0; } },
         { l: 'Quotes', tab: 'quote' }, { l: 'Customers', tab: 'customer' }, { l: 'Crew', tab: 'crew' }, { l: 'Supplies', tab: 'supply' }] },
-      { h: 'Money', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' }, { l: 'Reports and tax summary', tab: 'reports' }] },
+      { h: 'Finances', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' }, { l: 'Reports and tax summary', tab: 'reports' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] },
       { h: 'People', items: [{ l: 'Texts to customers', run: function () { F.texts && F.texts(); } }] }
     ];
   };
@@ -444,4 +444,18 @@ window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
     st.unshift({ id: 'svc', t: 'Choose your services', h: 'Pool, lawn, cleaning... everything else is built around this.', done: function () { return mySvc().length > 0; }, run: function () { myServices(true); } });
     return st;
   };
+})();
+
+// ===== Pay with Vyqil for Services: pay an invoice by QR code (USDC, 2% Vyqil fee paid by the business) =====
+(function () {
+  var A = window.VQ_APP;
+  A.pay = { items: [
+    { kind: 'invoice', contact: function (r) { var c = r.customer ? Q.get(r.customer) : null; return c ? { phone: c.phone, email: c.email } : {}; }, label: function (r) { return 'Invoice' + (r.number ? ' #' + r.number : ''); }, show: function (r) { return r.status !== 'Paid' && r.status !== 'Void' && (+r.amount || 0) >= 50; }, cents: function (r) { return Math.round(+r.amount || 0); },
+      onPaid: async function (r, found, req) {
+        var cur = Q.get(r.id); if ((cur && cur.status === 'Paid') || (cur && cur.paySig === found.signature)) throw { code: 'vq/already' };
+        await Q.recs().doc(r.id).update({ status: 'Paid', paidOn: Q.u.today(), paySig: found.signature, payNote: ('Pay with Vyqil, USDC' + (req.net === 'mainnet' ? '' : ' (TEST)')).slice(0, 80), updatedAt: Q.FV.serverTimestamp() });
+      } }
+  ] };
+  var oldStarter = A.starter;
+  A.starter = function () { var st = oldStarter(); st.push({ id: 'pay', t: 'Set up Pay with Vyqil', h: 'Optional. Collect invoices by QR code, paid in dollar coins.', done: function () { return !!(Q.S.biz && Q.S.biz.payWallet); }, run: function () { if (Q.pay) Q.pay.setup(); } }); return st; };
 })();
