@@ -9,6 +9,7 @@ window.VYRO_CHAIN = {
   // Vyqil's fee wallet on Solana. Public address only.
   feeWallet: 'HeGjhmZESYB17wcErsq82GcrAhwKyzQL8SZEqd8D6uQV',
   feeBps: 200,   // 1% paid by the business, taken out of the payment
+  payAppUrl: 'https://dusterman225-rgb.github.io/Vyro/',
   // Vyqil's fee address on Ethereum and BNB Chain (the same 0x address works on both). Public address only.
   evm: {
     feeAddress: '0x9bf0BAE9a4669a8325b386CD37fbEFC0c4Bd7922',
