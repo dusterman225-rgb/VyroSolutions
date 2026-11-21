@@ -114,7 +114,7 @@
         }
         var portals = []; db.collection('custPortals').where('custEmail', '==', email).get().then(function (sn) {
           portals = sn.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; });
-          return Promise.all(portals.map(function (p) { return db.collection('bookingPages').doc(p.bizId).get().then(function (d) { pages[p.bizId] = d.exists ? d.data() : null; }); }));
+          return Promise.all(portals.map(function (p) { return db.collection('alive').doc(p.bizId).get().then(function () { p._gone = false; }, function (e) { p._gone = !!(e && e.code === 'permission-denied'); }); })).then(function () { portals = portals.filter(function (p) { return !p._gone; }); return Promise.all(portals.map(function (p) { return db.collection('bookingPages').doc(p.bizId).get().then(function (d) { pages[p.bizId] = d.exists ? d.data() : null; }); })); });
         }).then(function () { paint(portals); db.collection('apptRequests').where('email', '==', email).onSnapshot(function (sn) { reqsAll = sn.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); if (!document.querySelector('.portal-form-open')) paint(portals); }, function () { /* list is optional */ }); }, function (e) { inner.appendChild(el('div', 'note err', friendly(e))); });
         pushBtn(inner);
       }

@@ -130,3 +130,7 @@ input,textarea,select{color-scheme:dark}
 .toprt{display:flex;align-items:center;gap:8px}.logout-sm{background:none;border:1px solid var(--line,#27405c);color:inherit;border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px;cursor:pointer;opacity:.85}.topbar .mark{cursor:pointer}
 
 .lnk{background:none;border:0;padding:4px 0 0;margin:0;color:#4B9CD3;font:inherit;font-size:.82rem;text-align:left;cursor:pointer;text-decoration:underline;display:block}
+
+.ntile{background:var(--card,#0C1117)}.ntile .d{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hscroll .ntile{flex:0 0 min(78%,250px)}
+.row.newmsg{border:1px solid #64bcf7;background:rgba(100,188,247,.12);box-shadow:0 0 0 1px rgba(100,188,247,.45),0 0 16px rgba(100,188,247,.25);border-radius:14px;padding-left:12px;padding-right:12px;margin:6px 0}
+.hscroll{padding:10px 8px 14px;margin:0 -8px}

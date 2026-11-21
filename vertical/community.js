@@ -71,9 +71,26 @@
       me.onclick = function () { msg.textContent = 'Getting your location...'; V.here().then(got, function (e) { msg.textContent = e.message; }); };
     });
   }
+  // Businesses with several places (a landlord's properties) ask which one the work is for, so each property uses its own location.
+  function pickProperty(ps, cb) {
+    if (ps.length === 1) return getPlace(ps[0], cb);
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', 'Which property is this for?'));
+      s.appendChild(el('p', 'hint', 'Businesses are found near the property you pick, not near your own address.'));
+      var box = el('div', 'card'); s.appendChild(box);
+      ps.slice().sort(function (a, b) { return String(Q.title(a)).localeCompare(String(Q.title(b))); }).forEach(function (p) {
+        var r = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', Q.title(p))); m.appendChild(el('span', '', p.lat != null ? (p.loc || p.city || 'Location saved') : 'Location will be looked up')); r.appendChild(m); r.onclick = function () { close(); getPlace(p, cb); }; box.appendChild(r);
+      });
+      var other = mk('Somewhere else', 'ghost', function () { close(); askPlace(null, '', function (p) { cb(p); }); }); s.appendChild(other);
+      btnRow(s).appendChild(mk('Cancel', 'ghost', close));
+    });
+  }
   function getPlace(rec, cb) {
-    var pr = cfg.place ? cfg.place(rec) : null, text = pr ? (cfg.placeText ? cfg.placeText(pr) : [pr.name || pr.address, pr.city].filter(Boolean).join(', ')) : '';
+    var pr = cfg.place ? cfg.place(rec) : null;
+    if (!pr && cfg.places) { var ps = cfg.places(); if (ps && ps.length) return pickProperty(ps, cb); }
+    var text = pr ? (cfg.placeText ? cfg.placeText(pr) : [pr.name || pr.address, pr.city].filter(Boolean).join(', ')) : '';
     if (pr && pr.lat != null && pr.lng != null) return cb({ lat: pr.lat, lng: pr.lng, city: pr.loc || pr.city || 'Your area', rec: pr });
+    if (pr && text) { return V.geocode(text).then(function (p) { if (!p.city) p.city = pr.city || 'Your area'; if (pr.id) Q.recs().doc(pr.id).update({ lat: p.lat, lng: p.lng, loc: p.city, updatedAt: Q.FV.serverTimestamp() }).catch(function () { /* still used for this request */ }); p.rec = pr; cb(p); }, function () { askPlace(pr, text, function (p) { p.rec = pr; cb(p); }); }); }
     if (!pr) { var saved = lsGet('vq_place_' + S.biz.id); if (saved) return cb(saved); var fb = cfg.fallback ? cfg.fallback() : null; if (fb) return cb(fb); if (dir && dir.lat != null) return cb({ lat: dir.lat, lng: dir.lng, city: dir.city || 'Your area' }); }
     askPlace(pr, text, function (p) { p.rec = pr; cb(p); });
   }
@@ -206,6 +223,11 @@
     if (!cfg.inbound) return;
     db().collection('directory').doc(S.biz.id).get().then(function (d) { dir = d.exists ? d.data() : null; watchInbox(); refresh(); }, function () { /* ignore */ });
   }
+  // Requests from a business that no longer exists are hidden (checked once per business).
+  var bizChecked = {}, bizGone = {};
+  function checkAlive(list) {
+    list.forEach(function (l) { var b = l.fromBiz; if (!b || bizChecked[b]) return; bizChecked[b] = 1; db().collection('alive').doc(b).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { bizGone[b] = true; inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); refresh(); } }); });
+  }
   function inView(l) {
     if (!dir || dir.lat == null) return false;
     if ((l.target || 'contractor') !== cfg.product || l.fromBiz === S.biz.id) return false; if (l.to && l.to !== S.biz.id) return false;
@@ -215,7 +237,7 @@
   function watchInbox() {
     if (inUnsub) { inUnsub(); inUnsub = null; } if (!dir || dir.lat == null || !dir.listed) { inLeads = []; return; }
     inUnsub = db().collection('communityLeads').where('cell', 'in', V.cellsAround(dir.lat, dir.lng, dir.radius || 100)).where('status', '==', 'open').limit(150).onSnapshot(function (s) {
-      inLeads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(inView);
+      inLeads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(inView); inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); checkAlive(inLeads);
       inLeads.forEach(function (l) { if (inAsked[l.id]) return; inAsked[l.id] = 1; db().collection('communityLeads').doc(l.id).collection('offers').doc(S.biz.id).get().then(function (o) { if (o.exists) { inReplied[l.id] = true; refresh(); } }, function () { /* ignore */ }); });
       refresh();
     }, function () { /* ignore */ });
@@ -239,7 +261,7 @@
       f.onclick = function () { pm.className = 'note'; pm.textContent = 'Looking...'; V.geocode(pl.value).then(got, function (e) { pm.className = 'note err'; pm.textContent = e.message; }); };
       u.onclick = function () { pm.className = 'note'; pm.textContent = 'Getting your location...'; V.here().then(got, function (e) { pm.className = 'note err'; pm.textContent = e.message; }); };
       s.appendChild(el('label', 'f', ic.catLabel || 'What you offer'));
-      var boxes = {}; cats.forEach(function (c) { var w = el('div', 'chk'), i = el('input'); i.type = 'checkbox'; i.id = 'cm_c_' + c.replace(/\W/g, ''); i.checked = dir ? (dir.trades || []).indexOf(c) > -1 : ((S.biz.services || []).indexOf(c) > -1); boxes[c] = i; var l = el('label', '', c); l.htmlFor = i.id; w.appendChild(i); w.appendChild(l); s.appendChild(w); });
+      var boxes = {}; cats.forEach(function (c) { var w = el('div', 'chk'), i = el('input'); i.type = 'checkbox'; i.id = 'cm_c_' + c.replace(/\W/g, ''); i.checked = !!(dir && (dir.trades || []).indexOf(c) > -1); boxes[c] = i; var l = el('label', '', c); l.htmlFor = i.id; w.appendChild(i); w.appendChild(l); s.appendChild(w); });
       var rad = opt(el('select'), ['25', '50', '100']); Array.prototype.forEach.call(rad.options, function (o) { o.textContent = 'Up to ' + o.value + ' miles'; }); rad.value = String(dir && dir.radius || 100); field(s, 'How far will you go for work?', rad);
       var sp = el('input'), sw = el('div', 'chk'); sp.type = 'checkbox'; sp.id = 'cm_sp2'; sp.checked = !!(dir && dir.phone); var sl = el('label', '', 'Show my business phone to others who look me up'); sl.htmlFor = sp.id; sw.appendChild(sp); sw.appendChild(sl); s.appendChild(sw);
       var phIn = el('input'); phIn.type = 'tel'; phIn.maxLength = 30; phIn.placeholder = 'Business phone'; phIn.value = (dir && dir.phone) || lsGet('vq_phone') || ''; s.appendChild(phIn);

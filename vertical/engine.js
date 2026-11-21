@@ -177,7 +177,7 @@
         batch.set(ref, { name: name, ownerUid: user.uid, product: C.id, createdAt: FV.serverTimestamp() });
         batch.set(ref.collection('members').doc(user.uid), { role: 'owner', email: (user.email || '').toLowerCase(), createdAt: FV.serverTimestamp() });
         batch.set(db.collection('users').doc(user.uid), { email: (user.email || '').toLowerCase(), bizId: ref.id, bizIds: FV.arrayUnion(ref.id) }, { merge: true });
-        await batch.commit(); return { id: ref.id, name: name, role: 'owner' };
+        await batch.commit(); try { sessionStorage.setItem('vq_new_biz', ref.id); } catch (e) { /* optional */ } location.replace('/dashboard.html'); return new Promise(function () { /* leaving the page */ });
       }
       if (S.pendingName) { var n = S.pendingName; S.pendingName = ''; make(n).then(resolve, reject); return; }
       root.textContent = ''; var w = el('div', 'auth'); w.appendChild(el('h1', '', 'Set up ' + C.name)); w.appendChild(el('p', 'sub', 'What is your business called?'));
@@ -294,6 +294,49 @@
     var work = []; if (!Q.communityMenu) Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
     var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports || C.pay) g.push({ h: 'Money', items: (Q.views.reports ? [{ l: 'Reports', tab: 'reports' }] : []).concat(Q.payMenu()) }); return g;
   }
+  // ---------- close (permanently delete) the business ----------
+  var CLOSE_COLLS = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'settings', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'vendors', 'purchases', 'shifts', 'audit', 'network'];
+  async function wipeQ(q) { for (var g = 0; g < 200; g++) { var sn = await q.limit(400).get(); if (sn.empty) return; var b = db.batch(); sn.forEach(function (d) { b.delete(d.ref); }); await b.commit(); if (sn.size < 400) return; } }
+  async function deleteBusiness() {
+    var id = S.biz.id, ref = db.collection('businesses').doc(id), left = [];
+    async function tryDo(label, fn) { try { await fn(); } catch (e) { left.push(label); } }
+    function delWhere(coll, field) { return wipeQ(db.collection(coll).where(field, '==', id)); }
+    await tryDo('community requests', async function () { var sn = await db.collection('communityLeads').where('fromBiz', '==', id).get(); for (var i = 0; i < sn.docs.length; i++) { var offs = await sn.docs[i].ref.collection('offers').get(); for (var k = 0; k < offs.docs.length; k++) { await wipeQ(offs.docs[k].ref.collection('msgs')); await offs.docs[k].ref.delete(); } await sn.docs[i].ref.delete(); } });
+    await tryDo('community replies', async function () { var sn = await db.collectionGroup('offers').where('bizId', '==', id).get(); for (var i = 0; i < sn.docs.length; i++) { await wipeQ(sn.docs[i].ref.collection('msgs')); await sn.docs[i].ref.delete(); } });
+    await tryDo('listing', function () { return db.collection('directory').doc(id).delete(); });
+    await tryDo('tenant portals', function () { return delWhere('tenantPortals', 'bizId'); });
+    await tryDo('tenant requests', function () { return delWhere('tenantRequests', 'bizId'); });
+    await tryDo('tenant messages', function () { return delWhere('tenantMsgs', 'bizId'); });
+    await tryDo('customer portals', function () { return delWhere('custPortals', 'bizId'); });
+    await tryDo('appointment requests', function () { return delWhere('apptRequests', 'bizId'); });
+    await tryDo('appointment page', function () { return db.collection('bookingPages').doc(id).delete(); });
+    await tryDo('shared estimates', function () { return delWhere('publicEstimates', 'bizId'); });
+    await tryDo('public page', function () { return delWhere('publicBrands', 'bizId'); });
+    await tryDo('invitations', function () { return delWhere('invites', 'bizId'); });
+    for (var ci = 0; ci < CLOSE_COLLS.length; ci++) { var nm = CLOSE_COLLS[ci]; await tryDo(nm, wipeQ.bind(null, ref.collection(nm))); }
+    await tryDo('team', async function () { var sn = await ref.collection('members').get(); for (var j = 0; j < sn.docs.length; j++) if (sn.docs[j].id !== S.user.uid) await sn.docs[j].ref.delete(); });
+    await ref.delete();
+    await tryDo('your membership', function () { return ref.collection('members').doc(S.user.uid).delete(); });
+    try { var ur = db.collection('users').doc(S.user.uid), ud = await ur.get(), patch = { bizIds: FV.arrayRemove(id) }; if (ud.exists && ud.data().bizId === id) patch.bizId = FV.delete(); await ur.set(patch, { merge: true }); } catch (e) { left.push('your account link'); }
+    return left;
+  }
+  function closeBusinessFlow() {
+    modal(function (sh, close) {
+      sh.appendChild(el('h3', '', 'Close this business'));
+      sh.appendChild(el('p', 'hint', 'This permanently deletes ' + S.biz.name + ': all its records, its Vyqil Community listing and requests, and every tenant and customer portal. Your team loses access. It cannot be undone.'));
+      sh.appendChild(el('label', 'f', 'Type the business name to confirm'));
+      var i = el('input'); i.placeholder = S.biz.name; i.autocomplete = 'off'; sh.appendChild(i);
+      var msg = el('div', 'note'); sh.appendChild(msg); var b = el('div', 'btns'), go = el('button', 'btn danger', 'Close business forever'), no = el('button', 'btn ghost', 'Cancel'); go.type = no.type = 'button'; go.disabled = true; b.appendChild(go); b.appendChild(no); sh.appendChild(b);
+      i.oninput = function () { go.disabled = i.value.trim() !== String(S.biz.name).trim(); };
+      no.onclick = close;
+      go.onclick = async function () {
+        if (i.value.trim() !== String(S.biz.name).trim()) return; go.disabled = no.disabled = true; msg.textContent = 'Deleting... please keep this page open.';
+        try { var left = await deleteBusiness(); msg.textContent = left.length ? 'Closed. A few items could not be removed (' + left.join(', ') + ').' : 'Closed.'; setTimeout(function () { location.replace('/dashboard.html'); }, left.length ? 2500 : 600); }
+        catch (e) { msg.className = 'note err'; msg.textContent = friendly(e); go.disabled = no.disabled = false; }
+      };
+    });
+  }
+
   function openTab(id) { return function () { S.tab = id; S.q = ''; S.calSel = null; render(); window.scrollTo(0, 0); }; }
   function buildMenu(menu, setOpen) {
     menu.textContent = ''; var head = el('div', 'mh'); head.appendChild(el('b', '', S.biz.name)); head.appendChild(el('small', '', C.name)); head.appendChild(el('small', '', roleLabel(S.biz.role) + ' · ' + (S.user.email || ''))); menu.appendChild(head);
@@ -303,6 +346,7 @@
     menuGroups().forEach(function (g) { var items = (g.items || []).filter(function (x) { return !x.show || x.show(); }); if (!items.length) return; var d = el('details'); d.appendChild(el('summary', 'mg', g.h)); items.forEach(function (x) { var a = item(d, x.l, x.run || openTab(x.tab)); if (x.badge) { var n = x.badge(); if (n) a.appendChild(el('span', 'badge', String(n))); } }); menu.appendChild(d); });
     item(menu, 'More tools and settings', openTab('more')); item(menu, 'Phone alerts', function () { Q.push.panel(); });
     var sw = el('a', 'mi', 'Switch business'); sw.href = '/dashboard.html'; menu.appendChild(sw);
+    if (S.biz.role === 'owner') item(menu, 'Close business', closeBusinessFlow, 'out');
     item(menu, 'Sign out', function () { signOutNow(); }, 'out');
   }
   function shell() {
@@ -425,13 +469,16 @@
       var soon = addDays(t, 3), groups = {}, order = [];
       evs.forEach(function (e) { var kind = e.over ? 'late' : (e.date <= soon ? 'soon' : ''); if (!kind) return; var key = kind + '|' + e.label; if (!groups[key]) { groups[key] = { kind: kind, label: e.label, list: [] }; order.push(key); } groups[key].list.push(e); });
       order.sort(function (a, b) { return groups[a].kind === groups[b].kind ? 0 : groups[a].kind === 'late' ? -1 : 1; });
+      if (!order.length) return;
+      var strip = el('div', 'hscroll'); v.appendChild(strip);
       order.forEach(function (key) {
-        var g = groups[key], col = dotColor(g.label), first = g.list[0], n = g.list.length;
-        var card = el('button', 'card vq-note'); card.type = 'button'; card.style.cssText = 'display:block;width:100%;text-align:left;border-left:5px solid ' + col + ';background:' + col + '1c;margin:0 0 8px;color:inherit;cursor:pointer';
-        card.appendChild(el('b', '', g.kind === 'late' ? n + ' past due: ' + g.label : n + ' due soon: ' + g.label));
-        var who = first.title || (first.rec ? title(first.rec) : ''); card.appendChild(el('div', 'hint', (g.kind === 'late' ? 'Oldest ' : 'Next ') + fmtDate(first.date) + (who ? ' · ' + who : '') + (n > 1 ? ' and ' + (n - 1) + ' more' : '')));
+        var g = groups[key], col = dotColor(g.label), first = g.list[0], n = g.list.length, late = g.kind === 'late';
+        var card = el('button', 'tile ntile'); card.type = 'button'; card.style.setProperty('--c', col);
+        card.style.cssText += ';text-align:left;color:inherit;cursor:pointer;font:inherit;border:2px solid ' + col + ';box-shadow:0 0 0 1px ' + col + '33,0 0 ' + (late ? 20 : 12) + 'px ' + col + (late ? '88' : '55');
+        card.appendChild(el('div', 'k', g.label)); card.appendChild(el('div', 'n', n + (late ? ' past due' : ' due soon')));
+        var who = first.title || (first.rec ? title(first.rec) : ''); card.appendChild(el('div', 'd', (late ? 'Oldest ' : 'Next ') + fmtDate(first.date) + (who ? ' · ' + who : '')));
         card.onclick = function () { var d = parse(first.date); S.cal = { y: d.getFullYear(), m: d.getMonth() }; S.calSel = first.date; render(); };
-        v.appendChild(card);
+        strip.appendChild(card);
       });
     })();
     calendarCard(v);
@@ -458,7 +505,7 @@
       Q.toast('Inviting...'); return p.quiet(r).then(function (x) {
         if (x.skip) { Q.toast('Add ' + (r.name || 'the ' + p.noun) + '\'s email first, then try again.'); return; }
         if (x.error) { Q.toast(x.error); return; }
-        Q.toast(x.existing ? 'They already have a login. Send them the link.' : 'Invitation emailed.'); if (p.after) p.after(r);
+        Q.toast(x.mailError ? 'Login ready, but the email could not be sent (' + x.mailError + '). Send them the link.' : (x.existing ? 'They already had a login, so a password link was emailed.' : 'Invitation emailed.')); if (p.after) p.after(r);
       });
     });
   }
@@ -467,9 +514,9 @@
     if (!todo.length) { Q.toast('Everyone already has a portal.'); return; }
     if (!ok.length) { Q.toast('None of your ' + p.noun + 's have an email on file. Add emails first.'); return; }
     Q.ask('Create portal logins and email an invite to ' + ok.length + ' ' + p.noun + (ok.length === 1 ? '' : 's') + ' who do not have one yet?' + (noMail ? ' ' + noMail + ' without an email will be skipped.' : ''), 'Invite all', async function () {
-      var done = 0, failed = 0, last = '';
-      for (var i = 0; i < ok.length; i++) { Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); try { var x = await p.quiet(ok[i]); if (x.ok) done++; else { failed++; last = x.error || ''; } } catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; } }
-      Q.toast('Invited ' + done + (failed ? ', ' + failed + ' failed' + (last ? ' (' + last + ')' : '') : '') + (noMail ? ', ' + noMail + ' skipped (no email)' : '') + '.');
+      var done = 0, failed = 0, noMailSent = 0, last = '';
+      for (var i = 0; i < ok.length; i++) { Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; } } else { failed++; last = x.error || ''; } } catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; } }
+      Q.toast('Invited ' + done + (noMailSent ? ', but ' + noMailSent + ' emails could not be sent (' + last + ')' : '') + (failed ? ', ' + failed + ' failed' + (last ? ' (' + last + ')' : '') : '') + (noMail ? ', ' + noMail + ' skipped (no email)' : '') + '.');
       render();
     });
   }
