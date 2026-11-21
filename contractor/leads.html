@@ -79,6 +79,25 @@
   }
   function cleanPhone(p) { return (p || '').replace(/[^0-9+]/g, ''); }
 
+
+  // A lead that came from a Vyqil Community request is removed once that request is closed or hired out to someone else.
+  // If this business was the one hired, the lead is marked Won instead.
+  async function pruneCommLeads(ctx, docs) {
+    var out = [];
+    await Promise.all(docs.map(async function (d) {
+      var l = d.data(), cid = l.communityLeadId;
+      if (!cid || l.status === 'Won') { out.push(d); return; }
+      try {
+        var cl = await vyro.db.collection('communityLeads').doc(cid).get();
+        var c = cl.exists ? cl.data() : null;
+        if (!c || (c.status !== 'open' && c.chosen !== ctx.bizId)) { try { await d.ref.delete(); return; } catch (e) { out.push(d); return; } }
+        if (c.chosen === ctx.bizId && (c.status === 'assigned' || c.status === 'done')) { try { await d.ref.update({ status: 'Won', statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() }); d.data = (function (x) { return function () { var y = x(); y.status = 'Won'; return y; }; })(d.data); } catch (e) { /* try again later */ } }
+      } catch (e) { /* keep it when the request cannot be checked */ }
+      out.push(d);
+    }));
+    return out;
+  }
+
   vyro.start(function (ctx) {
     try { if (window.vcommnudge) vcommnudge.leadsBanner(ctx); } catch (e) { /* optional */ }
     var col = ctx.bizRef.collection('leads');
@@ -171,8 +190,10 @@
     }
 
     async function load() {
-      var snap = await col.orderBy('createdAt', 'desc').get();
-      all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      var snap = await col.get();
+      var docs = await pruneCommLeads(ctx, snap.docs);
+      all = docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      all.sort(function (a, b) { var x = a.createdAt, y = b.createdAt; return (y && y.toMillis ? y.toMillis() : 9e15) - (x && x.toMillis ? x.toMillis() : 9e15); });
       render();
     }
 
