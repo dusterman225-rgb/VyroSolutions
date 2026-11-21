@@ -150,7 +150,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       w.appendChild(ps); w.appendChild(go); w.appendChild(no); box.appendChild(w);
     }
     // New leads show in Vyqil blue; ones already looked at turn dark. Kept on this device only.
-    var shown = [], nearTouched = false;
+    var shown = [], nearTouched = false; var gone = {}, checked = {};
     $('nearSec').addEventListener('toggle', function () { nearTouched = true; });
     if (location.hash === '#need') $('needSec').open = true; if (location.hash === '#listing') $('setupSec').open = true;
     function lget(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -218,7 +218,8 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     function watch() {
       if (unsub) { unsub(); unsub = null; } if (me.lat == null) { $('reqs').textContent = ''; return; }
       unsub = db.collection('communityLeads').where('cell', 'in', V.cellsAround(me.lat, me.lng, me.radius)).where('status', '==', 'open').limit(150).onSnapshot(function (s) {
-        leads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); drawFilters(); draw(); checkMine();
+        leads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (x) { return !gone[x.fromBiz]; }); drawFilters(); draw(); checkMine();
+        leads.forEach(function (l) { var b = l.fromBiz; if (!b || checked[b]) return; checked[b] = 1; db.collection('alive').doc(b).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { gone[b] = true; leads = leads.filter(function (x) { return !gone[x.fromBiz]; }); draw(); } }); });
       }, function (e) { $('reqMsg').className = 'note err'; $('reqMsg').textContent = vyro.friendly(e); });
     }
     function checkMine() {
