@@ -96,7 +96,12 @@ button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px
     $('aerr').textContent = '';
     db.collection('tenantPortals').where('tenantEmail', '==', String(u.email).toLowerCase()).get().then(function (s) {
       if (s.empty) { $('portals').appendChild(el('div', 'card', 'No tenant portal is set up for this email yet. Ask your landlord to invite you.')); return; }
-      s.docs.forEach(function (d) { drawPortal(d.data(), d.id); });
+      // A portal only shows while its business still exists. "alive/<business>" can be read only until the business is deleted.
+      var docs = s.docs, shown = 0;
+      Promise.all(docs.map(function (d) { return db.collection('alive').doc(d.data().bizId).get().then(function () { return true; }, function (e) { return !(e && e.code === 'permission-denied'); }); })).then(function (oks) {
+        docs.forEach(function (d, i) { if (oks[i]) { shown++; drawPortal(d.data(), d.id); } });
+        if (!shown) $('portals').appendChild(el('div', 'card', 'This landlord is no longer using Vyqil, so this portal has been closed.'));
+      });
     }, function (e) { $('aerr').textContent = friendly(e); });
   });
 })();

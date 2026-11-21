@@ -4,6 +4,7 @@ window.VQ_APP = {
   kinds: {
     property: { label: 'Property', plural: 'Properties', icon: '🏢', fields: [{ k: 'name', l: 'Name or address', t: 'text', req: 1, drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'city', l: 'City', t: 'text', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'insuranceDue', l: 'Insurance renews', t: 'date', cal: 1, alert: { hour: 9 }, lbl: 'Insurance renews', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Property details', dropOpenNew: true, dropClosed: true }],
       actions: [{ l: 'New repair order', saveFirst: true, run: function (r) { Q.openForm('repair', null, { property: r.id, status: 'New' }); } }, { l: 'Add a unit', saveFirst: true, run: function (r) { Q.openForm('unit', null, { property: r.id, status: 'Vacant' }); } }],
+      onSaved: function (r, prev) { if (prev && r.lat != null && (prev.name !== r.name || prev.city !== r.city)) Q.recs().doc(r.id).update({ lat: Q.FV.delete(), lng: Q.FV.delete(), loc: Q.FV.delete() }).catch(function () { /* looked up again next time */ }); },
       sub: function (r, rs) { var n = rs.filter(function (x) { return x.kind === 'unit' && x.property === r.id; }).length; return n + ' unit' + (n === 1 ? '' : 's'); } },
     unit: { label: 'Unit', plural: 'Units', icon: '🚪', stage: 'status', fields: [{ k: 'name', l: 'Unit name', t: 'text', req: 1, h: 'Apt 2B', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'property', l: 'Property', t: 'link', to: 'property', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'status', l: 'Status', t: 'select', o: ['Occupied', 'Vacant', 'Turnover'], req: 1, drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'rent', l: 'Monthly rent', t: 'money', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }],
       title: function (r) { return (r.property ? Q.title(Q.get(r.property)) + ' · ' : '') + r.name; }, amount: function (r) { return r.rent || ''; } },
@@ -39,7 +40,7 @@ window.VQ_APP = {
 (function () {
   var A = window.VQ_APP;
   function propOf(r) { if (!r) return null; if (r.kind === 'property') return r; var u = r.kind === 'unit' ? r : (r.unit ? Q.get(r.unit) : null); return u && u.property ? Q.get(u.property) : null; }
-  A.community = { product: 'landlord', place: propOf,
+  A.community = { product: 'landlord', place: propOf, places: function () { return Q.byKind('property'); },
     fallback: function () { var p = Q.byKind('property').filter(function (x) { return x.lat != null; })[0]; return p ? { lat: p.lat, lng: p.lng, city: p.loc || p.city || 'Your area' } : null; },
     chosen: { contractor: function (rec, o) { if (rec.kind !== 'repair') return null; var up = { vendor: o.bizName }; if (rec.status === 'New') up.status = 'Scheduled'; return up; } },
     inbound: { addKind: 'applicant', addLabel: 'Add as applicant', inboxTitle: 'Rental requests from realtors', listTitle: 'My rentals in the community', catLabel: 'Kinds of rentals you offer',
@@ -191,7 +192,7 @@ window.VQ_APP = {
     try {
       var a = app.auth(); await a.setPersistence(firebase.auth.Auth.Persistence.NONE);
       try { await a.createUserWithEmailAndPassword(email, randomPassword()); } catch (e) { if (!e || e.code !== 'auth/email-already-in-use') throw e; res.existing = true; }
-      if (!res.existing) { try { await a.sendPasswordResetEmail(email, { url: portalBase() }); } catch (e2) { await a.sendPasswordResetEmail(email); } res.emailed = true; }
+      try { await a.sendPasswordResetEmail(email, { url: portalBase() }); res.emailed = true; } catch (e2) { try { await a.sendPasswordResetEmail(email); res.emailed = true; } catch (e3) { res.mailError = Q.friendly(e3); } }
       try { await a.signOut(); } catch (x) { /* ignore */ }
     } catch (e) { res.error = Q.friendly(e); }
     try { await app.delete(); } catch (x) { /* ignore */ }
@@ -207,7 +208,7 @@ window.VQ_APP = {
       Q.toast('Inviting...'); var res = await makeLogin(email); if (res.error) { Q.toast(res.error); return; }
       var ref = Q.db.collection('tenantPortals').doc(), d = portalData(t); d.updatedAt = Q.FV.serverTimestamp();
       try { await ref.set(d); await Q.recs().doc(t.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { Q.toast(Q.friendly(e)); return; }
-      Q.toast(res.existing ? 'They already have a login. Send them the link.' : 'Invitation emailed.'); t.portalId = ref.id; shareLink(t);
+      Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link.' : (res.existing ? 'They already had a login, so a password link was emailed.' : 'Invitation emailed.')); t.portalId = ref.id; shareLink(t);
     });
   }
 
@@ -237,12 +238,13 @@ window.VQ_APP = {
           var c = U().el('div', 'card'); c.appendChild(U().el('b', '', (q.urgent ? '[Urgent] ' : '') + q.issue)); c.appendChild(U().el('div', 'hint', q.tenantName + (q.unit ? ' · ' + q.unit : '') + (q.phone ? ' · ' + q.phone : ''))); if (q.details) c.appendChild(U().el('div', '', q.details));
           var b = U().el('div', 'btns'), mk = U().el('button', 'btn', 'Make a repair'), no = U().el('button', 'btn ghost', 'Dismiss'); mk.type = no.type = 'button'; b.appendChild(mk); b.appendChild(no); c.appendChild(b);
           mk.onclick = function () {
-            mk.disabled = true; var t = Q.get(q.recId) || null, un = t && t.unit ? Q.get(t.unit) : null, txt = (q.issue + ' ' + (q.details || '')).toLowerCase(), trade = '';
+            mk.disabled = true; var qe = String(q.tenantEmail || '').trim().toLowerCase(), t = Q.get(q.recId) || Q.byKind('tenant').filter(function (x) { return (q.portalId && x.portalId === q.portalId) || (qe && String(x.email || '').trim().toLowerCase() === qe); })[0] || Q.byKind('tenant').filter(function (x) { return q.tenantName && x.name === q.tenantName; })[0] || null,
+              un = (t && t.unit ? Q.get(t.unit) : null) || Q.byKind('unit').filter(function (x) { return q.unit && (Q.title(x) === q.unit || q.unit.indexOf(Q.title(x)) === 0 || Q.title(x).indexOf(q.unit) === 0); })[0] || null, txt = (q.issue + ' ' + (q.details || '')).toLowerCase(), trade = '';
             [['Plumbing', /leak|faucet|sink|toilet|drain|pipe|water|clog|shower|plumb/], ['Electrical', /electric|outlet|power|light|breaker|switch|wiring|spark/], ['HVAC (heating and cooling)', /heat|furnace|\bac\b|a\/c|air condition|cooling|thermostat|hvac/], ['Roofing', /roof|ceiling leak|shingle/], ['Appliance repair', /fridge|refrigerator|stove|oven|dishwasher|washer|dryer|microwave|appliance/], ['Locksmith', /lock|key|deadbolt/], ['Pest control', /pest|roach|mice|mouse|rat\b|ants|bed ?bug|termite/], ['Windows and doors', /window|door|screen/], ['Painting', /paint|wall|stain/], ['Flooring', /floor|carpet|tile/]].some(function (x) { if (x[1].test(txt)) { trade = x[0]; return true; } return false; });
             var who = (q.tenantName || (t && t.name) || 'Tenant'), phone = q.phone || (t && t.phone) || '', mail = (t && t.email) || q.tenantEmail || '';
             var notes = ['Reported by tenant ' + who + (un ? ' in ' + Q.title(un) : (q.unit ? ' in ' + q.unit : '')), phone ? 'Phone: ' + phone : '', mail ? 'Email: ' + mail : '', q.details ? 'Details: ' + q.details : ''].filter(Boolean).join('\n').slice(0, 900);
             var data = { kind: 'repair', issue: String(q.issue || 'Tenant repair request').slice(0, 120), status: 'New', urgent: !!q.urgent, notes: notes, by: 'tenant', createdAt: Q.FV.serverTimestamp(), updatedAt: Q.FV.serverTimestamp() };
-            if (t && t.unit) data.unit = t.unit; var pr = (un && un.property) || (t && t.property) || ''; if (pr) data.property = pr; if (trade) data.trade = trade;
+            if (un) data.unit = un.id; else if (t && t.unit) data.unit = t.unit; var pr = (un && un.property) || (t && t.property) || ''; if (!pr && q.unit) { var pp = Q.byKind('property').filter(function (x) { return q.unit.indexOf(Q.title(x)) > -1; })[0]; if (pp) pr = pp.id; } if (pr) data.property = pr; if (trade) data.trade = trade;
             Q.recs().add(data).then(function (ref) { return Q.db.collection('tenantRequests').doc(q.id).update({ status: 'seen', repairId: ref.id }).then(function () { return ref.id; }); }).then(function (id) { Q.toast('Repair order created.'); var shown = Object.assign({}, data, { id: id }); delete shown.createdAt; delete shown.updatedAt; shown.id = id; close(); if (Q.openForm) Q.openForm('repair', shown); }, function (e) { mk.disabled = false; Q.toast(Q.friendly(e)); });
           };
           no.onclick = function () { no.disabled = true; Q.db.collection('tenantRequests').doc(q.id).update({ status: 'dismissed' }).catch(function (e) { no.disabled = false; Q.toast(Q.friendly(e)); }); };
@@ -505,7 +507,7 @@ window.VQ_APP = {
     if (!cs.length) { c.appendChild(el('div', 'empty', 'No tenant is in the tenant portal yet. Invite your tenants from the Tenants page. Then you can message each other here.')); return; }
     cs.sort(function (a, b) { var ta = threadOf(a.pid), tb = threadOf(b.pid); return (tb.length ? ms(tb[tb.length - 1]) : 0) - (ta.length ? ms(ta[ta.length - 1]) : 0); });
     cs.forEach(function (x) {
-      var t = x.t, th = threadOf(x.pid), last = th[th.length - 1], n = th.filter(function (m) { return m.from === 'tenant' && m.status === 'new'; }).length, row = el('div', 'row tap'), m = el('div', 'm');
+      var t = x.t, th = threadOf(x.pid), last = th[th.length - 1], n = th.filter(function (m) { return m.from === 'tenant' && m.status === 'new'; }).length, row = el('div', 'row tap' + (n ? ' newmsg' : '')), m = el('div', 'm');
       m.appendChild(el('b', '', t.name)); m.appendChild(el('span', '', last ? (last.from === 'landlord' ? 'You: ' : '') + String(last.body).slice(0, 70) : 'No messages yet')); row.appendChild(m); if (n) row.appendChild(el('span', 'pill bad', n + ' new')); row.onclick = function () { thread(t); }; c.appendChild(row);
     });
     v.appendChild(el('div', 'note', 'Tenants write to you from their tenant portal page. These messages stay in Vyqil. They are not sent by email or text, but you get a phone alert when one arrives.'));
