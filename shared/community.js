@@ -11,12 +11,13 @@
   var AUTO_TYPES = ['Repair', 'Oil change and maintenance', 'Tires', 'Body and paint', 'Detailing', 'Towing', 'Other'];
   var PHOTO_TYPES = ['Real estate photos', 'Portraits', 'Events', 'Product photos', 'Video', 'Other'];
   var LESSON_TYPES = ['Tutoring', 'Music', 'Fitness', 'Language', 'Art', 'Driving', 'Other'];
+  var EVENT_TYPES = ['Wedding', 'Engagement party', 'Bridal or baby shower', 'Birthday party', 'Anniversary', 'Graduation', 'Corporate event', 'Holiday party', 'Fundraiser', 'Other'];
   // One entry per kind of Vyqil business. "need" is how it reads in the "What do you need?" list.
-  var CATS = { contractor: TRADES, services: SERVICE_TYPES, landlord: RENTAL_TYPES, realtor: REALTOR_TYPES, salon: SALON_TYPES, auto: AUTO_TYPES, photo: PHOTO_TYPES, lessons: LESSON_TYPES };
-  var NAMES = { contractor: 'VyqilContractor', services: 'VyqilServices', landlord: 'VyqilLandlord', realtor: 'VyqilRealtor', salon: 'VyqilSalon', auto: 'VyqilAuto', photo: 'VyqilPhoto', lessons: 'VyqilLessons' };
-  var NOUNS = { contractor: 'contractors', services: 'cleaning, lawn and other service businesses', landlord: 'landlords', realtor: 'realtors', salon: 'salons', auto: 'auto shops', photo: 'photographers', lessons: 'teachers and coaches' };
-  var NEED = { contractor: 'Repairs and contractors', services: 'Cleaning, lawn and other services', landlord: 'Rental space (landlords)', realtor: 'Realtor help', salon: 'Hair, nails and beauty', auto: 'Auto repair and care', photo: 'Photography and video', lessons: 'Lessons and tutoring' };
-  var ORDER = ['contractor', 'services', 'realtor', 'landlord', 'photo', 'auto', 'salon', 'lessons'];
+  var CATS = { contractor: TRADES, services: SERVICE_TYPES, landlord: RENTAL_TYPES, realtor: REALTOR_TYPES, salon: SALON_TYPES, auto: AUTO_TYPES, photo: PHOTO_TYPES, lessons: LESSON_TYPES, events: EVENT_TYPES };
+  var NAMES = { contractor: 'VyqilContractor', services: 'VyqilServices', landlord: 'VyqilLandlord', realtor: 'VyqilRealtor', salon: 'VyqilSalon', auto: 'VyqilAuto', photo: 'VyqilPhoto', lessons: 'VyqilLessons', events: 'VyqilEvents' };
+  var NOUNS = { contractor: 'contractors', services: 'cleaning, lawn and other service businesses', landlord: 'landlords', realtor: 'realtors', salon: 'salons', auto: 'auto shops', photo: 'photographers', lessons: 'teachers and coaches', events: 'event and wedding planners' };
+  var NEED = { contractor: 'Repairs and contractors', services: 'Cleaning, lawn and other services', landlord: 'Rental space (landlords)', realtor: 'Realtor help', salon: 'Hair, nails and beauty', auto: 'Auto repair and care', photo: 'Photography and video', lessons: 'Lessons and tutoring', events: 'Event and wedding planning' };
+  var ORDER = ['contractor', 'services', 'realtor', 'landlord', 'photo', 'auto', 'salon', 'lessons', 'events'];
   var MAX_MILES = 100;
   function r2(n) { return Math.round(n * 100) / 100; }
   function cellOf(lat, lng) { return Math.floor((lat + 90) / 2) + '_' + Math.floor((lng + 180) / 2); }
