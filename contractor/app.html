@@ -168,12 +168,31 @@
       var r = document.createElement('a'); r.href = st.href; r.style.cssText = 'display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #1f2e3f;text-decoration:none;color:inherit' + (st.done ? ';opacity:.55' : '');
       if (st.href === '#alerts') r.onclick = function (ev) { ev.preventDefault(); var a = $('miAlerts'); if (a) a.click(); };
       var dot = document.createElement('span'); dot.textContent = st.done ? '\u2713' : String(i + 1); dot.style.cssText = 'flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;' + (st.done ? 'background:#2fbf8b;color:#04121f' : 'border:2px solid #4ba3ff'); r.appendChild(dot);
-      var m = document.createElement('span'); var b = document.createElement('b'); b.textContent = st.t; m.appendChild(b); var d = document.createElement('div'); d.style.cssText = 'font-size:.85rem;opacity:.8'; d.textContent = st.d; m.appendChild(d);
+      var m = document.createElement('span'); var b = document.createElement('b'); b.textContent = st.t; if (st.done) b.style.textDecoration = 'line-through'; m.appendChild(b); var d = document.createElement('div'); d.style.cssText = 'font-size:.85rem;opacity:.8'; d.textContent = st.d; m.appendChild(d);
       if (!st.done && !nextSet) { nextSet = true; var nx = document.createElement('div'); nx.textContent = 'Next step'; nx.style.cssText = 'color:#9fd6fb;font-size:.78rem;font-weight:700;margin-top:3px'; m.appendChild(nx); }
       r.appendChild(m); c.appendChild(r);
     });
     var hide = document.createElement('button'); hide.type = 'button'; hide.className = 'btn ghost'; hide.textContent = 'Hide this checklist'; hide.style.marginTop = '8px'; hide.onclick = function () { try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ } box.textContent = ''; }; c.appendChild(hide);
     box.appendChild(c);
+  }
+
+
+  // A lead that came from a Vyqil Community request is removed once that request is closed or hired out to someone else.
+  // If this business was the one hired, the lead is marked Won instead.
+  async function pruneCommLeads(ctx, docs) {
+    var out = [];
+    await Promise.all(docs.map(async function (d) {
+      var l = d.data(), cid = l.communityLeadId;
+      if (!cid || l.status === 'Won') { out.push(d); return; }
+      try {
+        var cl = await vyro.db.collection('communityLeads').doc(cid).get();
+        var c = cl.exists ? cl.data() : null;
+        if (!c || (c.status !== 'open' && c.chosen !== ctx.bizId)) { try { await d.ref.delete(); return; } catch (e) { out.push(d); return; } }
+        if (c.chosen === ctx.bizId && (c.status === 'assigned' || c.status === 'done')) { try { await d.ref.update({ status: 'Won', statusChangedAt: vyro.stamp(), updatedAt: vyro.stamp() }); d.data = (function (x) { return function () { var y = x(); y.status = 'Won'; return y; }; })(d.data); } catch (e) { /* try again later */ } }
+      } catch (e) { /* keep it when the request cannot be checked */ }
+      out.push(d);
+    }));
+    return out;
   }
 
   vyro.start(async function (ctx) {
@@ -249,7 +268,8 @@
       (async function () {
         try {
           var snap = await ctx.bizRef.collection('leads').get();
-          snap.forEach(function (d) {
+          var ldocs = await pruneCommLeads(ctx, snap.docs);
+          ldocs.forEach(function (d) {
             var l = d.data();
             if (l.status === 'New') {
               n.newLeads++;
