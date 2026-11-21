@@ -761,6 +761,23 @@
     Q.push = { panel: panel, on: flag, disable: disable, soon: function () { clearTimeout(timer); timer = setTimeout(function () { sync(false); }, 4000); } };
   })();
 
+  // ---------- required fields get a glowing blue ring ----------
+  // Any label that ends in "*" marks the box right after it (input, select or textarea), so every form in every app gets the same look.
+  function markReq(root) {
+    try {
+      Array.prototype.forEach.call((root.querySelectorAll ? root.querySelectorAll('label.f, label.field') : []), function (lb) {
+        var t = (lb.textContent || '').trim(); if (!/\*\s*$/.test(t) && !(lb.classList.contains('field') && lb.querySelector(':required'))) return;
+        var box = lb.classList.contains('field') ? lb.querySelector('input,select,textarea') : lb.nextElementSibling;
+        while (box && box.tagName === 'DIV' && box.firstElementChild && !/^(INPUT|SELECT|TEXTAREA)$/.test(box.tagName)) box = box.querySelector('input,select,textarea') || null;
+        if (box && /^(INPUT|SELECT|TEXTAREA)$/.test(box.tagName)) box.classList.add('req');
+      });
+    } catch (e) { /* cosmetic only */ }
+  }
+  try { new MutationObserver(function (m) { m.forEach(function (x) { Array.prototype.forEach.call(x.addedNodes, function (n) { if (n.nodeType === 1) markReq(n.parentNode || n); }); }); }).observe(document.body || document.documentElement, { childList: true, subtree: true }); } catch (e) { /* optional */ }
+  // The glow shows only while the box is empty (same as Estimates in Contractor).
+  function paintReq() { Array.prototype.forEach.call(document.querySelectorAll('.req'), function (e) { var vis = e.offsetParent !== null && !e.disabled; e.classList.toggle('vneed', vis && !String(e.value == null ? '' : e.value).trim()); }); }
+  ['input', 'change', 'keyup'].forEach(function (ev) { document.addEventListener(ev, function () { setTimeout(paintReq, 0); }, true); }); setInterval(paintReq, 700);
+
   // ---------- go ----------
   document.title = C.name;
   auth.onAuthStateChanged(function (u) { if (!u) { S.biz = null; S.recs = []; authView(); } else vqGate(u, boot); });

@@ -134,3 +134,5 @@ input,textarea,select{color-scheme:dark}
 .ntile{background:var(--card,#0C1117)}.ntile .d{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hscroll .ntile{flex:0 0 min(78%,250px)}
 .row.newmsg{border:1px solid #64bcf7;background:rgba(100,188,247,.12);box-shadow:0 0 0 1px rgba(100,188,247,.45),0 0 16px rgba(100,188,247,.25);border-radius:14px;padding-left:12px;padding-right:12px;margin:6px 0}
 .hscroll{padding:10px 8px 14px;margin:0 -8px}
+
+.vneed{outline:2px solid #4ba3ff!important;outline-offset:1px;border-radius:8px;box-shadow:0 0 0 3px rgba(75,163,255,.25),0 0 14px 3px rgba(75,163,255,.75)!important;animation:vneedPulse 2.2s ease-in-out infinite}@keyframes vneedPulse{50%{box-shadow:0 0 0 3px rgba(75,163,255,.15),0 0 8px 1px rgba(75,163,255,.45)}}@media(prefers-reduced-motion:reduce){.vneed{animation:none}}

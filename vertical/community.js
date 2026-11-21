@@ -60,7 +60,7 @@
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', 'Where is it?'));
       s.appendChild(el('p', 'hint', 'Type a street address or ZIP code. Other businesses only ever see the town and state, never the address.'));
-      var i = el('input'); i.maxLength = 120; i.value = text || ''; i.placeholder = '123 Main St, Springfield, IL or 62701'; field(s, 'Address or ZIP code', i);
+      var i = el('input'); i.maxLength = 120; i.value = text || ''; i.placeholder = '123 Main St, Springfield, IL or 62701'; field(s, 'Address or ZIP code *', i);
       var msg = el('div', 'note err'); s.appendChild(msg);
       var b = btnRow(s), go = mk('Find it', '', null), me = mk('Use my location', 'ghost', null), x = mk('Cancel', 'ghost', close); b.appendChild(go); b.appendChild(me); b.appendChild(x);
       function got(p) {
@@ -256,7 +256,7 @@
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', ic.listTitle || 'Community listing'));
       s.appendChild(el('p', 'hint', ic.listHelp || 'Other Vyqil businesses near you can find you, and requests within your range show up here. Vyqil uses the place you set, not live tracking. Only the town and an approximate point are saved.'));
-      var pl = el('input'); pl.maxLength = 120; pl.value = me.city || ''; pl.placeholder = '62701 or Springfield, IL'; field(s, 'Where do you work from? (address or ZIP)', pl);
+      var pl = el('input'); pl.maxLength = 120; pl.value = me.city || ''; pl.placeholder = '62701 or Springfield, IL'; field(s, 'Where do you work from? (address or ZIP) *', pl);
       var pm = el('div', 'note'); pm.textContent = me.lat != null ? 'Using ' + me.city + '.' : ''; s.appendChild(pm);
       var b1 = btnRow(s), f = mk('Find this place', 'ghost sm', null), u = mk('Use my location', 'ghost sm', null); b1.appendChild(f); b1.appendChild(u);
       function got(p) { me = p; if (!me.city) me.city = 'Your area'; pm.className = 'note ok'; pm.textContent = 'Using ' + me.city + '.'; }
