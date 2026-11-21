@@ -21,6 +21,8 @@
   <div id="listView">
     <div class="tabs"><a class="on" href="customers.html">Active</a><a id="viewArch" href="archived.html">Archived</a></div>
     <div class="card">
+      <div id="pbar" style="display:none;margin-bottom:10px"><button class="btn" id="inviteAll" type="button"></button><div class="note">Emails each customer who has a job and no portal yet a link to set their password.</div></div>
+      <div class="note" id="pmsg"></div>
       <input class="search" id="q" type="search" placeholder="Search name, phone or email" autocomplete="off">
       <div id="list"></div>
       <div class="note" id="empty"></div>
@@ -96,6 +98,59 @@
       window.scrollTo(0, 0);
     }
 
+    // Portal status per customer: 'yes' has a portal, 'no' has a job but no portal yet, 'nojobs' cannot have one yet.
+    var pstate = {}, pRun = 0;
+    function okMail(c) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.email || '').trim()); }
+    function pending() { return all.filter(function (c) { return !c.archived && okMail(c) && pstate[c.id] === 'no'; }); }
+    function pnote(t, bad) { $('pmsg').textContent = t || ''; $('pmsg').className = 'note' + (bad ? ' err' : ''); }
+    async function checkPortals() {
+      var run = ++pRun, list = all.filter(function (c) { return !c.archived && okMail(c); });
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i]; if (run !== pRun) return;
+        if (pstate[c.id] === 'yes') continue;
+        try {
+          var em = String(c.email).trim().toLowerCase();
+          if (await vportal.hasForCustomer(ctx, c.id, em, c.email)) pstate[c.id] = 'yes';
+          else { var js = await vportal.findJobs(ctx, c.id, em, c.email); pstate[c.id] = js.filter(function (d) { return d.data().status !== 'Cancelled'; }).length ? 'no' : 'nojobs'; }
+        } catch (e) { /* leave unknown */ }
+        if (i % 4 === 3) render();
+      }
+      if (run === pRun) render();
+    }
+    async function inviteOne(c) {
+      var em = String(c.email || '').trim().toLowerCase();
+      var r = await vportal.ensureForCustomer(ctx, c.id, em, c.name, c.email);
+      if (r && r.ok) { pstate[c.id] = 'yes'; return { ok: true, emailed: !!r.emailed, existing: r.created === false }; }
+      if (r && r.reason === 'no-jobs') pstate[c.id] = 'nojobs';
+      return { ok: false, msg: (r && r.message) || 'Could not create the portal.' };
+    }
+    async function inviteCustomer(c) {
+      if (!confirm('Create a portal login for ' + c.email + ' and email them a link to set a password?')) return;
+      pnote('Inviting ' + c.name + '...');
+      try {
+        var x = await inviteOne(c);
+        if (x.ok) pnote(x.emailed ? 'Invite emailed to ' + c.email + '. It often lands in Spam or Junk.' : 'Portal is ready for ' + c.name + '. They already had a login, so no new email was needed; send them the portal link below.');
+        else pnote(c.name + ': ' + x.msg, true);
+      } catch (e) { pnote(vyro.friendly(e), true); }
+      render();
+    }
+    async function inviteAllCustomers() {
+      var todo = pending(); if (!todo.length) return;
+      if (!confirm('Create portal logins and email an invite to ' + todo.length + ' customer' + (todo.length === 1 ? '' : 's') + ' who do not have one yet?')) return;
+      var ok = 0, noMail = 0, bad = [];
+      $('inviteAll').disabled = true;
+      for (var i = 0; i < todo.length; i++) {
+        pnote('Inviting ' + (i + 1) + ' of ' + todo.length + '...');
+        try { var x = await inviteOne(todo[i]); if (x.ok) { ok++; if (!x.emailed) noMail++; } else bad.push(todo[i].name + ': ' + x.msg); }
+        catch (e) { bad.push(todo[i].name + ': ' + vyro.friendly(e)); }
+        if (i < todo.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
+      }
+      $('inviteAll').disabled = false;
+      pnote('Invited ' + ok + ' customer' + (ok === 1 ? '' : 's') + (noMail ? ' (' + noMail + ' already had a login, so no new email)' : '') + '. The email often lands in Spam or Junk.' + (bad.length ? ' Not done: ' + bad.join(' | ') : ''), bad.length > 0);
+      render();
+    }
+    $('inviteAll').addEventListener('click', inviteAllCustomers);
+
     function render() {
       var q = $('q').value.trim().toLowerCase();
       var box = $('list'); box.textContent = '';
@@ -110,6 +165,8 @@
       });
       $('empty').textContent = shown.length ? '' :
         (active.length ? 'No customers match your search.' : 'No customers yet. They appear here automatically when an estimate is approved.');
+      var np = pending().length;
+      $('pbar').style.display = np ? 'block' : 'none'; $('inviteAll').textContent = 'Invite all ' + np + ' customer' + (np === 1 ? '' : 's') + ' to portal';
       shown.forEach(function (c) {
         var row = vyro.el('div', 'item');
         var left = vyro.el('div', 'grow');
@@ -118,9 +175,15 @@
         if (c.phone) bits.push(c.phone);
         if (c.email) bits.push(c.email);
         if (c.language && c.language !== 'en') bits.push(langName(c.language));
+        if (pstate[c.id] === 'yes') bits.push('Portal on');
         left.appendChild(vyro.el('small', '', bits.join(' \u00b7 ') || 'No contact details'));
         left.addEventListener('click', function () { location.href = 'customer.html?id=' + c.id; });
         row.appendChild(left);
+        if (pstate[c.id] === 'no' && okMail(c)) {
+          var iv = vyro.el('a', 'mini', 'Invite to portal'); iv.href = '#';
+          iv.addEventListener('click', function (ev) { ev.preventDefault(); inviteCustomer(c); });
+          row.appendChild(iv);
+        }
         if (cleanPhone(c.phone)) {
           var call = vyro.el('a', 'mini', 'Call'); call.href = 'tel:' + cleanPhone(c.phone); row.appendChild(call);
         }
@@ -155,7 +218,7 @@
     async function load() {
       var snap = await col.orderBy('nameLower').get();
       all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
-      render();
+      render(); checkPortals();
     }
 
     vportal.portalUrl(ctx, '').then(function (u) {
