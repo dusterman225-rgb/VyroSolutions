@@ -72,7 +72,7 @@ textarea{min-height:80px;resize:vertical}input[type=checkbox]{width:22px;height:
 .cal-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 4px;font-size:.72rem;color:var(--mut)}.cal-legend span{display:inline-flex;align-items:center;gap:6px}.cal-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
 .cal-day{margin:14px 0 4px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
 .starter .sh{display:flex;align-items:baseline;justify-content:space-between}.starter h3{margin:0;color:#fff;letter-spacing:.08em;text-transform:uppercase;font-size:.95rem}.starter .sh small{color:var(--mut)}
-.starter .ck{padding:11px 0}.starter .ck.next .m b{color:#fff}
+.starter .ck.done .m b{text-decoration:line-through;opacity:.6}.starter .ck{padding:11px 0}.starter .ck.next .m b{color:#fff}
 .tick{flex:0 0 26px;height:26px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--mut)}
 .ck.next .tick{border-color:var(--blue);color:#fff;box-shadow:0 0 10px var(--glow)}.ck.done .tick{border-color:#2b5a45;color:var(--ok);background:rgba(127,227,176,.08)}
 .chat{display:flex;flex-direction:column;gap:8px;min-height:40vh}
