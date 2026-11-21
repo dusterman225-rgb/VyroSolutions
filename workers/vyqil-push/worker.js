@@ -620,16 +620,8 @@ async function rpcCall(env, method, params) {
   const r = await fetch(env.SOLANA_RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: method, params: params }) });
   const j = await r.json(); if (j.error) throw new Error(j.error.message || 'rpc'); return j.result;
 }
-async function startupUnits(env) {
-  if (!rentCache || Date.now() - rentCache.at > 3600000) rentCache = { at: Date.now(), v: BigInt(await rpcCall(env, 'getMinimumBalanceForRentExemption', [PAY.ACCOUNT_SIZE])) };
-  if (!priceCache || Date.now() - priceCache.at > 300000) {
-    const r = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot'), j = await r.json(), p = parseFloat(j && j.data && j.data.amount);
-    if (!(p > 0)) throw new Error('no-price'); priceCache = { at: Date.now(), v: p };
-  }
-  // lamports / 1e9 * price * 1e6 = lamports * price / 1000; rounded UP to the next cent
-  const raw = BigInt(Math.ceil(Number(rentCache.v) * priceCache.v / 1000)), cent = 10000n;
-  return ((raw + cent - 1n) / cent) * cent;
-}
+// Opening a receiver's USDC account is paid by Vyqil's payment wallet (sponsored), so the receiver gets the full amount.
+async function startupUnits(env) { return 0n; }
 async function accountExists(env, addr) { const r = await rpcCall(env, 'getAccountInfo', [addr, { encoding: 'base64', commitment: 'confirmed' }]); return !!(r && r.value); }
 async function edImport(kind, fmt, bytes, usage) {
   try { return await crypto.subtle.importKey(fmt, bytes, { name: 'Ed25519' }, true, [usage]); }
@@ -685,8 +677,8 @@ async function payRoute(req, env, path) {
       // Make sure it would succeed before Vyqil puts its name on it.
       const sim = await rpcCall(env, 'simulateTransaction', [b64enc(raw), { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: false, commitment: 'confirmed' }]);
       if (sim && sim.value && sim.value.err) {
-        const logs = (sim.value.logs || []).join(' '), low = /insufficient funds|custom program error: 0x1\b/i.test(logs);
-        return out({ error: 'would-fail', detail: low ? 'Not enough USDC in this wallet for the payment and the Vyqil fee.' : 'The network says this payment would not go through. Nothing was sent.' }, 400);
+        const logs = (sim.value.logs || []).join(' '), low = /insufficient funds|custom program error: 0x1\b/i.test(logs); const errTxt = JSON.stringify(sim.value.err).slice(0, 120), gasMissing = /AccountNotFound/i.test(errTxt) || /Attempt to debit an account but found no record/i.test(logs), stale = /BlockhashNotFound/i.test(errTxt);
+        return out({ error: 'would-fail', detail: gasMissing ? 'Vyqil\'s payment wallet has no SOL yet, so it cannot cover the network fee. Nothing was sent.' : stale ? 'This payment took too long to approve. Please start it again. Nothing was sent.' : low ? 'Not enough USDC in this wallet for the payment and the Vyqil fee.' : 'The network says this payment would not go through (' + errTxt + '). Nothing was sent.' }, 400);
       }
       const bal = await rpcCall(env, 'getBalance', [gas, { commitment: 'confirmed' }]);
       if (!bal || bal.value < 5000000) return out({ error: 'busy', detail: 'Payments are paused for a moment. Please try again later.' }, 503);
