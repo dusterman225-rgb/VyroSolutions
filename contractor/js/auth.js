@@ -408,3 +408,14 @@
     }
   } catch (e) { /* the help chat is optional */ }
 })();
+
+// ---- Required boxes glow blue while empty (same look as Estimates: js/needs.js). Pages that already call vneeds.watch themselves are left alone. ----
+(function () {
+  var REQ = { 'customers.html': ['#name'], 'leads.html': ['#name'], 'profile.html': ['#name'], 'subs.html': ['#name'], 'team.html': ['#mname', '#memail'], 'timelog.html': ['#amt', '#date'], 'community.html': ['#place'] };
+  function markReq() {
+    var f = (location.pathname.split('/').pop() || '').toLowerCase(), list = REQ[f]; if (!list || window.__reqWatching) return; window.__reqWatching = true;
+    function go() { try { vneeds.watch(list); } catch (e) { /* cosmetic */ } }
+    if (window.vneeds) go(); else { var sc = document.createElement('script'); sc.src = 'js/needs.js'; sc.onload = go; document.head.appendChild(sc); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markReq); else markReq();
+})();

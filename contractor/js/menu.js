@@ -20,6 +20,7 @@
     }
     menu.appendChild(Object.assign(el('a', 'mi', 'Dashboard'), { href: 'app.html' }));
     group('Work', [['Leads', 'leads.html'], ['Estimates', 'estimates.html'], ['Active jobs', 'jobs.html']]);
+    group('Community', [['Nearby requests and Vyqil members', 'community.html'], ['Need A Vyqil Member', 'community.html#need'], ['My community listing', 'community.html#listing']]);
     group('Customers', [['Customers', 'customers.html'], money && ['Contracts', 'documents.html'], ['Messages', 'messages.html']]);
     group('Money', money ? [['Invoices', 'invoices.html'], ['Expenses and bills', 'expenses.html'], ['Recurring bills', 'recurring.html'], role === 'owner' && ['Finances', 'finances.html'], role === 'owner' && ['Pay with Vyqil', 'paysettings.html']] : []);
     group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], ['Assistant', 'assistant.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
