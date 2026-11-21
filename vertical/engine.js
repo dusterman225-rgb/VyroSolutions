@@ -472,7 +472,7 @@
       if (!order.length) return;
       var strip = el('div', 'hscroll'); v.appendChild(strip);
       order.forEach(function (key) {
-        var g = groups[key], col = dotColor(g.label), first = g.list[0], n = g.list.length, late = g.kind === 'late';
+        var g = groups[key], first = g.list[0], n = g.list.length, late = g.kind === 'late', col = late ? '#ff5a5a' : dotColor(g.label);
         var card = el('button', 'tile ntile'); card.type = 'button'; card.style.setProperty('--c', col);
         card.style.cssText += ';text-align:left;color:inherit;cursor:pointer;font:inherit;border:2px solid ' + col + ';box-shadow:0 0 0 1px ' + col + '33,0 0 ' + (late ? 20 : 12) + 'px ' + col + (late ? '88' : '55');
         card.appendChild(el('div', 'k', g.label)); card.appendChild(el('div', 'n', n + (late ? ' past due' : ' due soon')));
@@ -514,9 +514,22 @@
     if (!todo.length) { Q.toast('Everyone already has a portal.'); return; }
     if (!ok.length) { Q.toast('None of your ' + p.noun + 's have an email on file. Add emails first.'); return; }
     Q.ask('Create portal logins and email an invite to ' + ok.length + ' ' + p.noun + (ok.length === 1 ? '' : 's') + ' who do not have one yet?' + (noMail ? ' ' + noMail + ' without an email will be skipped.' : ''), 'Invite all', async function () {
-      var done = 0, failed = 0, noMailSent = 0, last = '';
-      for (var i = 0; i < ok.length; i++) { Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; } } else { failed++; last = x.error || ''; } } catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; } }
-      Q.toast('Invited ' + done + (noMailSent ? ', but ' + noMailSent + ' emails could not be sent (' + last + ')' : '') + (failed ? ', ' + failed + ' failed' + (last ? ' (' + last + ')' : '') : '') + (noMail ? ', ' + noMail + ' skipped (no email)' : '') + '.');
+      var done = 0, failed = 0, noMailSent = 0, last = '', rows = [];
+      for (var i = 0; i < ok.length; i++) {
+        Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); var nm = ok[i].name || (p.emailOf ? p.emailOf(ok[i]) : ok[i].email) || '';
+        try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; rows.push({ n: nm, bad: true, t: 'Portal made, email NOT sent: ' + x.mailError }); } else rows.push({ n: nm, t: x.existing ? 'Password link emailed (they already had a login)' : 'Invite emailed' }); } else { failed++; last = x.error || ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + (x.error || 'unknown') }); } }
+        catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + last }); }
+        if (i < ok.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
+      }
+      Q.toast('Invited ' + done + (noMailSent ? ', but ' + noMailSent + ' emails could not be sent' : '') + (failed ? ', ' + failed + ' failed' : '') + '.');
+      Q.modal(function (sh, close) {
+        sh.appendChild(el('h3', '', 'Invite results'));
+        sh.appendChild(el('p', 'hint', 'An email that says "emailed" was accepted by the email service. It is sent by Firebase (a noreply address) and often lands in Spam or Junk, so ask them to check there.'));
+        var box = el('div', 'card'); sh.appendChild(box);
+        rows.forEach(function (r) { var d = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', r.n)); var sp = el('span', '', r.t); if (r.bad) sp.style.color = '#ff8a8a'; m.appendChild(sp); d.appendChild(m); box.appendChild(d); });
+        if (noMail) sh.appendChild(el('p', 'hint', noMail + ' skipped because there is no email on file.'));
+        var ob = el('button', 'btn', 'OK'); ob.type = 'button'; ob.onclick = close; sh.appendChild(ob);
+      });
       render();
     });
   }

@@ -17,6 +17,7 @@
   function btnRow(s) { var r = el('div', 'btns'); s.appendChild(r); return r; }
   function mk(label, cls, fn) { var b = el('button', 'btn ' + (cls || ''), label); b.type = 'button'; if (fn) b.onclick = fn; return b; }
   function block(b) { b.style.cssText = 'display:block;width:100%;margin:8px 0'; return b; }
+  var bizChecked = {}, bizGone = {};
   function cidKey(t) { return t === 'contractor' ? 'cid' : 'cid_' + t; }
     function ms(ts) { return ts && ts.toMillis ? ts.toMillis() : Date.now(); }
   function refresh() { if ((S.tab === 'more' || S.tab === 'leads' || S.tab === 'today') && Q.render && !document.querySelector('.modal')) Q.render(); }
@@ -45,7 +46,8 @@
   function watchOffers(l) {
     if (watched[l.id]) return;
     watched[l.id] = db().collection('communityLeads').doc(l.id).collection('offers').onSnapshot(function (snap) {
-      offers[l.id] = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; });
+      offers[l.id] = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }).filter(function (o) { return !bizGone[o.bizId]; });
+      offers[l.id].forEach(function (o) { if (!o.bizId || bizChecked[o.bizId]) return; bizChecked[o.bizId] = 1; db().collection('alive').doc(o.bizId).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { bizGone[o.bizId] = true; Object.keys(offers).forEach(function (k) { offers[k] = offers[k].filter(function (z) { return !bizGone[z.bizId]; }); }); inLeads = inLeads.filter(function (z) { return !bizGone[z.fromBiz]; }); refresh(); } }); });
       var n = offers[l.id].length;
       if (!firstLoad && n > (replyCount[l.id] || 0)) Q.toast('Someone replied to "' + (l.title || 'your request') + '". See More > Community.');
       replyCount[l.id] = n; refresh();
@@ -101,8 +103,8 @@
   function openFind(rec, place, pre) {
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', 'Find a Vyqil...'));
-      var near = el('div', 'hint', 'Near ' + place.city + '. '); var ch = el('button', 'btn sm ghost', 'Change place'); ch.type = 'button';
-      ch.onclick = function () { close(); lsSet('vq_place_' + S.biz.id, null); askPlace(place.rec, '', function (p) { p.rec = place.rec; openFind(rec, p, pre); }); }; near.appendChild(ch); s.appendChild(near);
+      var near = el('div', 'hint'), nearTxt = el('span'); near.appendChild(nearTxt); near.appendChild(document.createTextNode(' ')); var ch = el('button', 'btn sm ghost', 'Use other location'); ch.type = 'button';
+      ch.onclick = function () { close(); askPlace(null, '', function (p) { openFind(rec, p, pre); }); }; near.appendChild(ch); s.appendChild(near);
       var existing = rec && pre.target && rec[cidKey(pre.target)] ? myLeads.filter(function (l) { return l.id === rec[cidKey(pre.target)]; })[0] : null;
       if (existing) { var ex = el('div', 'note'); ex.textContent = 'You already sent a request for this (' + (existing.status === 'open' ? 'open' : existing.status) + ', ' + (offers[existing.id] || []).length + ' replies). '; var vb = el('button', 'btn sm ghost', 'See replies'); vb.type = 'button'; vb.onclick = function () { close(); requests(existing.id); }; ex.appendChild(vb); s.appendChild(ex); }
       var need = el('select'), b0 = el('option', '', 'Choose what you need...'); b0.value = ''; need.appendChild(b0);
@@ -164,7 +166,8 @@
           });
         }, function (e) { if (my !== tick) return; list.textContent = ''; list.appendChild(el('div', 'empty', Q.friendly(e))); });
       }
-      need.onchange = load; rad.onchange = load; load();
+      function nearSet() { var nm = place.rec ? String(Q.title(place.rec) || '') : ''; nearTxt.textContent = 'Searching for Vyqil community members within ' + rad.value + ' miles of ' + (nm ? nm + ' (' + place.city + ')' : place.city) + '.'; } nearSet();
+      need.onchange = load; rad.onchange = function () { nearSet(); load(); }; load();
     });
   }
   function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
@@ -224,7 +227,6 @@
     db().collection('directory').doc(S.biz.id).get().then(function (d) { dir = d.exists ? d.data() : null; watchInbox(); refresh(); }, function () { /* ignore */ });
   }
   // Requests from a business that no longer exists are hidden (checked once per business).
-  var bizChecked = {}, bizGone = {};
   function checkAlive(list) {
     list.forEach(function (l) { var b = l.fromBiz; if (!b || bizChecked[b]) return; bizChecked[b] = 1; db().collection('alive').doc(b).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { bizGone[b] = true; inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); refresh(); } }); });
   }
