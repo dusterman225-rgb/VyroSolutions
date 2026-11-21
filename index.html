@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
 <title>VyqilSolutions - Simple apps for your business and your home</title>
-<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, with more for other businesses. One login, add apps as you grow.">
+<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, event planners and more. One login, add apps as you grow.">
 <link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -148,7 +148,8 @@
 (function () {
   var $ = function (i) { return document.getElementById(i); };
   $('yr').textContent = new Date().getFullYear();
-  var P = window.VYRO_PRICES || {};
+  // Monthly price per business: every app is $7, Restaurant is $20. Shown here so this page never depends on another file.
+  var P = Object.assign({}, window.VYRO_PRICES || {}, { restaurant: 20, takeout: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 });
   var APPS = [
     { id: 'contractor', name: 'VyqilContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
     { id: 'restaurant', name: 'VyqilRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
@@ -164,8 +165,10 @@
     { name: 'VyqilServices', href: 'services/index.html?signup=1', logo: 'services/images/logo.png', who: 'Cleaning, lawn and pool services', items: ['Recurring customers with plan, price and gate notes', 'Scheduled visits with morning reminders', 'Invoices with due dates and an unpaid total', 'Flags recurring customers with nothing scheduled'] },
     { name: 'VyqilAuto', href: 'auto/index.html?signup=1', logo: 'auto/images/logo.png', who: 'Auto shops and detailers', items: ['Customers and vehicles with service-due reminders', 'Repair orders from estimate to pickup', 'Parts, labor and totals', 'Promised-by date alerts', 'Ready for pickup and unpaid lists'] },
     { name: 'VyqilPhoto', href: 'photo/index.html?signup=1', logo: 'photo/images/logo.png', who: 'Photographers and videographers', items: ['Bookings from inquiry to delivered', 'Deposit and balance tracking', 'A shoot checklist with dated steps', 'Shoot-day and gallery-due alerts', 'Client list'] },
+    { name: 'VyqilEvents', href: 'events/index.html?signup=1', logo: 'events/images/logo.png', who: 'Wedding and event planners', items: ['Clients and events, from inquiry to done', 'Guest lists with RSVPs', 'Vendors and budgets', 'A day-of schedule and planning checklist', 'An elegant white-and-gold look for weddings'] },
     { name: 'VyqilLessons', href: 'lessons/index.html?signup=1', logo: 'lessons/images/logo.png', who: 'Tutors, music teachers and small daycares', items: ['Students with parent or guardian contact details', 'Lesson schedule with reminders', 'Attendance marking', 'Billing with due dates and an unpaid total', 'Birthdays'] }
   ];
+  var NEWID = { 'VyqilRealtor': 'realtor', 'VyqilLandlord': 'landlord', 'VyqilSalon': 'salon', 'VyqilServices': 'services', 'VyqilAuto': 'auto', 'VyqilPhoto': 'photo', 'VyqilLessons': 'lessons', 'VyqilEvents': 'events' };
   function card(a, beta) {
     var d = document.createElement('div'); d.className = 'pcard' + (a.wide ? ' wide' : '');
     if (a.logo) { var lg = document.createElement('img'); lg.src = a.logo; lg.alt = ''; lg.loading = 'lazy'; lg.style.cssText = 'display:block;width:100%;max-width:300px;height:auto;margin:0 0 8px;mix-blend-mode:screen'; d.appendChild(lg); }
@@ -179,6 +182,7 @@
     if (a.groups) a.groups.forEach(function (g) { var h4 = document.createElement('h4'); h4.textContent = g[0]; d.appendChild(h4); list(g[1]); });
     else list(a.items);
     if (a.note) { var n = document.createElement('div'); n.className = 'soon-note'; n.textContent = a.note; d.appendChild(n); }
+    if (beta && NEWID[a.name] && typeof P[NEWID[a.name]] === 'number') { var pr2 = document.createElement('div'); pr2.className = 'price'; pr2.textContent = money(P[NEWID[a.name]]); var s2 = document.createElement('small'); s2.textContent = ' per month, per business'; pr2.appendChild(s2); d.appendChild(pr2); }
     if (beta) { var n2 = document.createElement('div'); n2.className = 'soon-note'; n2.textContent = FIRST; d.appendChild(n2); }
     return d;
   }
