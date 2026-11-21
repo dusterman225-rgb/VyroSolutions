@@ -1,0 +1,87 @@
+/* VyqilEvents: wedding planner look. Ivory and white with soft gold, classic serif type.
+   Loaded on top of ../vertical/engine.css only when the business picks "Wedding planner". */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@300;400;500&display=swap');
+
+:root{
+  --bg:#FBF8F2; --card:#FFFFFF; --card2:#F6F0E4;
+  --line:rgba(176,141,70,.38);
+  --blue:#B08D46; --blue2:#9A7733; --glow:rgba(176,141,70,.38);
+  --text:#4A423A; --mut:#8A7F72; --silver:#5B5247;
+  --red:#B4483E; --ok:#4F7D5C; --warn:#A9772B;
+  --serif:'Cormorant Garamond','Playfair Display',Georgia,'Times New Roman',serif;
+  --sans:'Jost','Helvetica Neue',Arial,sans-serif;
+}
+html,body{background:var(--bg)!important;color:var(--text)}
+body{font-family:var(--sans);font-weight:400;letter-spacing:.01em;background-image:radial-gradient(1200px 500px at 50% -120px,rgba(176,141,70,.10),transparent 70%)!important}
+
+/* headings and titles in serif */
+h1,h2,h3,.sheet h3,.auth h1,.starter h3,.cal-title,.menu .mh b,.row .m b,.stat b,.amt,.vq-note .t b{font-family:var(--serif);color:#2F2820!important}
+h2{font-size:1.15rem;letter-spacing:.2em;font-weight:600;color:#7A6128!important;border-bottom:1px solid var(--line);padding-bottom:6px}
+.row .m b{font-size:1.12rem;font-weight:600;letter-spacing:.01em}
+.amt{font-weight:600;color:#7A6128!important}
+.stat b{font-size:1.5rem;font-weight:600}
+.auth h1,.sheet h3,.starter h3{letter-spacing:.18em}
+
+/* cards: white with a fine gold hairline */
+.card,.row,.stat div,.vq-drop,.vq-note{background:#fff!important;border-color:var(--line)!important;box-shadow:0 1px 0 rgba(176,141,70,.12),0 8px 22px rgba(90,70,30,.06)}
+.row{border-radius:14px}
+.stat div{background:linear-gradient(180deg,#fff,#FBF6EA)!important}
+.card.lead-old{background:#F4EFE6!important;border-color:rgba(176,141,70,.2)!important}
+
+/* top bar and menu */
+.topbar .mark{mix-blend-mode:normal!important;filter:none!important}
+img.logo,.logo.wide,.auth .logo{mix-blend-mode:normal!important;filter:none!important}
+.menu-btn{background:#fff!important;border-color:var(--line)!important;color:#7A6128!important;font-family:var(--sans);letter-spacing:.2em}
+.menu-btn[aria-expanded=true]{border-color:var(--blue)!important;color:#5E4A1C!important}
+.menu{background:#fff!important;border-color:var(--line)!important;box-shadow:0 14px 40px rgba(90,70,30,.22)!important}
+.menu .mh{background:linear-gradient(180deg,#FBF6EA,#fff)!important}
+.menu .mi{color:#4A423A!important}.menu .mi:hover{background:rgba(176,141,70,.12)!important;color:#2F2820!important}
+.menu .mi.out{color:var(--red)!important}
+.menu details{border-top-color:rgba(176,141,70,.2)!important}
+.menu summary,.menu .mg{color:#7A6128!important;font-family:var(--serif);font-size:1.05rem;letter-spacing:.14em}
+
+/* buttons: gold */
+.btn{background:linear-gradient(180deg,#C8A55B,#B08D46)!important;border-color:#9A7733!important;color:#fff!important;font-family:var(--sans);letter-spacing:.14em;text-transform:uppercase;font-weight:500;box-shadow:0 4px 14px rgba(176,141,70,.35)!important}
+.btn.ghost{background:#fff!important;color:#7A6128!important;box-shadow:none!important;border-color:var(--blue)!important}
+.btn.danger{background:#fff!important;color:var(--red)!important;border-color:var(--red)!important;box-shadow:none!important}
+.subs button{background:#fff!important;color:#7A6128!important;border-color:var(--line)!important}
+.subs button.on{background:#F6EBD0!important;color:#5E4A1C!important;border-color:var(--blue)!important;box-shadow:0 0 10px var(--glow)!important}
+
+/* forms */
+.sheet,.vq-pick-box,.toast{background:#FFFDF9!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:0 -10px 40px rgba(90,70,30,.25)!important}
+.toast{box-shadow:0 8px 26px rgba(90,70,30,.3)!important}
+input,textarea{background:#fff!important}select,.vq-sel{background-color:#fff!important}
+input,select,textarea,.vq-sel{border-color:var(--line)!important;color:#3A332B!important;font-family:var(--sans)}
+select{color-scheme:light}
+option,optgroup{background:#fff!important;color:#3A332B!important}optgroup{color:#9A7733!important}
+input::placeholder,textarea::placeholder{color:#B3A894}
+label.f,.field span,.sheet .hint,.hint,.note{color:var(--mut)!important}
+label.f{font-family:var(--serif);font-size:1rem;letter-spacing:.06em;color:#7A6128!important}
+.vq-opt{color:#4A423A!important;border-bottom-color:rgba(176,141,70,.18)!important}
+.vq-opt.on{background:#F6EBD0!important;color:#2F2820!important}
+.vq-pick-box .vq-opt:active{background:#F2E6C8!important}
+
+/* required boxes keep a gold glow while empty */
+.vneed{outline:2px solid #C8A55B!important;box-shadow:0 0 0 3px rgba(200,165,91,.25),0 0 14px 3px rgba(200,165,91,.65)!important}
+
+/* calendar */
+.cal-cell{background:#fff!important;border-color:rgba(176,141,70,.22)!important;color:#4A423A!important}
+.cal-cell.sel{background:#F6EBD0!important;border-color:var(--blue)!important}
+.cal-cell.today .cal-num{color:#7A6128}
+
+/* checklist, notes, pills */
+.ck{border-bottom-color:rgba(176,141,70,.25)!important}
+.ck .m b{color:#2F2820!important}
+.ck.next .tick{border-color:var(--blue)!important;color:#7A6128!important}
+.ck.done .tick{border-color:var(--ok)!important;color:var(--ok)!important;background:rgba(79,125,92,.08)!important}
+.vq-note{border-color:var(--blue)!important}
+.vq-note .t span{color:var(--mut)!important}
+.vq-note .go{color:var(--blue)}
+.pill,.stage{border-color:var(--line)!important;color:#7A6128!important;background:#FBF6EA!important}
+.pill.ok{color:var(--ok)!important}.pill.bad{color:var(--red)!important}.pill.warn{color:var(--warn)!important}
+.late,.over{color:var(--red)!important}
+.empty{color:var(--mut)}
+a,.link{color:#8A6A25}
+.ntile{background:#fff!important}
+hr{border-color:var(--line)}
+@media print{body{background:#fff!important}}
