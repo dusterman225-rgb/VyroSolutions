@@ -21,14 +21,18 @@
     { id: 'salon', name: 'VyqilSalon', desc: 'Clients, appointments and services for salons and barbers.', live: true },
     { id: 'auto', name: 'VyqilAuto', desc: 'Customers, vehicles and repair orders for auto shops.', live: true },
     { id: 'photo', name: 'VyqilPhoto', desc: 'Clients and bookings for photographers.', live: true },
-    { id: 'lessons', name: 'VyqilLessons', desc: 'Students, lessons and billing for teachers and tutors.', live: true }
+    { id: 'lessons', name: 'VyqilLessons', desc: 'Students, lessons and billing for teachers and tutors.', live: true },
+    { id: 'events', name: 'VyqilEvents', desc: 'Clients, events, guests, vendors, budgets and a day-of schedule for wedding and event planners.', live: true }
   ];
+  // Monthly price per business, in US dollars. Every app is $7 except Restaurant at $20. Nothing is charged until billing is switched on.
+  var PRICES = { restaurant: 20, takeout: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 };
+  window.VYRO_PRICES = PRICES;
   // Where each app opens when the owner has not set an address in js/net-config.js.
-  var DEFAULT_URLS = { landlord: 'landlord/index.html', realtor: 'realtor/index.html', services: 'services/index.html', salon: 'salon/index.html', auto: 'auto/index.html', photo: 'photo/index.html', lessons: 'lessons/index.html' };
+  var DEFAULT_URLS = { landlord: 'landlord/index.html', realtor: 'realtor/index.html', services: 'services/index.html', salon: 'salon/index.html', auto: 'auto/index.html', photo: 'photo/index.html', lessons: 'lessons/index.html', events: 'events/index.html' };
   // What the owner picks when making a business. The first app comes with it.
   var CATEGORIES = [
     ['Restaurant or cafe', 'restaurant'], ['Takeout or fast food', 'takeout'], ['Contractor or trades', 'contractor'], ['Retail shop', 'retail'], ['Landlord or property manager', 'landlord'],
-    ['Realtor', 'realtor'], ['Cleaning, landscaping or home services', 'services'], ['Salon or barber', 'salon'], ['Auto shop', 'auto'], ['Photographer', 'photo'], ['Lessons or tutoring', 'lessons'], ['Other', 'contractor']
+    ['Realtor', 'realtor'], ['Cleaning, landscaping or home services', 'services'], ['Salon or barber', 'salon'], ['Auto shop', 'auto'], ['Photographer', 'photo'], ['Lessons or tutoring', 'lessons'], ['Event or wedding planner', 'events'], ['Other', 'contractor']
   ];
   // Defaults are names. The real power comes from the rules, not these labels.
   var ROLE_LABEL = { owner: 'Owner', gm: 'Administrator', supervisor: 'Manager', employee: 'Employee', cook: 'Employee (cook)', server: 'Employee (server)', host: 'Employee (host)', kiosk: 'Device' };
