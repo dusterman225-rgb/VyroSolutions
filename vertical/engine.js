@@ -136,7 +136,7 @@
         var b = await db.collection('businesses').doc(ids[i]).get(), bd = b.exists ? b.data() : null;
         if (!bd || bd.status === 'closed') continue;
         var has = bd.apps && C.id in bd.apps ? !!bd.apps[C.id] : bd.product === C.id;
-        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id, profile: bd.profile || {}, phone: (bd.profile && bd.profile.phone) || bd.phone || '' }; }
+        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id, profile: bd.profile || {}, eventStyle: bd.eventStyle || '', phone: (bd.profile && bd.profile.phone) || bd.phone || '' }; }
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
@@ -295,7 +295,7 @@
     var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports || C.pay) g.push({ h: 'Money', items: (Q.views.reports ? [{ l: 'Reports', tab: 'reports' }] : []).concat(Q.payMenu()) }); return g;
   }
   // ---------- close (permanently delete) the business ----------
-  var CLOSE_COLLS = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'settings', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'vendors', 'purchases', 'shifts', 'audit', 'network'];
+  var CLOSE_COLLS = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'records_events', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'settings', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'vendors', 'purchases', 'shifts', 'audit', 'network'];
   async function wipeQ(q) { for (var g = 0; g < 200; g++) { var sn = await q.limit(400).get(); if (sn.empty) return; var b = db.batch(); sn.forEach(function (d) { b.delete(d.ref); }); await b.commit(); if (sn.size < 400) return; } }
   async function deleteBusiness() {
     var id = S.biz.id, ref = db.collection('businesses').doc(id), left = [];
