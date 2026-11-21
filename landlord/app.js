@@ -39,7 +39,7 @@ window.VQ_APP = {
 // Community: find a contractor, cleaner or realtor from your records, and receive rental requests from realtors.
 (function () {
   var A = window.VQ_APP;
-  function propOf(r) { if (!r) return null; if (r.kind === 'property') return r; var u = r.kind === 'unit' ? r : (r.unit ? Q.get(r.unit) : null); return u && u.property ? Q.get(u.property) : null; }
+  function propOf(r) { if (!r) return null; if (r.kind === 'property') return r; if (r.property && Q.get(r.property)) return Q.get(r.property); var u = r.kind === 'unit' ? r : (r.unit ? Q.get(r.unit) : null); return u && u.property ? Q.get(u.property) : null; }
   A.community = { product: 'landlord', place: propOf, places: function () { return Q.byKind('property'); },
     fallback: function () { var p = Q.byKind('property').filter(function (x) { return x.lat != null; })[0]; return p ? { lat: p.lat, lng: p.lng, city: p.loc || p.city || 'Your area' } : null; },
     chosen: { contractor: function (rec, o) { if (rec.kind !== 'repair') return null; var up = { vendor: o.bizName }; if (rec.status === 'New') up.status = 'Scheduled'; return up; } },
