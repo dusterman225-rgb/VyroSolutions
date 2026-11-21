@@ -89,7 +89,9 @@
       s.docs.forEach(function (d) { var x = d.data(); x.id = d.id; if ((x.product || 'contractor') !== product) return; var mi = miles(lat, lng, x.lat, x.lng); x.miles = mi;
         if (mi > radius) return; if (mi > (x.radius || MAX_MILES)) return;   // they only want work inside their own range
         if (cat && cat !== 'Other' && (x.trades || []).indexOf(cat) < 0) return; out.push(x); });
-      out.sort(function (a, b) { return a.miles - b.miles; }); return out;
+      out.sort(function (a, b) { return a.miles - b.miles; });
+      // Drop listings left behind by a business that no longer exists.
+      return Promise.all(out.map(function (x) { return db.collection('alive').doc(x.id).get().then(function () { return true; }, function (e) { return !(e && e.code === 'permission-denied'); }); })).then(function (oks) { return out.filter(function (x, i) { return oks[i]; }); });
     });
   }
   // Completed community jobs and average rating for a set of businesses, in one query (people only see jobs the requester marked done).
