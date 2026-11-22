@@ -414,7 +414,7 @@ window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
   A.fn = A.fn || {}; A.fn.services = function () { myServices(false); };
 
   // ---- Home card, shown once automatically on first run ----
-  Q.extras.push(function (v) {
+  function addMyServicesCard() { Q.extras.push(function (v) {
     var m = mySvc(), c = el('div', 'card'); v.appendChild(el('h2', '', 'My services'));
     v.appendChild(c);
     if (!m.length) {
@@ -425,7 +425,8 @@ window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
       var w = el('div'); m.forEach(function (n) { var t = el('span', 'tag', info(n).icon + ' ' + n); t.style.cssText = 'display:inline-block;margin:0 6px 6px 0;padding:6px 10px;border-radius:999px;background:rgba(127,127,127,.18);font-size:14px'; w.appendChild(t); }); c.appendChild(w);
       var e = el('button', 'btn ghost', 'Edit my services'); e.type = 'button'; e.style.cssText = 'display:block;width:100%;margin-top:4px'; e.onclick = function () { myServices(false); }; c.appendChild(e);
     }
-  });
+  }); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addMyServicesCard); else addMyServicesCard();
 
   // ---- Menu: Community has its own group; My services sits under Work ----
   var oldMenu = A.menu;
@@ -459,4 +460,14 @@ window.VQ_APP.portal = { kind: 'customer', invoices: function (c, recs) {
   ] };
   var oldStarter = A.starter;
   A.starter = function () { var st = oldStarter(); st.push({ id: 'pay', t: 'Set up Pay with Vyqil', h: 'Optional. Collect invoices by QR code, paid in dollar coins.', done: function () { return !!(Q.S.biz && Q.S.biz.payWallet); }, run: function () { if (Q.pay) Q.pay.setup(); } }); return st; };
+})();
+
+// ===== Same format as the other Vyqil apps: one "Add" dropdown on each main list, and a past-due notice for missed visits =====
+(function () {
+  var A = window.VQ_APP, K = A.kinds;
+  K.visit.addMenu = ['visit', 'customer', 'quote', 'invoice', 'expense'];
+  K.customer.addMenu = ['customer', 'visit', 'quote', 'invoice'];
+  K.invoice.addMenu = ['invoice', 'customer', 'visit', 'expense'];
+  // Shows "View visit" on the notice, like "View invoice" on past-due invoices.
+  A.watch.push({ l: 'Visits past due', fn: function (rs, t) { return rs.filter(function (r) { return r.kind === 'visit' && r.status === 'Scheduled' && r.date && r.date < t; }); }, sub: function (r) { return 'Was ' + Q.u.fmtDate(r.date) + (r.time ? ' ' + Q.u.fmtTime(r.time) : '') + '. Mark it Done or Skipped, or move the date.'; } });
 })();
