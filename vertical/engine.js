@@ -394,7 +394,7 @@
   // The button on every past-due notice names what is past due: "View rent", "View bill", "View invoice", "View repair"...
   function overdueNoun(label, rec, forced) {
     if (forced) return forced; var l = String(label || ''), kd = rec && K(rec.kind), kl = kd ? String(kd.label || '').toLowerCase() : '';
-    if (/balance/i.test(l)) return 'balance'; if (/gallery/i.test(l)) return 'gallery'; if (/follow/i.test(l)) return 'follow-up'; if (/commission/i.test(l)) return 'commission'; if (/closing/i.test(l)) return 'closing'; if (/open house/i.test(l)) return 'open house'; if (/showing/i.test(l)) return 'showing'; if (/shoot/i.test(l)) return 'shoot'; if (/visit/i.test(l)) return 'visit'; if (/listing/i.test(l)) return 'listing'; if (/loan|inspection period/i.test(l)) return 'deal date';
+    if (/vendor payment/i.test(l)) return 'vendor payment'; if (/balance/i.test(l)) return 'balance'; if (/gallery/i.test(l)) return 'gallery'; if (/follow/i.test(l)) return 'follow-up'; if (/commission/i.test(l)) return 'commission'; if (/closing/i.test(l)) return 'closing'; if (/open house/i.test(l)) return 'open house'; if (/showing/i.test(l)) return 'showing'; if (/shoot/i.test(l)) return 'shoot'; if (/visit/i.test(l)) return 'visit'; if (/listing/i.test(l)) return 'listing'; if (/loan|inspection period/i.test(l)) return 'deal date';
     if (/rent/i.test(l)) return 'rent'; if (/bill/i.test(l) || /bill|expense/.test(kl)) return 'bill'; if (/invoice/i.test(l)) return 'invoice';
     if (/repair/.test(kl)) return 'repair'; if (/lease/i.test(l)) return 'lease'; if (/insur/i.test(l)) return 'insurance'; if (/inspect/i.test(l)) return 'inspection';
     return kl || 'item';
@@ -482,11 +482,26 @@
       var strip = el('div', 'hscroll'); v.appendChild(strip);
       order.forEach(function (key) {
         var g = groups[key], first = g.list[0], n = g.list.length, late = g.kind === 'late', col = late ? '#ff5a5a' : dotColor(g.label);
-        var card = el('button', 'tile ntile'); card.type = 'button'; card.style.setProperty('--c', col);
+        var card = el('div', 'tile ntile'); card.setAttribute('role', 'button'); card.tabIndex = 0; card.style.setProperty('--c', col);
         card.style.cssText += ';text-align:left;color:inherit;cursor:pointer;font:inherit;border:2px solid ' + col + ';box-shadow:0 0 0 1px ' + col + '33,0 0 ' + (late ? 20 : 12) + 'px ' + col + (late ? '88' : '55');
         card.appendChild(el('div', 'k', g.label)); card.appendChild(el('div', 'n', n + (late ? ' past due' : ' due soon')));
         var who = first.title || (first.rec ? title(first.rec) : ''); card.appendChild(el('div', 'd', (late ? 'Oldest ' : 'Next ') + fmtDate(first.date) + (who ? ' · ' + who : '')));
-        card.onclick = function () { var d = parse(first.date); S.cal = { y: d.getFullYear(), m: d.getMonth() }; S.calSel = first.date; render(); };
+        var openLate = function () {
+          var items = g.list.filter(function (e) { return e.rec && e.rec.id; });
+          if (items.length === 1) { openForm(items[0].rec.kind, items[0].rec); return; }
+          if (items.length > 1) { Q.modal(function (sh, close) {
+            sh.appendChild(el('h3', '', g.label + ': ' + n + ' past due'));
+            var box = el('div', 'card'); items.slice(0, 30).forEach(function (e) {
+              var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', e.title || title(e.rec))); m.appendChild(el('span', '', fmtDate(e.date) + ' · ' + rel(e.date))); row.appendChild(m);
+              var vb = el('button', 'btn sm', 'View ' + overdueNoun(e.label, e.rec, e.noun)); vb.type = 'button'; vb.style.marginLeft = '6px'; row.appendChild(vb);
+              row.onclick = function () { close(); openForm(e.rec.kind, e.rec); }; box.appendChild(row); });
+            sh.appendChild(box); var x = el('button', 'btn ghost', 'Close'); x.type = 'button'; x.onclick = close; sh.appendChild(x); }); return; }
+          var d = parse(first.date); S.cal = { y: d.getFullYear(), m: d.getMonth() }; S.calSel = first.date; render();
+        };
+        if (late) {
+          var lv = el('button', 'btn sm', 'View ' + overdueNoun(g.label, first.rec, first.noun) + (n > 1 ? 's' : '')); lv.type = 'button'; lv.style.marginTop = '8px';
+          lv.onclick = function (ev) { ev.stopPropagation(); openLate(); }; card.appendChild(lv); card.onclick = openLate;
+        } else card.onclick = function () { var d = parse(first.date); S.cal = { y: d.getFullYear(), m: d.getMonth() }; S.calSel = first.date; render(); };
         strip.appendChild(card);
       });
     })();
