@@ -6,7 +6,7 @@ window.VQ_APP = {
       actions: [{ l: 'New repair order', saveFirst: true, run: function (r) { Q.openForm('repair', null, { property: r.id, status: 'New' }); } }, { l: 'Add a unit', saveFirst: true, run: function (r) { Q.openForm('unit', null, { property: r.id, status: 'Vacant' }); } }],
       onSaved: function (r, prev) { if (prev && r.lat != null && (prev.name !== r.name || prev.city !== r.city)) Q.recs().doc(r.id).update({ lat: Q.FV.delete(), lng: Q.FV.delete(), loc: Q.FV.delete() }).catch(function () { /* looked up again next time */ }); },
       sub: function (r, rs) { var n = rs.filter(function (x) { return x.kind === 'unit' && x.property === r.id; }).length; return n + ' unit' + (n === 1 ? '' : 's'); } },
-    unit: { label: 'Unit', plural: 'Units', icon: '🚪', stage: 'status', fields: [{ k: 'name', l: 'Unit name', t: 'text', req: 1, h: 'Apt 2B', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'property', l: 'Property', t: 'link', to: 'property', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'status', l: 'Status', t: 'select', o: ['Occupied', 'Vacant', 'Turnover'], req: 1, drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'rent', l: 'Monthly rent', t: 'money', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }],
+    unit: { label: 'Unit', plural: 'Units', icon: '🚪', stage: 'status', addMenu: ['unit', 'tenant', 'repair', 'property'], fields: [{ k: 'name', l: 'Unit name', t: 'text', req: 1, h: 'Apt 2B', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'property', l: 'Property', t: 'link', to: 'property', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'status', l: 'Status', t: 'select', o: ['Occupied', 'Vacant', 'Turnover'], req: 1, drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'rent', l: 'Monthly rent', t: 'money', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Unit information', dropClosed: true, dropIf: function (r) { return r.status === 'Occupied'; } }],
       title: function (r) { return (r.property ? Q.title(Q.get(r.property)) + ' · ' : '') + r.name; }, amount: function (r) { return r.rent || ''; } },
     tenant: { label: 'Tenant', plural: 'Tenants', icon: '👤', stage: 'status', closed: function (r) { return r.status === 'Moved out'; }, sort: function (a, b) { return (a.leaseEnd || '9') < (b.leaseEnd || '9') ? -1 : 1; },
       fields: [{ k: 'name', l: 'Name', t: 'text', req: 1 }, { k: 'unit', l: 'Unit', t: 'link', to: 'unit' }, { k: 'status', l: 'Status', t: 'select', o: ['Current', 'Notice given', 'Moved out'], req: 1 }, { k: 'phone', l: 'Phone', t: 'tel' }, { k: 'email', l: 'Email', t: 'email' }, { k: 'rent', l: 'Monthly rent', t: 'money' }, { k: 'dueDay', l: 'Rent due day of month', t: 'number', d: 1, hint: '1 to 28.' },
@@ -192,7 +192,9 @@ window.VQ_APP = {
     try {
       var a = app.auth(); await a.setPersistence(firebase.auth.Auth.Persistence.NONE);
       try { await a.createUserWithEmailAndPassword(email, randomPassword()); } catch (e) { if (!e || e.code !== 'auth/email-already-in-use') throw e; res.existing = true; }
-      try { await a.sendPasswordResetEmail(email, { url: portalBase() }); res.emailed = true; } catch (e2) { try { await a.sendPasswordResetEmail(email); res.emailed = true; } catch (e3) { res.mailError = Q.friendly(e3); } }
+      // New registrants get a "set your password" email. Someone who already has a Vyqil login gets NO password email:
+      // they are sent their tenant portal link instead (the landlord shares it), and they sign in with the password they already have.
+      if (!res.existing) { try { await a.sendPasswordResetEmail(email, { url: portalBase() }); res.emailed = true; } catch (e2) { try { await a.sendPasswordResetEmail(email); res.emailed = true; } catch (e3) { res.mailError = Q.friendly(e3); } } }
       try { await a.signOut(); } catch (x) { /* ignore */ }
     } catch (e) { res.error = Q.friendly(e); }
     try { await app.delete(); } catch (x) { /* ignore */ }
@@ -204,11 +206,11 @@ window.VQ_APP = {
   function invite(t) {
     var email = String(t.email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { Q.toast('Add ' + (t.name || 'the tenant') + '\'s email first, then try again.'); return; }
-    Q.ask('Create a tenant login for ' + email + ' and email them a link to set a password?', 'Invite', async function () {
+    Q.ask('Create a tenant portal for ' + email + '? New members get an email to set a password. If they already have a Vyqil login, you will get their portal link to send instead.', 'Invite', async function () {
       Q.toast('Inviting...'); var res = await makeLogin(email); if (res.error) { Q.toast(res.error); return; }
       var ref = Q.db.collection('tenantPortals').doc(), d = portalData(t); d.updatedAt = Q.FV.serverTimestamp();
       try { await ref.set(d); await Q.recs().doc(t.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { Q.toast(Q.friendly(e)); return; }
-      Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link.' : (res.existing ? 'They already had a login, so a password link was emailed.' : 'Invitation emailed.')); t.portalId = ref.id; shareLink(t);
+      Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link.' : (res.existing ? 'They already have a Vyqil login, so no password email was sent. Share their portal link.' : 'Invitation emailed.')); t.portalId = ref.id; shareLink(t);
     });
   }
 
@@ -219,7 +221,7 @@ window.VQ_APP = {
     try { await ref.set(d); await Q.recs().doc(t.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { return { error: Q.friendly(e) }; }
     t.portalId = ref.id; return { ok: true, existing: res.existing, mailError: res.mailError };
   }
-  window.VQ_APP.portalInvite = { kind: 'tenant', coll: 'tenantPortals', noun: 'tenant', skip: function (t) { return t.status === 'Moved out'; }, quiet: quietInvite, after: function (t) { shareLink(t); } };
+  window.VQ_APP.portalInvite = { kind: 'tenant', coll: 'tenantPortals', noun: 'tenant', skip: function (t) { return t.status === 'Moved out'; }, quiet: quietInvite, linkOf: tenantUrl, after: function (t) { shareLink(t); } };
 
   // ----- repair requests sent by tenants
   var reqCount = 0, reqs = [];
@@ -443,8 +445,9 @@ window.VQ_APP = {
   };
   function letters(tenant, pick, insp) {
     Q.modal(function (s, close) {
-      s.appendChild(el('h3', '', 'Letters and notices')); s.appendChild(el('label', 'f', 'Tenant')); var ts = el('select'); Q.byKind('tenant').filter(function (t) { return t.status !== 'Moved out'; }).forEach(function (t) { var o = el('option', '', t.name); o.value = t.id; ts.appendChild(o); }); s.appendChild(ts);
+      s.appendChild(el('h3', '', 'Letters and notices')); s.appendChild(el('label', 'f', 'Tenant *')); var ts = el('select'); var t0 = el('option', '', 'Choose a tenant'); t0.value = ''; ts.appendChild(t0); Q.byKind('tenant').filter(function (t) { return t.status !== 'Moved out'; }).forEach(function (t) { var o = el('option', '', t.name); o.value = t.id; ts.appendChild(o); }); s.appendChild(ts);
       if (tenant) ts.value = tenant.id; else if (insp && insp.unit) { var m0 = Q.byKind('tenant').filter(function (t) { return t.unit === insp.unit && t.status !== 'Moved out'; })[0]; if (m0) ts.value = m0.id; }
+      
       s.appendChild(el('label', 'f', 'Letter')); var ls = el('select'); Object.keys(LETTERS).forEach(function (k) { var o = el('option', '', LETTERS[k].l); o.value = k; ls.appendChild(o); }); if (pick) ls.value = pick; s.appendChild(ls);
       var box = el('div'), inputs = {}; s.appendChild(box);
       function draw() { box.textContent = ''; inputs = {}; LETTERS[ls.value].f.forEach(function (f) { box.appendChild(el('label', 'f', f[1])); var i = el('input'); i.type = f[2] === 'date' ? 'date' : 'text'; if (f[2] === 'money') i.inputMode = 'decimal'; i.maxLength = 160; if (insp && f[0] === 'date' && ls.value === 'entry') i.value = insp.date || ''; box.appendChild(i); inputs[f[0]] = { i: i, t: f[2] }; }); }
@@ -452,7 +455,7 @@ window.VQ_APP = {
       var m = el('div', 'note', 'Notice periods and required wording differ by state and city. Check your local rules before you send.'); s.appendChild(m);
       var b = el('div', 'btns'), go = el('button', 'btn', 'Write it'), x = el('button', 'btn ghost', 'Close'); go.type = x.type = 'button'; b.appendChild(go); b.appendChild(x); s.appendChild(b); x.onclick = close;
       go.onclick = function () {
-        var t = Q.get(ts.value); if (!t) { m.className = 'note err'; m.textContent = 'Add a tenant first.'; return; } var v = {}, L = LETTERS[ls.value];
+        var t = Q.get(ts.value); if (!t) { m.className = 'note err'; m.textContent = 'Choose a tenant first.'; return; } var v = {}, L = LETTERS[ls.value];
         for (var k in inputs) { var raw = inputs[k].i.value.trim(); v[k] = inputs[k].t === 'money' ? (raw && cents(raw) != null ? money(cents(raw)) : (raw ? raw : '')) : inputs[k].t === 'date' ? (raw ? fmt(raw) : '') : raw; }
         if (ls.value === 'deposit') v.amount = inputs.amount.i.value.trim();
         close(); showText(L.l + ' for ' + t.name, letterhead() + '\n\n' + fmt(today()) + '\n\nDear ' + (t.name || 'Tenant').split(/\s+/)[0] + ',\n\n' + L.t(t, v) + '\n\nThank you,\n' + (biz().name || ''), t);
