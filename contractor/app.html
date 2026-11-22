@@ -336,8 +336,8 @@
       ]],
       ['Money', [
         n.owed > 0 && ['Money owed to you', vutil.fmt(n.owed), 'invoices.html', false],
-        n.over > 0 && ['Overdue invoices', n.over, 'invoices.html', true],
-        n.bills > 0 && ['Bills to pay', vutil.fmt(n.bills) + (n.billsOver ? ' (' + n.billsOver + ' overdue)' : ''), 'expenses.html', n.billsOver > 0]
+        n.over > 0 && ['Overdue invoices', n.over, 'invoices.html', true, 'View past due: invoices'],
+        n.bills > 0 && ['Bills to pay', vutil.fmt(n.bills) + (n.billsOver ? ' (' + n.billsOver + ' overdue)' : ''), 'expenses.html', n.billsOver > 0, n.billsOver > 0 ? 'View past due: bills' : '']
       ]],
       ['Profit watch (costs logged vs job price)', watch],
       ['Work', [
@@ -346,7 +346,7 @@
       ]],
       ['Leads', [
         n.newLeads > 0 && ['New leads', n.newLeads + (n.staleLeads ? ' (' + n.staleLeads + ' waiting 2+ days)' : ''), 'leads.html', n.staleLeads > 0],
-        n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true]
+        n.due > 0 && ['Follow-ups due', n.due, 'leads.html', true, 'View past due: follow-ups']
       ]]
     ];
     var box = $('attBody'); box.textContent = ''; var any = false;
@@ -357,6 +357,7 @@
         var a = vyro.el('a', 'arow'); a.href = r[2];
         a.appendChild(vyro.el('span', '', r[0]));
         a.appendChild(vyro.el('b', r[3] ? 'late' : '', String(r[1])));
+        if (r[4]) { var vb = vyro.el('span', 'mini', r[4]); vb.style.cssText = 'margin-left:8px;border:1px solid #4ba3ff;border-radius:999px;padding:3px 10px;font-size:.75rem;white-space:nowrap'; a.appendChild(vb); }
         box.appendChild(a);
       });
     });

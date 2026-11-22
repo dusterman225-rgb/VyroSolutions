@@ -1,229 +1,31 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
-<title>VyqilSolutions - Simple apps for your business and your home</title>
-<meta name="description" content="VyqilSolutions makes simple phone-first apps for contractors, restaurants, takeout and retail shops, event planners and more. One login, add apps as you grow.">
-<link rel="stylesheet" href="css/net.css"><link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="/icons/icon-192.png" type="image/png">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Vyqil Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
-<style>
-  .hero{padding:26px 0 8px;text-align:center}
-  .hero h1{font-size:2rem;line-height:1.15;margin:10px 0}
-  .hero p{color:var(--dim);font-size:1.05rem;margin:6px auto 16px;max-width:30em}
-  .cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  .cta .btn{min-width:140px;text-decoration:none}
-  .nav{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .nav .brand{font-weight:800;letter-spacing:.06em;color:var(--text);text-decoration:none}
-  .nav .btn{min-height:38px;padding:0 14px;text-decoration:none}
-  section{margin:34px 0}
-  section>h2{font-size:1.35rem;margin:0 0 6px}
-  .lead{color:var(--dim);margin:0 0 12px}
-  .grid{display:grid;grid-template-columns:1fr;gap:12px}
-  @media(min-width:560px){.grid{grid-template-columns:1fr 1fr}}
-  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
-  .pcard h3{margin:0 0 2px;font-size:1.05rem;letter-spacing:0;text-transform:none;color:var(--text)}
-  .pcard .for{color:var(--dim);font-size:.88rem;margin-bottom:8px}
-  .pcard ul{margin:6px 0 10px;padding-left:18px;color:var(--text);font-size:.92rem}
-  .pcard li{margin:2px 0}
-  .price{font-size:1.25rem;font-weight:800;color:var(--blue)}
-  .price small{font-weight:400;color:var(--dim);font-size:.82rem}
-  .banner2{background:#0b2233;border:1px solid var(--blue);color:#cfe8f8;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:.93rem}
-  .ex{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:14px;margin:12px 0}
-  .ex b{color:var(--blue)}
-  .steps{counter-reset:s;display:grid;gap:10px}
-  .steps div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px 12px 48px;position:relative}
-  .steps div:before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:12px;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#05070A;font-weight:800;text-align:center;line-height:24px;font-size:.85rem}
-  .trust{display:grid;gap:8px;font-size:.93rem}
-  .trust div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
-  .pcard.soon{opacity:.92;border-style:dashed}
-  .pcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-  .badge-soon{flex:0 0 auto;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#05070A;background:#f5c542;border-radius:999px;padding:3px 10px;white-space:nowrap}
-  .pcard .about{color:var(--text);font-size:.93rem;margin:6px 0 8px}
-  .pcard h4{margin:10px 0 2px;font-size:.82rem;letter-spacing:.05em;text-transform:uppercase;color:var(--blue)}
-  .pcard.wide{grid-column:1/-1}
-  .soon-note{color:var(--dim);font-size:.88rem;margin-top:8px}
-  details.dd{background:var(--panel);border:1px solid var(--line);border-radius:16px;margin:12px 0;overflow:hidden}
-  details.dd>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px;font-size:1.1rem;-webkit-tap-highlight-color:transparent}
-  details.dd>summary::-webkit-details-marker{display:none}
-  details.dd>summary small{display:block;color:var(--dim);font-size:.84rem;font-weight:400;margin-top:2px}
-  details.dd>summary i{width:11px;height:11px;border-right:2px solid var(--blue);border-bottom:2px solid var(--blue);transform:rotate(45deg);transition:transform .2s;flex:0 0 auto;margin-right:4px}
-  details.dd[open]>summary i{transform:rotate(-135deg)}
-  details.dd[open]>summary{border-bottom:1px solid var(--line)}
-  .ddbody{padding:4px 14px 16px}
-  h3.sub{margin:22px 0 8px;font-size:1.02rem}
-  .badge-new{flex:0 0 auto;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#05070A;background:var(--blue);border-radius:999px;padding:3px 10px;white-space:nowrap}
-  .open-btn{display:inline-block;margin-top:10px;text-decoration:none;min-height:40px;line-height:40px;padding:0 18px}
-  footer{border-top:1px solid var(--line);padding:18px 0;color:var(--dim);font-size:.85rem;text-align:center}
-  footer a{color:var(--dim)}
-</style>
-</head><body><div class="wrap">
-
-<div class="nav"><a class="brand" href="/"><img src="icons/icon-192.png" alt="VyqilSolutions" style="height:38px;width:38px;border-radius:9px;display:block"></a>
-  <span><a class="btn ghost" id="navIn" href="login.html">Log in</a></span></div>
-
-<div class="hero">
-  <img src="images/vyqil-solutions.png" alt="VyqilSolutions - One Vision. Endless Possibilities." style="width:min(92vw,460px);height:auto;display:block;margin:0 auto 14px">
-  <h1>Run your business and your home from your phone.</h1>
-  <p>VyqilSolutions makes simple, affordable apps for small businesses. One login. Add an app when you need it.</p>
-  <div class="cta" id="cta">
-    <a class="btn" href="login.html?signup=1" id="ctaUp">Sign up</a>
-    <a class="btn ghost" href="login.html" id="ctaIn">Log in</a>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img class="wordmark" src="images/vyqil-logo.svg" alt="Vyqil - Business. Simplified.">
+    <div class="tag">Business Platform</div>
   </div>
-  <div class="note" style="margin-top:10px">Free while we launch. No card needed.</div>
+
+  <div class="card">
+    <h2>Run your jobs from your phone</h2>
+    <p>Leads, estimates, jobs, invoices and a customer portal, all in one place.</p>
+  </div>
+
+  <a class="btn" href="choose.html">Get Started</a>
 </div>
-
-<section id="about">
-  <h2>About VyqilSolutions</h2>
-  <p class="lead">Small businesses should not need five different tools, a stack of logins and an IT person. VyqilSolutions builds one family of apps that work the same way, so what you learn in one carries to the next.</p>
-  <div class="trust">
-    <div><b>One account.</b> Sign in once and switch between your businesses from a list. Starting a restaurant besides your contracting company? Each business keeps its own name, team and records.</div>
-    <div><b>Built for phones.</b> Install it like an app. The checkout keeps working when the internet drops and catches up when it returns.</div>
-    <div><b>Your data is yours.</b> Download everything whenever you want. See who did what in the activity log.</div>
-    <div><b>Made for people who are not tech people.</b> Plain words, short steps and a setup checklist for every new business.</div>
-  </div>
-</section>
-
-<section id="apps">
-  <h2>Pick your apps</h2>
-  <p class="lead">Tap the heading to see every app and what it does. One account works for all of them.</p>
-  <details class="dd" id="ddBiz">
-    <summary><span><b>For your business</b><small id="bizCount"></small></span><i aria-hidden="true"></i></summary>
-    <div class="ddbody">
-      <p class="lead">Every business app lets you download all your data. The four apps at the top also include teams and roles, scheduling and an activity log. The newer apps below them are first versions: built for one owner, with team logins and customer portals still to come.</p>
-      <div class="grid" id="appGrid"></div>
-      <h3 class="sub">Newer business apps (first version)</h3>
-      <div class="grid" id="newGrid"></div>
-    </div>
-  </details>
-</section>
-
-<section id="pricing">
-  <h2>Packages and upgrades</h2>
-  <p class="lead">Each app is its own monthly subscription. Add another app any time and its price is added to your plan. There is no bundle to outgrow.</p>
-  <div class="banner2" id="launchBanner"><b>Launch offer:</b> every app is free while we launch, with no card on file. You will be told before any price starts, and you can leave and download your data first.</div>
-  <div class="ex" id="example"></div>
-  <div class="pcard" id="addons">
-    <h3>Upgrades</h3>
-    <ul>
-      <li><b>Photo Plus</b> <span id="ppPrice"></span>: read up to 50 receipt and invoice photos a day instead of 15. The reader fills in your inventory from a photo, and you check every line before it is saved.</li>
-      <li><b>The built-in AI assistant</b> is included in every Vyqil business app's monthly subscription at no extra charge: ask questions about your own business records, get efficiency and savings reports, talk instead of typing (in any browser), have answers read aloud, and scan receipts in VyqilContractor. It only reads your records, and you accept a notice before first use.</li>
-      <li><b>Bring your own AI</b> is included with the built-in assistant: already have your own AI account? Connect it at no extra charge.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="how">
-  <h2>How it works</h2>
-  <div class="steps">
-    <div><b>Create your account.</b> It takes a minute.</div>
-    <div><b>Create a business and pick its app.</b> A short checklist walks you through setup.</div>
-    <div><b>Invite your team.</b> Each person gets their own login and only sees what their role allows.</div>
-    <div><b>Add another app whenever you grow.</b> It is a separate business with its own name, in the same account.</div>
-  </div>
-</section>
-
-<section id="safe">
-  <h2>Careful with your information</h2>
-  <div class="trust">
-    <div><b>Separated by business.</b> One business cannot see another's records.</div>
-    <div><b>Roles.</b> Owners, managers and staff see only what they need. Money and finance pages are limited to managers.</div>
-    <div><b>Encrypted connection.</b> Everything travels over HTTPS.</div>
-    <div><b>AI you control.</b> The help bot never sees your business records. The built-in assistant does, only after you accept a notice, and you can use your own AI account instead.</div>
-  </div>
-</section>
-
-<section>
-  <div class="cta"><a class="btn" href="login.html?signup=1" id="ctaUp2">Sign up free</a><a class="btn ghost" href="login.html" id="ctaIn2">Log in</a></div>
-</section>
-
-<footer>
-  &copy; <span id="yr"></span> VyqilSolutions &middot; <a href="legal.html">Terms and privacy (draft)</a>
-</footer>
-
-</div>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="shared/firebase-config.js"></script>
-<script src="js/net-config.js"></script>
-<script>
-(function () {
-  var $ = function (i) { return document.getElementById(i); };
-  $('yr').textContent = new Date().getFullYear();
-  // Monthly price per business: every app is $7, Restaurant is $20. Shown here so this page never depends on another file.
-  var P = Object.assign({}, window.VYRO_PRICES || {}, { restaurant: 20, takeout: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 });
-  var APPS = [
-    { id: 'contractor', name: 'VyqilContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
-    { id: 'restaurant', name: 'VyqilRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
-    { id: 'takeout', name: 'VyqilTakeout', who: 'Takeout and fast food', items: ['Fast counter checkout and customer kiosk', 'Order board and kitchen screen', 'Same menu as your restaurant, or its own', 'Coupons and discounts with manager approval', 'Staff schedule and end of day close'] },
-    { id: 'retail', name: 'VyqilRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
-  ];
-  function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
-  var FIRST = 'First version: built for one owner. Team logins and customer portals are not included yet.';
-  var NEWAPPS = [
-    { name: 'VyqilRealtor', href: 'realtor/index.html?signup=1', logo: 'realtor/images/logo.png', who: 'Real estate agents', items: ['Client list with stages from lead to closed', 'Follow-up dates with phone alerts', 'Deals with a contract-to-close checklist and deadline alerts', 'Commission estimate for every deal', 'Listings with open house dates', 'Birthday and home anniversary reminders for past clients'] },
-    { name: 'VyqilLandlord', href: 'landlord/index.html?signup=1', logo: 'landlord/images/logo.png', who: 'Landlords and property managers', items: ['Properties, units and tenants', 'Rent ledger with automatic rent-due reminders', 'Repair requests with status and visit dates', 'Lease end and insurance renewal reminders', 'Rent roll and vacancies at a glance'] },
-    { name: 'VyqilSalon', href: 'salon/index.html?signup=1', logo: 'salon/images/logo.png', who: 'Salons, barbers and spas', items: ['Appointments with a reminder an hour before', 'Client notes, formulas and allergies', 'Services and prices', 'A list of clients due to rebook', 'Today’s bookings and revenue this month'] },
-    { name: 'VyqilServices', href: 'services/index.html?signup=1', logo: 'services/images/logo.png', who: 'Cleaning, lawn and pool services', items: ['Recurring customers with plan, price and gate notes', 'Scheduled visits with morning reminders', 'Invoices with due dates and an unpaid total', 'Flags recurring customers with nothing scheduled'] },
-    { name: 'VyqilAuto', href: 'auto/index.html?signup=1', logo: 'auto/images/logo.png', who: 'Auto shops and detailers', items: ['Customers and vehicles with service-due reminders', 'Repair orders from estimate to pickup', 'Parts, labor and totals', 'Promised-by date alerts', 'Ready for pickup and unpaid lists'] },
-    { name: 'VyqilPhoto', href: 'photo/index.html?signup=1', logo: 'photo/images/logo.png', who: 'Photographers and videographers', items: ['Bookings from inquiry to delivered', 'Deposit and balance tracking', 'A shoot checklist with dated steps', 'Shoot-day and gallery-due alerts', 'Client list'] },
-    { name: 'VyqilEvents', href: 'events/index.html?signup=1', logo: 'events/images/logo.png', who: 'Wedding and event planners', items: ['Clients and events, from inquiry to done', 'Guest lists with RSVPs', 'Vendors and budgets', 'A day-of schedule and planning checklist', 'An elegant white-and-gold look for weddings'] },
-    { name: 'VyqilLessons', href: 'lessons/index.html?signup=1', logo: 'lessons/images/logo.png', who: 'Tutors, music teachers and small daycares', items: ['Students with parent or guardian contact details', 'Lesson schedule with reminders', 'Attendance marking', 'Billing with due dates and an unpaid total', 'Birthdays'] }
-  ];
-  var NEWID = { 'VyqilRealtor': 'realtor', 'VyqilLandlord': 'landlord', 'VyqilSalon': 'salon', 'VyqilServices': 'services', 'VyqilAuto': 'auto', 'VyqilPhoto': 'photo', 'VyqilLessons': 'lessons', 'VyqilEvents': 'events' };
-  function card(a, beta) {
-    var d = document.createElement('div'); d.className = 'pcard' + (a.wide ? ' wide' : '');
-    if (a.logo) { var lg = document.createElement('img'); lg.src = a.logo; lg.alt = ''; lg.loading = 'lazy'; lg.style.cssText = 'display:block;width:100%;max-width:300px;height:auto;margin:0 0 8px;mix-blend-mode:screen'; d.appendChild(lg); }
-    var top = document.createElement('div'); top.className = 'top';
-    var h = document.createElement('h3'); h.textContent = a.name; top.appendChild(h);
-    if (beta) { var b = document.createElement('span'); b.className = 'badge-new'; b.textContent = 'First version'; top.appendChild(b); }
-    d.appendChild(top);
-    var f = document.createElement('div'); f.className = 'for'; f.textContent = a.who; d.appendChild(f);
-    if (a.about) { var ab = document.createElement('div'); ab.className = 'about'; ab.textContent = a.about; d.appendChild(ab); }
-    function list(items) { var ul = document.createElement('ul'); items.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); }); d.appendChild(ul); }
-    if (a.groups) a.groups.forEach(function (g) { var h4 = document.createElement('h4'); h4.textContent = g[0]; d.appendChild(h4); list(g[1]); });
-    else list(a.items);
-    if (a.note) { var n = document.createElement('div'); n.className = 'soon-note'; n.textContent = a.note; d.appendChild(n); }
-    if (beta && NEWID[a.name] && typeof P[NEWID[a.name]] === 'number') { var pr2 = document.createElement('div'); pr2.className = 'price'; pr2.textContent = money(P[NEWID[a.name]]); var s2 = document.createElement('small'); s2.textContent = ' per month, per business'; pr2.appendChild(s2); d.appendChild(pr2); }
-    if (beta) { var n2 = document.createElement('div'); n2.className = 'soon-note'; n2.textContent = FIRST; d.appendChild(n2); }
-    return d;
-  }
-  function openLink(d, href, label) { var l = document.createElement('a'); l.className = 'btn open-btn'; l.href = href; l.textContent = label; d.appendChild(l); }
-  var grid = $('appGrid');
-  APPS.forEach(function (a) {
-    var d = card(a, false);
-    var pr = document.createElement('div'); pr.className = 'price';
-    var v = P[a.id];
-    if (typeof v === 'number') { pr.textContent = money(v); var s = document.createElement('small'); s.textContent = ' per month, per business'; pr.appendChild(s); }
-    else { pr.textContent = 'Price announced at launch'; }
-    d.appendChild(pr); openLink(d, 'login.html?signup=1', 'Sign up'); grid.appendChild(d);
-  });
-  NEWAPPS.forEach(function (a) { var d = card(a, true); openLink(d, a.href, 'Open ' + a.name); $('newGrid').appendChild(d); });
-  $('bizCount').textContent = (APPS.length + NEWAPPS.length) + ' apps: ' + APPS.map(function (a) { return a.name.replace('Vyqil', ''); }).concat(NEWAPPS.map(function (a) { return a.name.replace('Vyqil', ''); })).join(', ');
-  // A link such as /#business opens the dropdown.
-  function openFromHash() { var h = location.hash; if (h === '#apps' || h === '#business') $('ddBiz').open = true; }
-  openFromHash(); window.addEventListener('hashchange', openFromHash);
-  // The worked example uses the real prices above, so it can never disagree with them.
-  var priced = APPS.filter(function (a) { return typeof P[a.id] === 'number'; });
-  var ex = $('example');
-  if (priced.length >= 2) {
-    var a1 = priced[0], a2 = priced[1];
-    ex.innerHTML = '';
-    var t = document.createElement('div'); t.innerHTML = '<b>Example:</b> '; 
-    t.appendChild(document.createTextNode('You start with ' + a1.name + ' at ' + money(P[a1.id]) + ' a month. Later you add ' + a2.name + ' for ' + money(P[a2.id]) + ' a month. Your plan is then ' + money(P[a1.id] + P[a2.id]) + ' a month. If you drop an app, its price drops off.'));
-    ex.appendChild(t);
-  } else { ex.style.display = 'none'; }
-  $('ppPrice').textContent = '(+$5 per month)';
-  // Signed-in visitors get a shortcut instead of the sign-up buttons.
-  try {
-    if (window.firebase && window.VYRO_FIREBASE_CONFIG) {
-      var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
-      firebase.auth().onAuthStateChanged(function (u) {
-        if (!u) return;
-        ['ctaUp', 'ctaUp2'].forEach(function (i) { var el = $(i); if (el) { el.textContent = 'Open your dashboard'; el.href = 'dashboard.html?go=1'; } });
-        ['ctaIn', 'ctaIn2'].forEach(function (i) { var el = $(i); if (el) el.style.display = 'none'; });
-        $('navIn').textContent = 'Dashboard'; $('navIn').href = 'dashboard.html?go=1';
-      });
-    }
-  } catch (e) { /* the buttons still work without it */ }
-})();
-</script>
-</body></html>
+<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot.js"></script>
+</body>
+</html>
