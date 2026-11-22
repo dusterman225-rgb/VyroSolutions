@@ -136,7 +136,7 @@
         var b = await db.collection('businesses').doc(ids[i]).get(), bd = b.exists ? b.data() : null;
         if (!bd || bd.status === 'closed') continue;
         var has = bd.apps && C.id in bd.apps ? !!bd.apps[C.id] : bd.product === C.id;
-        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id, profile: bd.profile || {}, eventStyle: bd.eventStyle || '', phone: (bd.profile && bd.profile.phone) || bd.phone || '' }; }
+        if (has) { var m = await db.collection('businesses').doc(ids[i]).collection('members').doc(user.uid).get(); if (m.exists) found = { id: ids[i], name: bd.name, role: m.data().role, col: bd.product === C.id ? 'records' : 'records_' + C.id, profile: bd.profile || {}, phone: (bd.profile && bd.profile.phone) || bd.phone || '' }; }
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
@@ -295,7 +295,7 @@
     var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports || C.pay) g.push({ h: 'Money', items: (Q.views.reports ? [{ l: 'Reports', tab: 'reports' }] : []).concat(Q.payMenu()) }); return g;
   }
   // ---------- close (permanently delete) the business ----------
-  var CLOSE_COLLS = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'records_events', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'settings', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'vendors', 'purchases', 'shifts', 'audit', 'network'];
+  var CLOSE_COLLS = ['records', 'records_landlord', 'records_realtor', 'records_services', 'records_salon', 'records_auto', 'records_photo', 'records_lessons', 'menu', 'tables', 'supply', 'reservations', 'orders', 'customers', 'leads', 'jobs', 'estimates', 'invoices', 'expenses', 'recurring', 'templates', 'settings', 'documents', 'contracts', 'events', 'notifications', 'schedule', 'products', 'vendors', 'purchases', 'shifts', 'audit', 'network'];
   async function wipeQ(q) { for (var g = 0; g < 200; g++) { var sn = await q.limit(400).get(); if (sn.empty) return; var b = db.batch(); sn.forEach(function (d) { b.delete(d.ref); }); await b.commit(); if (sn.size < 400) return; } }
   async function deleteBusiness() {
     var id = S.biz.id, ref = db.collection('businesses').doc(id), left = [];
@@ -396,6 +396,7 @@
     m.appendChild(b); var sp = el('span', '', fmtDate(e.date) + (e.time ? ' · ' + fmtTime(e.time) : '') + ' · ' + rel(e.date)); m.appendChild(sp); r.appendChild(m);
     if (e.over) { var oc = dotColor(e.label); r.style.borderLeft = '4px solid ' + oc; b.style.color = oc; }
     if (e.act) { var a = el('button', 'btn sm', e.act.label); a.type = 'button'; a.onclick = function (ev) { ev.stopPropagation(); e.act.run(); }; r.appendChild(a); }
+    if (!e.act && e.rec && e.rec.kind === 'repair' && e.rec.id) { var vb = el('button', 'btn sm', 'View repair'); vb.type = 'button'; vb.onclick = function (ev) { ev.stopPropagation(); openForm('repair', e.rec); }; r.appendChild(vb); }
     r.onclick = function () { if (e.rec && e.rec.id) openForm(e.rec.kind, e.rec); }; return r;
   }
   // First-run checklist. Steps come from C.starter, or a sensible default. Done is worked out from the data; a few steps are ticked by hand.
@@ -501,23 +502,25 @@
   function piTodo() { var p = PI(); if (!p) return []; return byKind(p.kind).filter(function (r) { return !r.portalId && !(p.skip && p.skip(r)); }); }
   function inviteOne(r) {
     var p = PI(); if (!p) return;
-    Q.ask('Create a ' + p.noun + ' portal login for ' + ((p.emailOf ? p.emailOf(r) : r.email) || 'this ' + p.noun) + ' and email them a link to set a password?', 'Invite', function () {
+    Q.ask('Create a ' + p.noun + ' portal for ' + ((p.emailOf ? p.emailOf(r) : r.email) || 'this ' + p.noun) + '? New members get an email to set a password; if they already have a Vyqil login you get their portal link to send instead.', 'Invite', function () {
       Q.toast('Inviting...'); return p.quiet(r).then(function (x) {
         if (x.skip) { Q.toast('Add ' + (r.name || 'the ' + p.noun) + '\'s email first, then try again.'); return; }
         if (x.error) { Q.toast(x.error); return; }
-        Q.toast(x.mailError ? 'Login ready, but the email could not be sent (' + x.mailError + '). Send them the link.' : (x.existing ? 'They already had a login, so a password link was emailed.' : 'Invitation emailed.')); if (p.after) p.after(r);
+        Q.toast(x.mailError ? 'Login ready, but the email could not be sent (' + x.mailError + '). Send them the link.' : (x.existing ? 'They already have a Vyqil login, so no password email was sent. Share their portal link.' : 'Invitation emailed.')); if (p.after) p.after(r);
       });
     });
   }
+  // For people who already have a Vyqil login: an email you send yourself with their portal link (no password reset).
+  function mailLink(r, p) { var em = String((p.emailOf ? p.emailOf(r) : r.email) || '').trim(), biz = (S.biz && S.biz.name) || 'us'; return 'mailto:' + encodeURIComponent(em) + '?subject=' + encodeURIComponent('Your ' + biz + ' portal') + '&body=' + encodeURIComponent('Hi ' + String(r.name || '').split(/\s+/)[0] + ',\n\nYour ' + p.noun + ' portal is ready. Sign in with your Vyqil email and password here:\n' + p.linkOf(r) + '\n\nThank you,\n' + biz); }
   function inviteAll() {
     var p = PI(); if (!p) return; var todo = piTodo(), ok = todo.filter(function (r) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((PI().emailOf ? PI().emailOf(r) : r.email) || '').trim()); }), noMail = todo.length - ok.length;
     if (!todo.length) { Q.toast('Everyone already has a portal.'); return; }
     if (!ok.length) { Q.toast('None of your ' + p.noun + 's have an email on file. Add emails first.'); return; }
-    Q.ask('Create portal logins and email an invite to ' + ok.length + ' ' + p.noun + (ok.length === 1 ? '' : 's') + ' who do not have one yet?' + (noMail ? ' ' + noMail + ' without an email will be skipped.' : ''), 'Invite all', async function () {
+    Q.ask('Create portals and invite ' + ok.length + ' ' + p.noun + (ok.length === 1 ? '' : 's') + ' who do not have one yet? New members are emailed a link to set a password. Anyone who already has a Vyqil login is given their portal link to send instead.' + (noMail ? ' ' + noMail + ' without an email will be skipped.' : ''), 'Invite all', async function () {
       var done = 0, failed = 0, noMailSent = 0, last = '', rows = [];
       for (var i = 0; i < ok.length; i++) {
         Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); var nm = ok[i].name || (p.emailOf ? p.emailOf(ok[i]) : ok[i].email) || '';
-        try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; rows.push({ n: nm, bad: true, t: 'Portal made, email NOT sent: ' + x.mailError }); } else rows.push({ n: nm, t: x.existing ? 'Password link emailed (they already had a login)' : 'Invite emailed' }); } else { failed++; last = x.error || ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + (x.error || 'unknown') }); } }
+        try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; rows.push({ n: nm, bad: true, t: 'Portal made, email NOT sent: ' + x.mailError }); } else rows.push(x.existing ? { n: nm, t: 'Already has a Vyqil login. Portal added; no password email sent. Send them their portal link:', href: p.linkOf ? mailLink(ok[i], p) : '', copy: p.linkOf ? p.linkOf(ok[i]) : '' } : { n: nm, t: 'Invite emailed' }); } else { failed++; last = x.error || ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + (x.error || 'unknown') }); } }
         catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + last }); }
         if (i < ok.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
       }
@@ -526,7 +529,7 @@
         sh.appendChild(el('h3', '', 'Invite results'));
         sh.appendChild(el('p', 'hint', 'An email that says "emailed" was accepted by the email service. It is sent by Firebase (a noreply address) and often lands in Spam or Junk, so ask them to check there.'));
         var box = el('div', 'card'); sh.appendChild(box);
-        rows.forEach(function (r) { var d = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', r.n)); var sp = el('span', '', r.t); if (r.bad) sp.style.color = '#ff8a8a'; m.appendChild(sp); d.appendChild(m); box.appendChild(d); });
+        rows.forEach(function (r) { var d = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', r.n)); var sp = el('span', '', r.t); if (r.bad) sp.style.color = '#ff8a8a'; m.appendChild(sp); d.appendChild(m); if (r.href) { var lk = el('a', 'btn sm', 'Email the link'); lk.href = r.href; lk.style.margin = '6px 6px 0 0'; lk.style.display = 'inline-block'; m.appendChild(lk); var cp = el('button', 'btn ghost sm', 'Copy link'); cp.type = 'button'; cp.style.marginTop = '6px'; cp.onclick = function () { try { navigator.clipboard.writeText(r.copy); Q.toast('Link copied.'); } catch (x) { window.prompt('Copy this link', r.copy); } }; m.appendChild(cp); } box.appendChild(d); });
         if (noMail) sh.appendChild(el('p', 'hint', noMail + ' skipped because there is no email on file.'));
         var ob = el('button', 'btn', 'OK'); ob.type = 'button'; ob.onclick = close; sh.appendChild(ob);
       });
@@ -542,7 +545,12 @@
   function listView(v, k) {
     var kd = K(k), all = byKind(k), q = (S.q || '').toLowerCase(), flt = S.filter[k] || '';
     var h = el('h2', '', kd.plural); h.appendChild(el('small', '', all.length + ' total')); v.appendChild(h);
-    var nb = el('button', 'btn wide', 'New ' + kd.label.toLowerCase()); nb.type = 'button'; nb.onclick = function () { openForm(k); }; v.appendChild(nb);
+    if (kd.addMenu && kd.addMenu.length) {
+      // One "Add" dropdown (unit, tenant, repair request...) instead of a single New button.
+      var am = el('select', 'btn wide vq-add'); am.setAttribute('aria-label', 'Add'); var a0 = el('option', '', 'Add...'); a0.value = ''; am.appendChild(a0);
+      kd.addMenu.forEach(function (ak) { if (!K(ak)) return; var ao = el('option', '', K(ak).label); ao.value = ak; am.appendChild(ao); });
+      am.onchange = function () { var pick = am.value; am.value = ''; if (pick) openForm(pick); }; v.appendChild(am);
+    } else { var nb = el('button', 'btn wide', 'New ' + kd.label.toLowerCase()); nb.type = 'button'; nb.onclick = function () { openForm(k); }; v.appendChild(nb); }
     portalBar(v, k);
     var s = el('input', 'search'); s.type = 'search'; s.placeholder = 'Search ' + kd.plural.toLowerCase(); s.value = S.q || ''; s.oninput = function () { S.q = s.value; var pos = s.selectionStart; listBody(); }; v.appendChild(s);
     if (kd.stage && fieldOf(k, kd.stage) && fieldOf(k, kd.stage).o) {

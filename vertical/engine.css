@@ -136,3 +136,6 @@ input,textarea,select{color-scheme:dark}
 .hscroll{padding:10px 8px 14px;margin:0 -8px}
 
 .vneed{outline:2px solid #4ba3ff!important;outline-offset:1px;border-radius:8px;box-shadow:0 0 0 3px rgba(75,163,255,.25),0 0 14px 3px rgba(75,163,255,.75)!important;animation:vneedPulse 2.2s ease-in-out infinite}@keyframes vneedPulse{50%{box-shadow:0 0 0 3px rgba(75,163,255,.15),0 0 8px 1px rgba(75,163,255,.45)}}@media(prefers-reduced-motion:reduce){.vneed{animation:none}}
+
+select.vq-add{appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center;font-weight:700;cursor:pointer;margin-bottom:8px}
+.vneed.btn,button.vneed{outline:2px solid #4ba3ff;box-shadow:0 0 0 3px rgba(75,163,255,.25),0 0 14px 3px rgba(75,163,255,.75)}

@@ -258,8 +258,8 @@
       s.appendChild(el('p', 'hint', ic.listHelp || 'Other Vyqil businesses near you can find you, and requests within your range show up here. Vyqil uses the place you set, not live tracking. Only the town and an approximate point are saved.'));
       var pl = el('input'); pl.maxLength = 120; pl.value = me.city || ''; pl.placeholder = '62701 or Springfield, IL'; field(s, 'Where do you work from? (address or ZIP) *', pl);
       var pm = el('div', 'note'); pm.textContent = me.lat != null ? 'Using ' + me.city + '.' : ''; s.appendChild(pm);
-      var b1 = btnRow(s), f = mk('Find this place', 'ghost sm', null), u = mk('Use my location', 'ghost sm', null); b1.appendChild(f); b1.appendChild(u);
-      function got(p) { me = p; if (!me.city) me.city = 'Your area'; pm.className = 'note ok'; pm.textContent = 'Using ' + me.city + '.'; }
+      var b1 = btnRow(s), f = mk('Find this place', 'ghost sm', null), u = mk('Use my location', 'ghost sm', null); b1.appendChild(f); b1.appendChild(u); if (me.lat == null) f.classList.add('vneed');
+      function got(p) { me = p; f.classList.remove('vneed'); if (!me.city) me.city = 'Your area'; pm.className = 'note ok'; pm.textContent = 'Using ' + me.city + '.'; }
       f.onclick = function () { pm.className = 'note'; pm.textContent = 'Looking...'; V.geocode(pl.value).then(got, function (e) { pm.className = 'note err'; pm.textContent = e.message; }); };
       u.onclick = function () { pm.className = 'note'; pm.textContent = 'Getting your location...'; V.here().then(got, function (e) { pm.className = 'note err'; pm.textContent = e.message; }); };
       s.appendChild(el('label', 'f', ic.catLabel || 'What you offer'));
