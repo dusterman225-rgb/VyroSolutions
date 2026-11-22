@@ -394,6 +394,7 @@
   // The button on every past-due notice names what is past due: "View rent", "View bill", "View invoice", "View repair"...
   function overdueNoun(label, rec, forced) {
     if (forced) return forced; var l = String(label || ''), kd = rec && K(rec.kind), kl = kd ? String(kd.label || '').toLowerCase() : '';
+    if (/balance/i.test(l)) return 'balance'; if (/gallery/i.test(l)) return 'gallery'; if (/follow/i.test(l)) return 'follow-up'; if (/commission/i.test(l)) return 'commission'; if (/closing/i.test(l)) return 'closing'; if (/open house/i.test(l)) return 'open house'; if (/showing/i.test(l)) return 'showing'; if (/shoot/i.test(l)) return 'shoot'; if (/visit/i.test(l)) return 'visit'; if (/listing/i.test(l)) return 'listing'; if (/loan|inspection period/i.test(l)) return 'deal date';
     if (/rent/i.test(l)) return 'rent'; if (/bill/i.test(l) || /bill|expense/.test(kl)) return 'bill'; if (/invoice/i.test(l)) return 'invoice';
     if (/repair/.test(kl)) return 'repair'; if (/lease/i.test(l)) return 'lease'; if (/insur/i.test(l)) return 'insurance'; if (/inspect/i.test(l)) return 'inspection';
     return kl || 'item';
@@ -603,7 +604,7 @@
 
   // ---------- add / edit ----------
   function checklistFor(r) {
-    var kd = K(r.kind); if (!kd.checklist) return null; var tpl = C.checklists[kd.checklist.tpl];
+    var kd = K(r.kind); if (!kd.checklist) return null; var tk = typeof kd.checklist.tpl === 'function' ? kd.checklist.tpl(r) : kd.checklist.tpl, tpl = C.checklists[tk];
     var base = r[kd.checklist.base]; if (!isDate(base)) return { error: 'Set the ' + (fieldOf(r.kind, kd.checklist.base).l || 'date').toLowerCase() + ' first, then add the checklist.' };
     return { items: tpl.map(function (x) { var b = x.from && isDate(r[x.from]) ? r[x.from] : base; return { t: x.t, due: addDays(b, x.off || 0), done: false }; }) };
   }
