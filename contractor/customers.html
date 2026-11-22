@@ -21,7 +21,7 @@
   <div id="listView">
     <div class="tabs"><a class="on" href="customers.html">Active</a><a id="viewArch" href="archived.html">Archived</a></div>
     <div class="card">
-      <div id="pbar" style="display:none;margin-bottom:10px"><button class="btn" id="inviteAll" type="button"></button><div class="note">Emails each customer who has a job and no portal yet a link to set their password.</div></div>
+      <div id="pbar" style="display:none;margin-bottom:10px"><button class="btn" id="inviteAll" type="button"></button><div class="note">New customers are emailed a link to set their password. Anyone who already has a Vyqil account gets no email; you are shown their portal link to send.</div></div>
       <div class="note" id="pmsg"></div>
       <input class="search" id="q" type="search" placeholder="Search name, phone or email" autocomplete="off">
       <div id="list"></div>
@@ -117,6 +117,27 @@
       }
       if (run === pRun) render();
     }
+    // Someone who already has a Vyqil account is NOT sent a password email. The contractor gets this notice to send their portal link.
+    async function showExisting(list) {
+      var link = ''; try { link = await vportal.portalUrl(ctx, ''); } catch (e) { link = ''; }
+      var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center';
+      var sh = document.createElement('div'); sh.style.cssText = 'background:#0C1117;color:#eef3f8;border:1px solid #27405c;border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:520px;max-height:85vh;overflow:auto';
+      var h = document.createElement('h3'); h.textContent = list.length === 1 ? list[0].name + ' already has a Vyqil account' : list.length + ' customers already have a Vyqil account'; sh.appendChild(h);
+      var p = document.createElement('p'); p.textContent = 'No email was sent. A set-your-password email goes only to people who are new to Vyqil. Please send each of them their portal link yourself. They sign in with the password they already use (if they never set one, they can tap "Forgot your password?" on the sign-in page).'; sh.appendChild(p);
+      list.forEach(function (c) {
+        var row = document.createElement('div'); row.style.cssText = 'border-top:1px solid #27405c;padding:10px 0';
+        var nm = document.createElement('b'); nm.textContent = c.name || c.email; row.appendChild(nm);
+        var msg = 'Hi ' + String(c.name || '').split(/\s+/)[0] + ', your customer portal is ready. Sign in here with your Vyqil email and password: ' + link;
+        var bx = document.createElement('div'); bx.style.marginTop = '6px';
+        function btn(t, href) { var a = document.createElement('a'); a.className = 'btn'; a.textContent = t; a.href = href; a.style.cssText = 'display:inline-block;margin:0 6px 6px 0;text-decoration:none'; bx.appendChild(a); return a; }
+        if (c.email) btn('Email the link', 'mailto:' + encodeURIComponent(c.email) + '?subject=' + encodeURIComponent('Your customer portal') + '&body=' + encodeURIComponent(msg));
+        if (c.phone) btn('Text the link', 'sms:' + String(c.phone).replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent(msg));
+        var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'btn ghost'; cp.textContent = 'Copy link'; cp.onclick = async function () { try { await navigator.clipboard.writeText(link); cp.textContent = 'Copied'; } catch (e) { window.prompt('Copy this link', link); } }; bx.appendChild(cp);
+        row.appendChild(bx); sh.appendChild(row);
+      });
+      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn'; ok.textContent = 'Done'; ok.onclick = function () { ov.remove(); }; sh.appendChild(ok);
+      ov.appendChild(sh); document.body.appendChild(ov);
+    }
     async function inviteOne(c) {
       var em = String(c.email || '').trim().toLowerCase();
       var r = await vportal.ensureForCustomer(ctx, c.id, em, c.name, c.email);
@@ -125,29 +146,31 @@
       return { ok: false, msg: (r && r.message) || 'Could not create the portal.' };
     }
     async function inviteCustomer(c) {
-      if (!confirm('Create a portal login for ' + c.email + ' and email them a link to set a password?')) return;
+      if (!confirm('Create a portal for ' + c.email + '? New members are emailed a link to set a password. If they already have a Vyqil account, you will get their portal link to send instead.')) return;
       pnote('Inviting ' + c.name + '...');
       try {
         var x = await inviteOne(c);
-        if (x.ok) pnote(x.emailed ? 'Invite emailed to ' + c.email + '. It often lands in Spam or Junk.' : 'Portal is ready for ' + c.name + '. They already had a login, so no new email was needed; send them the portal link below.');
+        if (x.ok && x.existing && !x.emailed) { pnote('Portal added for ' + c.name + '. They already have a Vyqil account, so no email was sent.'); showExisting([c]); }
+        else if (x.ok) pnote(x.emailed ? 'Invite emailed to ' + c.email + '. It often lands in Spam or Junk.' : 'Portal is ready for ' + c.name + '. They already had a login, so no new email was needed; send them the portal link below.');
         else pnote(c.name + ': ' + x.msg, true);
       } catch (e) { pnote(vyro.friendly(e), true); }
       render();
     }
     async function inviteAllCustomers() {
       var todo = pending(); if (!todo.length) return;
-      if (!confirm('Create portal logins and email an invite to ' + todo.length + ' customer' + (todo.length === 1 ? '' : 's') + ' who do not have one yet?')) return;
-      var ok = 0, noMail = 0, bad = [];
+      if (!confirm('Create portals and invite ' + todo.length + ' customer' + (todo.length === 1 ? '' : 's') + '? New members are emailed a link to set a password. Anyone who already has a Vyqil account is shown a notice so you can send them their portal link.')) return;
+      var ok = 0, noMail = 0, bad = [], exist = [];
       $('inviteAll').disabled = true;
       for (var i = 0; i < todo.length; i++) {
         pnote('Inviting ' + (i + 1) + ' of ' + todo.length + '...');
-        try { var x = await inviteOne(todo[i]); if (x.ok) { ok++; if (!x.emailed) noMail++; } else bad.push(todo[i].name + ': ' + x.msg); }
+        try { var x = await inviteOne(todo[i]); if (x.ok) { ok++; if (!x.emailed) { noMail++; exist.push(todo[i]); } } else bad.push(todo[i].name + ': ' + x.msg); }
         catch (e) { bad.push(todo[i].name + ': ' + vyro.friendly(e)); }
         if (i < todo.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
       }
       $('inviteAll').disabled = false;
-      pnote('Invited ' + ok + ' customer' + (ok === 1 ? '' : 's') + (noMail ? ' (' + noMail + ' already had a login, so no new email)' : '') + '. The email often lands in Spam or Junk.' + (bad.length ? ' Not done: ' + bad.join(' | ') : ''), bad.length > 0);
+      pnote('Invited ' + ok + ' customer' + (ok === 1 ? '' : 's') + (noMail ? ' (' + noMail + ' already have a Vyqil account, so NO email was sent: send them their portal link from the notice)' : '') + '. The email often lands in Spam or Junk.' + (bad.length ? ' Not done: ' + bad.join(' | ') : ''), bad.length > 0);
       render();
+      if (exist.length) showExisting(exist);
     }
     $('inviteAll').addEventListener('click', inviteAllCustomers);
 
