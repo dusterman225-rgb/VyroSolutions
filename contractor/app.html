@@ -10,11 +10,13 @@
 <link rel="stylesheet" href="css/clean.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
+<style>.toprt{display:flex;align-items:center;gap:8px}.logout-sm{background:none;border:1px solid var(--line,#27405c);color:inherit;border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px;cursor:pointer;opacity:.85}</style>
 </head>
 <body>
 <div class="wrap">
   <div class="topbar">
     <img class="mark-small" src="images/logo.svg" alt="Vyqil">
+    <div class="toprt"><button class="logout-sm" id="logoutTop" type="button">Log out</button>
     <div>
       <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu">Menu &#9662;</button>
       <div class="menu" id="menu">
@@ -68,6 +70,7 @@
         <a class="mi" href="/dashboard.html">Switch business</a>
         <button class="mi out" id="out" type="button">Sign out</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -137,6 +140,7 @@
   document.addEventListener('click', function (e) { if (!$('menu').contains(e.target)) setMenu(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
   window.addEventListener('unhandledrejection', function (e) { if (window.vyroSigningOut) e.preventDefault(); });
+  $('logoutTop').addEventListener('click', function () { $('out').click(); });
   $('out').addEventListener('click', function () { var go = function () { location.href = vyro.loginUrl(); }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
 
   // ---- Get started checklist (same idea as VyqilLandlord): shows what is done, what is next, and can be hidden ----

@@ -59,7 +59,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
     <div class="in">
       <p>Vyqil uses the place you set here, not live tracking, to show you requests within your range. Landlords near you can also find you in their "Find VyqilContractor" list. Only the town and an approximate point are saved, never your street address.</p>
       <label class="field"><span>Where do you work from? (address or ZIP) *</span><input id="place" type="text" maxlength="120" placeholder="62701 or Springfield, IL"></label>
-      <button class="btn ghost" id="findPlace" type="button">Find this place</button>
+      <button class="btn ghost vneed" id="findPlace" type="button">Find this place</button>
       <button class="btn ghost" id="myLoc" type="button">Use my location</button>
       <div class="note" id="placeMsg"></div>
       <div class="field"><span>Trades you do</span><div id="trades"></div></div>
@@ -98,7 +98,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       var c = el('input'); c.type = 'checkbox'; c.value = t; c.style.cssText = 'width:22px;height:22px;flex:none'; c.disabled = !canEdit; l.appendChild(c); l.appendChild(document.createTextNode(t)); $('trades').appendChild(l);
     });
     function ticked() { return Array.prototype.map.call(document.querySelectorAll('#trades input:checked'), function (c) { return c.value; }); }
-    function setPlace(p) { me.lat = p.lat; me.lng = p.lng; me.city = p.city || me.city || 'Your area'; $('placeMsg').className = 'note ok'; $('placeMsg').textContent = 'Using ' + me.city + '.'; }
+    function setPlace(p) { $('findPlace').classList.remove('vneed'); me.lat = p.lat; me.lng = p.lng; me.city = p.city || me.city || 'Your area'; $('placeMsg').className = 'note ok'; $('placeMsg').textContent = 'Using ' + me.city + '.'; }
     $('findPlace').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Looking...'; V.geocode($('place').value).then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
     $('myLoc').onclick = function () { $('placeMsg').className = 'note'; $('placeMsg').textContent = 'Getting your location...'; V.here().then(setPlace, function (e) { $('placeMsg').className = 'note err'; $('placeMsg').textContent = e.message; }); };
     if (!canEdit) { ['place', 'findPlace', 'myLoc', 'radius', 'showPhone', 'listed', 'save', 'perk', 'lic', 'ins'].forEach(function (i) { $(i).disabled = true; }); $('msg').textContent = 'Only the owner or manager can change the community listing.'; }
@@ -114,7 +114,7 @@ label.f{display:block;margin:9px 0 3px;color:var(--cm-mut);font-size:.76rem;font
       catch (e) { msg.className = 'note err'; msg.textContent = vyro.friendly(e); }
       this.disabled = false;
     };
-    function sum() { $('setupSum').textContent = me.lat == null ? '(not set up)' : (me.listed ? 'listed' : 'hidden') + ' · ' + me.city + ' · ' + me.radius + ' mi'; $('needSetup').style.display = me.lat == null ? 'block' : 'none'; }
+    function sum() { $('findPlace').classList.toggle('vneed', me.lat == null); $('setupSum').textContent = me.lat == null ? '(not set up)' : (me.listed ? 'listed' : 'hidden') + ' · ' + me.city + ' · ' + me.radius + ' mi'; $('needSetup').style.display = me.lat == null ? 'block' : 'none'; }
 
     // ---- nearby requests ----
     function drawFilters() {
