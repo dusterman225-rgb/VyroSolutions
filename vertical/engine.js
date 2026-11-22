@@ -391,12 +391,19 @@
   }
 
   // ---------- Today ----------
+  // The button on every past-due notice names what is past due: "View rent", "View bill", "View invoice", "View repair"...
+  function overdueNoun(label, rec, forced) {
+    if (forced) return forced; var l = String(label || ''), kd = rec && K(rec.kind), kl = kd ? String(kd.label || '').toLowerCase() : '';
+    if (/rent/i.test(l)) return 'rent'; if (/bill/i.test(l) || /bill|expense/.test(kl)) return 'bill'; if (/invoice/i.test(l)) return 'invoice';
+    if (/repair/.test(kl)) return 'repair'; if (/lease/i.test(l)) return 'lease'; if (/insur/i.test(l)) return 'insurance'; if (/inspect/i.test(l)) return 'inspection';
+    return kl || 'item';
+  }
   function evRow(e, big) {
     var r = el('div', 'row tap'), m = el('div', 'm'), b = el('b', '', e.label + ': ' + (e.title || title(e.rec)));
     m.appendChild(b); var sp = el('span', '', fmtDate(e.date) + (e.time ? ' · ' + fmtTime(e.time) : '') + ' · ' + rel(e.date)); m.appendChild(sp); r.appendChild(m);
     if (e.over) { var oc = dotColor(e.label); r.style.borderLeft = '4px solid ' + oc; b.style.color = oc; }
     if (e.act) { var a = el('button', 'btn sm', e.act.label); a.type = 'button'; a.onclick = function (ev) { ev.stopPropagation(); e.act.run(); }; r.appendChild(a); }
-    if (!e.act && e.rec && e.rec.kind === 'repair' && e.rec.id) { var vb = el('button', 'btn sm', 'View repair'); vb.type = 'button'; vb.onclick = function (ev) { ev.stopPropagation(); openForm('repair', e.rec); }; r.appendChild(vb); }
+    if (e.over && e.rec && e.rec.id) { var vb = el('button', 'btn sm', 'View ' + overdueNoun(e.label, e.rec, e.noun)); vb.type = 'button'; vb.style.marginLeft = '6px'; vb.onclick = function (ev) { ev.stopPropagation(); openForm(e.rec.kind, e.rec); }; r.appendChild(vb); }
     r.onclick = function () { if (e.rec && e.rec.id) openForm(e.rec.kind, e.rec); }; return r;
   }
   // First-run checklist. Steps come from C.starter, or a sensible default. Done is worked out from the data; a few steps are ticked by hand.
@@ -492,7 +499,10 @@
     if (C.watch) C.watch.forEach(function (w) {
       var list = []; try { list = w.fn(S.recs, t) || []; } catch (x) { list = []; }
       if (!list.length) return; v.appendChild(el('h2', '', w.l)); var c = el('div', 'card');
-      list.slice(0, 15).forEach(function (r) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(r))); if (w.sub) m.appendChild(el('span', '', w.sub(r, S.recs, t))); row.appendChild(m); row.onclick = function () { openForm(r.kind, r); }; c.appendChild(row); }); v.appendChild(c);
+      var late = /overdue|late|past due|expired|unpaid/i.test(w.l);
+      list.slice(0, 15).forEach(function (r) { var row = el('div', 'row tap'), m = el('div', 'm'); m.appendChild(el('b', '', title(r))); if (w.sub) m.appendChild(el('span', '', w.sub(r, S.recs, t))); row.appendChild(m); row.onclick = function () { openForm(r.kind, r); };
+        if (late) { var wb = el('button', 'btn sm', 'View ' + overdueNoun(w.l, r, w.noun)); wb.type = 'button'; wb.style.marginLeft = '6px'; wb.onclick = function (ev) { ev.stopPropagation(); openForm(r.kind, r); }; row.appendChild(wb); }
+        c.appendChild(row); }); v.appendChild(c);
     });
   }
 
@@ -500,13 +510,29 @@
   // ---------- portal invites (tenants / customers) ----------
   function PI() { return C.portalInvite || Q.portalInvite || null; }
   function piTodo() { var p = PI(); if (!p) return []; return byKind(p.kind).filter(function (r) { return !r.portalId && !(p.skip && p.skip(r)); }); }
+  // Someone who already has a Vyqil account is NOT sent a password email. The business gets this clear notice to send the portal link itself.
+  function existingModal(r, p) {
+    var link = p.linkOf(r), em = String((p.emailOf ? p.emailOf(r) : r.email) || '').trim(), ph = r.phone || '';
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', (r.name || 'This ' + p.noun) + ' already has a Vyqil account'));
+      s.appendChild(el('p', '', 'No email was sent. A set-your-password email goes only to people who are new to Vyqil. Because ' + (r.name || 'they') + ' already has an account, please send them this portal link yourself and they sign in with the password they already use. If they have never set a password, they can tap "Forgot your password?" on the sign-in page.'));
+      var box = el('div', 'card'); box.style.wordBreak = 'break-all'; box.textContent = link; s.appendChild(box);
+      var b = el('div', 'btns');
+      var a1 = el('a', 'btn', 'Email the link'); a1.href = mailLink(r, p); b.appendChild(a1);
+      if (ph) { var a2 = el('a', 'btn', 'Text the link'); a2.href = 'sms:' + String(ph).replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent('Your ' + ((S.biz && S.biz.name) || '') + ' ' + p.noun + ' portal: ' + link); b.appendChild(a2); }
+      var cp = el('button', 'btn ghost', 'Copy link'); cp.type = 'button'; cp.onclick = function () { try { navigator.clipboard.writeText(link); Q.toast('Link copied.'); } catch (x) { window.prompt('Copy this link', link); } }; b.appendChild(cp);
+      var ok = el('button', 'btn ghost', 'Done'); ok.type = 'button'; ok.onclick = close; b.appendChild(ok); s.appendChild(b);
+    });
+    if (p.afterQuiet) p.afterQuiet(r);
+  }
   function inviteOne(r) {
     var p = PI(); if (!p) return;
     Q.ask('Create a ' + p.noun + ' portal for ' + ((p.emailOf ? p.emailOf(r) : r.email) || 'this ' + p.noun) + '? New members get an email to set a password; if they already have a Vyqil login you get their portal link to send instead.', 'Invite', function () {
       Q.toast('Inviting...'); return p.quiet(r).then(function (x) {
         if (x.skip) { Q.toast('Add ' + (r.name || 'the ' + p.noun) + '\'s email first, then try again.'); return; }
         if (x.error) { Q.toast(x.error); return; }
-        Q.toast(x.mailError ? 'Login ready, but the email could not be sent (' + x.mailError + '). Send them the link.' : (x.existing ? 'They already have a Vyqil login, so no password email was sent. Share their portal link.' : 'Invitation emailed.')); if (p.after) p.after(r);
+        if (x.existing && p.linkOf) { existingModal(r, p); return; }
+        Q.toast(x.mailError ? 'Login ready, but the email could not be sent (' + x.mailError + '). Send them the link.' : 'Invitation emailed. They will get an email to set their password (check Spam).'); if (p.after) p.after(r);
       });
     });
   }
@@ -520,7 +546,7 @@
       var done = 0, failed = 0, noMailSent = 0, last = '', rows = [];
       for (var i = 0; i < ok.length; i++) {
         Q.toast('Inviting ' + (i + 1) + ' of ' + ok.length + '...'); var nm = ok[i].name || (p.emailOf ? p.emailOf(ok[i]) : ok[i].email) || '';
-        try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; rows.push({ n: nm, bad: true, t: 'Portal made, email NOT sent: ' + x.mailError }); } else rows.push(x.existing ? { n: nm, t: 'Already has a Vyqil login. Portal added; no password email sent. Send them their portal link:', href: p.linkOf ? mailLink(ok[i], p) : '', copy: p.linkOf ? p.linkOf(ok[i]) : '' } : { n: nm, t: 'Invite emailed' }); } else { failed++; last = x.error || ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + (x.error || 'unknown') }); } }
+        try { var x = await p.quiet(ok[i]); if (x.ok) { done++; if (x.mailError) { noMailSent++; last = x.mailError; rows.push({ n: nm, bad: true, t: 'Portal made, email NOT sent: ' + x.mailError }); } else rows.push(x.existing ? { n: nm, t: 'ALREADY HAS A VYQIL ACCOUNT. No email was sent. Send them their portal link yourself:', href: p.linkOf ? mailLink(ok[i], p) : '', copy: p.linkOf ? p.linkOf(ok[i]) : '' } : { n: nm, t: 'Invite emailed' }); } else { failed++; last = x.error || ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + (x.error || 'unknown') }); } }
         catch (e) { failed++; last = Q.friendly ? Q.friendly(e) : ''; rows.push({ n: nm, bad: true, t: 'Failed: ' + last }); }
         if (i < ok.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
       }
@@ -536,7 +562,7 @@
       render();
     });
   }
-  Q.portalInviteAll = inviteAll; Q.portalPending = function () { return piTodo().filter(function (r) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((PI().emailOf ? PI().emailOf(r) : r.email) || '').trim()); }).length; };
+  Q.portalExisting = function (r) { var p = PI(); if (p && p.linkOf) existingModal(r, p); }; Q.portalInviteAll = inviteAll; Q.portalPending = function () { return piTodo().filter(function (r) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String((PI().emailOf ? PI().emailOf(r) : r.email) || '').trim()); }).length; };
   function portalBar(v, k) {
     var p = PI(); if (!p || p.kind !== k) return; var n = Q.portalPending(); if (!n) return;
     var b = el('button', 'btn wide ghost', 'Invite all ' + n + ' ' + p.noun + (n === 1 ? '' : 's') + ' to portal'); b.type = 'button'; b.onclick = inviteAll; v.appendChild(b);

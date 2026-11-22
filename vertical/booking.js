@@ -52,8 +52,8 @@
     try {
       var a = app.auth(); await a.setPersistence(firebase.auth.Auth.Persistence.NONE);
       try { await a.createUserWithEmailAndPassword(email, randomPassword()); } catch (e) { if (!e || e.code !== 'auth/email-already-in-use') throw e; res.existing = true; }
-      // Always email a "set your password" link. If the address already has a Vyqil login (for example from an earlier invite that was never finished), this is how they get in.
-      try { await a.sendPasswordResetEmail(email, { url: portalBase() }); } catch (e2) { try { await a.sendPasswordResetEmail(email); } catch (e3) { res.mailError = Q.friendly(e3); } }
+      // New to Vyqil: email a "set your password" link. Already has a Vyqil account: NO password email; the business is shown a notice to send them the portal link itself.
+      if (!res.existing) { try { await a.sendPasswordResetEmail(email, { url: portalBase() }); } catch (e2) { try { await a.sendPasswordResetEmail(email); } catch (e3) { res.mailError = Q.friendly(e3); } } }
       try { await a.signOut(); } catch (x) { /* ignore */ }
     } catch (e) { res.error = Q.friendly(e); }
     try { await app.delete(); } catch (x) { /* ignore */ }
@@ -71,10 +71,11 @@
   }
   function invite(r) {
     var email = emailOf(r); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { Q.toast('Add ' + (nameOf(r) || 'the customer') + '\'s email first, then try again.'); return; }
-    Q.ask('Create a customer portal login for ' + email + ' and email them a link to set a password?', 'Invite', async function () {
+    Q.ask('Create a customer portal for ' + email + '? New members are emailed a link to set a password. If they already have a Vyqil account, you will get their portal link to send instead.', 'Invite', async function () {
       Q.toast('Inviting...'); var res = await makeLogin(email); if (res.error) { Q.toast(res.error); return; }
       var ref = Q.db.collection('custPortals').doc();
       try { await ref.set(portalDoc(r)); await Q.recs().doc(r.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { Q.toast(Q.friendly(e)); return; }
+      if (res.existing && Q.portalExisting) { r.portalId = ref.id; Q.portalExisting(r); return; }
       Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link and ask them to tap Forgot your password.' : res.existing ? 'That email already had a Vyqil login, so we emailed a link to set a new password.' : 'Invitation emailed.'); r.portalId = ref.id; portalLink(r);
     });
   }
@@ -94,7 +95,7 @@
     r.portalId = ref.id; return { ok: true, existing: res.existing, mailError: res.mailError };
   }
   function addPortalActions() {
-    if (P && C.kinds && C.kinds[P.kind]) Q.portalInvite = { kind: P.kind, coll: 'custPortals', noun: 'customer', emailOf: emailOf, quiet: quietInvite, after: function (r) { portalLink(r); } };
+    if (P && C.kinds && C.kinds[P.kind]) Q.portalInvite = { kind: P.kind, coll: 'custPortals', noun: 'customer', emailOf: emailOf, linkOf: function (r) { return portalBase() + '?e=' + encodeURIComponent(emailOf(r)); }, quiet: quietInvite, after: function (r) { portalLink(r); } };
     if (!P || !C.kinds || !C.kinds[P.kind]) return; var kd = C.kinds[P.kind]; kd.actions = kd.actions || [];
     kd.actions.push({ l: 'Invite to customer portal', show: function (r) { return !r.portalId; }, run: function (r) { invite(r); } });
     kd.actions.push({ l: 'Customer portal link', show: function (r) { return !!r.portalId; }, run: function (r) { portalLink(r); } });
