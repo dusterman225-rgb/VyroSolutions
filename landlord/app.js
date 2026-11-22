@@ -210,7 +210,7 @@ window.VQ_APP = {
       Q.toast('Inviting...'); var res = await makeLogin(email); if (res.error) { Q.toast(res.error); return; }
       var ref = Q.db.collection('tenantPortals').doc(), d = portalData(t); d.updatedAt = Q.FV.serverTimestamp();
       try { await ref.set(d); await Q.recs().doc(t.id).update({ portalId: ref.id, updatedAt: Q.FV.serverTimestamp() }); } catch (e) { Q.toast(Q.friendly(e)); return; }
-      Q.toast(res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link.' : (res.existing ? 'They already have a Vyqil login, so no password email was sent. Share their portal link.' : 'Invitation emailed.')); t.portalId = ref.id; shareLink(t);
+      Q.toast(res.existing ? 'Portal added.' : res.mailError ? 'Login ready, but the email could not be sent (' + res.mailError + '). Send them the link.' : 'Invitation emailed. They will get an email to set their password (check Spam).'); t.portalId = ref.id; if (res.existing && Q.portalExisting) Q.portalExisting(t); else shareLink(t);
     });
   }
 
