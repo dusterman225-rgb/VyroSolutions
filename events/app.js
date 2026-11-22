@@ -98,7 +98,7 @@ window.VQ_APP = {
     var n = function (k) { return Q.byKind(k).length + ' total'; }, open = Q.tools.open;
     Q.tools.hubGroup(v, 'Planning', [['Events', n('event'), open('event')], ['Clients', n('client'), open('client')], ['Tasks', n('task'), open('task')], ['Day-of schedule', n('timeline'), open('timeline')]]);
     Q.tools.hubGroup(v, 'People', [['Guests', n('guest'), open('guest')], ['Vendors', n('vendor'), open('vendor')], ['Vendor bookings and budget', n('booking'), open('booking')]]);
-    Q.tools.hubGroup(v, 'Finances', [['Invoices', n('invoice'), open('invoice')], ['Budget and RSVP overview', 'Per event totals', function () { Q.S.tab = 'overview'; Q.render(); }]]);
+    Q.tools.hubGroup(v, 'Finances', [['Invoices', n('invoice'), open('invoice')], ['Expenses', n('expense'), open('expense')], ['Reports and tax summary', 'Income and expenses', function () { Q.S.tab = 'reports'; Q.render(); }], ['Budget and RSVP overview', 'Per event totals', function () { Q.S.tab = 'overview'; Q.render(); }]]);
   };
 
   // ---------- budget and RSVP overview (one card per upcoming event) ----------
@@ -127,6 +127,12 @@ window.VQ_APP = {
     if (wed && !l) { l = document.createElement('link'); l.id = 'vqWed'; l.rel = 'stylesheet'; l.href = 'wedding.css'; document.head.appendChild(l); }
     if (!wed && l && l.parentNode) l.parentNode.removeChild(l);
     var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', wed ? '#FBF8F2' : '#05070A');
+    // Logo follows the look: chrome V with neon ring (standard) or the gold script V (wedding).
+    var sfx = wed ? '-wedding' : '', lg = 'images/logo' + sfx + '.png', ic = 'images/icon' + sfx + '-192.png';
+    A.logo = ic; A.logoWide = lg;
+    [].forEach.call(document.querySelectorAll('img.logo'), function (i) { i.src = lg; });
+    [].forEach.call(document.querySelectorAll('.topbar .mark, img.mark'), function (i) { if (i.tagName === 'IMG') i.src = ic; });
+    [].forEach.call(document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]'), function (i) { i.href = ic; });
     try { localStorage.setItem('vq_events_style', s || ''); } catch (e) { /* optional */ }
   }
   try { applyStyle(localStorage.getItem('vq_events_style') || ''); } catch (e) { /* optional */ }
@@ -165,7 +171,8 @@ window.VQ_APP = {
     return [
       { h: 'Planning', items: [{ l: 'Events', tab: 'event' }, { l: 'Clients', tab: 'client' }, { l: 'Tasks', tab: 'task' }, { l: 'Day-of schedule', tab: 'timeline' }] },
       { h: 'People', items: [{ l: 'Guests', tab: 'guest' }, { l: 'Vendors', tab: 'vendor' }, { l: 'Vendor bookings and budget', tab: 'booking' }] },
-      { h: 'Finances', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Budget and RSVP overview', tab: 'overview' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] },
+      { h: 'Community', items: Q.communityMenu ? Q.communityMenu() : [] },
+      { h: 'Finances', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' }, { l: 'Budget and RSVP overview', tab: 'overview' }, { l: 'Reports and tax summary', tab: 'reports' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] },
       { h: 'Look', items: [{ l: 'Choose wedding or party look', run: function () { F.style && F.style(); } }] }
     ];
   };
@@ -178,7 +185,8 @@ window.VQ_APP = {
       { id: 'book', t: 'Book a vendor on an event', h: 'Track cost, deposit and the next payment date.', kind: 'booking', form: 'booking' },
       { id: 'guest', t: 'Start the guest list', h: 'RSVPs, meal choices and tables.', kind: 'guest', form: 'guest' },
       { id: 'inv', t: 'Send your first invoice', h: 'Planning fee or deposit.', kind: 'invoice', form: 'invoice' },
-      { id: 'cinv', t: 'Invite clients to their portal', h: 'Open a client and send the portal link so they can see invoices.', manual: true, run: function () { if (Q.portalInviteAll) Q.portalInviteAll(); } },
+      { id: 'cinv', t: 'Invite clients to their portal', h: 'One tap emails an invite to every client who is not in yet.', done: function (rs) { var p = Q.portalPending ? Q.portalPending() : []; return !p.length && rs.some(function (r) { return r.kind === 'client' && r.portalId; }); }, run: function () { if (Q.portalInviteAll) Q.portalInviteAll(); } },
+      { id: 'pay', t: 'Set up Pay with Vyqil', h: 'Optional. Collect invoices by QR code, paid in dollar coins.', done: function () { return !!(Q.S.biz && Q.S.biz.payWallet); }, run: function () { if (Q.pay) Q.pay.setup(); } },
       { id: 'comm', t: 'Set up Vyqil Community', h: 'Be found by nearby Vyqil businesses, and find them.', manual: true, run: function () { if (Q.community) Q.community.listing(); } },
       { id: 'alerts', t: 'Turn on phone alerts', h: 'Get event, task and payment alerts when the app is closed.', manual: true, run: function () { Q.push.panel(); } }
     ];
@@ -200,4 +208,79 @@ window.VQ_APP.portal = { kind: 'client', invoices: function (c, recs) {
         await Q.recs().doc(r.id).update({ status: 'Paid', paidOn: Q.u.today(), paySig: found.signature, payNote: ('Pay with Vyqil, USDC' + (req.net === 'mainnet' ? '' : ' (TEST)')).slice(0, 80), updatedAt: Q.FV.serverTimestamp() });
       } }
   ] };
+})();
+
+// ===== Same format as the other Vyqil apps: Add dropdown, Community, past-due notices, guest texts, expenses, reports =====
+(function () {
+  var A = window.VQ_APP, K = A.kinds;
+  function U() { return Q.u; }
+  function el(t, c, x) { return U().el(t, c, x); }
+  function money(c) { return U().money(c); }
+  function fmt(d) { return d ? U().fmtDate(d) : ''; }
+  function sms(phone, body) { if (phone) window.location.href = 'sms:' + String(phone).replace(/[^\d+]/g, '') + (body ? '?&body=' + encodeURIComponent(body) : ''); }
+  function addHelper(rec, o) { var cur = String(rec.helpers || ''); if (cur.indexOf(o.bizName) >= 0) return null; return { helpers: (cur ? cur + ', ' : '') + o.bizName }; }
+
+  K.event.addMenu = ['event', 'client', 'task', 'guest', 'booking'];
+  K.client.addMenu = ['client', 'event', 'invoice'];
+  K.task.addMenu = ['task', 'event', 'guest', 'booking'];
+  var ef = K.event.fields, ni = ef.map(function (f) { return f.k; }).indexOf('notes');
+  ef.splice(ni < 0 ? ef.length : ni, 0, { k: 'helpers', l: 'Hired through Vyqil', t: 'text', hint: 'Filled in when you choose a Vyqil business from "Find a Vyqil".' });
+
+  // Community: search near the venue.
+  A.community.place = function (r) { return r && (r.venueAddress || r.venue) ? r : null; };
+  A.community.placeText = function (r) { return r.venueAddress || r.venue; };
+  A.community.places = function () { return Q.byKind('event').filter(function (e) { return e.venueAddress || e.venue; }); };
+  A.community.chosen = { photo: addHelper, salon: addHelper, services: addHelper, contractor: addHelper };
+  A.community.inbound.addDefaults = { status: 'Inquiry', source: 'Vyqil Community' };
+  [['Find a photographer', 'photo', 'Events', 'Photographer needed'], ['Find hair and makeup', 'salon', 'Skin care and makeup', 'Hair and makeup needed'], ['Find a cleaning crew', 'services', 'House cleaning', 'Cleanup after an event'], ['Find a handyman for setup', 'contractor', 'Handyman / general repair', 'Setup help needed']].forEach(function (x) {
+    K.event.actions.push({ l: x[0], group: 'Find a Vyqil', saveFirst: true, run: function (r) { Q.community.find(r, { target: x[1], cat: x[2], title: x[3] + ': ' + (r.title || 'an event') }); } });
+  });
+  K.client.actions = (K.client.actions || []).concat([
+    { l: 'Call', show: function (r) { return !!r.phone; }, run: function (r) { window.location.href = 'tel:' + String(r.phone).replace(/[^\d+]/g, ''); } },
+    { l: 'Text', show: function (r) { return !!r.phone; }, run: function (r) { sms(r.phone); } },
+    { l: 'Create an event for this client', run: function (r) { Q.openForm('event', null, { client: r.id, status: 'Inquiry' }); } }]);
+  K.guest.actions = [
+    { l: 'Text an RSVP reminder', show: function (r) { return !!r.phone; }, run: function (r) { var e = r.event ? Q.get(r.event) : null; sms(r.phone, 'Hi ' + String(r.name || '').split(/\s+/)[0] + ', a reminder to RSVP for ' + (e ? Q.title(e) : 'our event') + (e && e.date ? ' on ' + fmt(e.date) : '') + '. Thank you!'); } },
+    { l: 'Text the guest', show: function (r) { return !!r.phone; }, run: function (r) { sms(r.phone); } }];
+
+  // Business expenses (software, travel, marketing...). Feed the reports and tax summary.
+  K.expense = { label: 'Expense', plural: 'Expenses', icon: '🧾', stage: 'category', sort: function (a, b) { return (a.date || '') < (b.date || '') ? 1 : -1; },
+    title: function (r) { return (r.category || 'Expense') + (r.note ? ' · ' + r.note : ''); },
+    fields: [{ k: 'date', l: 'Date', t: 'date', req: 1 }, { k: 'amount', l: 'Amount', t: 'money', req: 1 }, { k: 'category', l: 'Category', t: 'select', o: ['Software', 'Travel and mileage', 'Marketing', 'Supplies and decor', 'Insurance', 'Assistants and wages', 'Fees', 'Other'], req: 1 }, { k: 'note', l: 'What it was for', t: 'text' }, { k: 'event', l: 'For which event', t: 'link', to: 'event' }],
+    amount: function (r) { return r.amount || ''; }, sub: function (r) { return r.date ? fmt(r.date) : ''; }, addMenu: ['expense', 'event', 'invoice'] };
+
+  // Past-due notices (each gets a "View ..." button that names what is past due).
+  A.watch.push({ l: 'Vendor payments past due', noun: 'vendor payment', fn: function (rs, t) { return rs.filter(function (r) { return r.kind === 'booking' && r.status !== 'Paid in full' && r.status !== 'Quoted' && r.due && r.due < t; }); }, sub: function (r) { return 'Was due ' + fmt(r.due) + ' · ' + money(Math.max(0, (r.cost || 0) - (r.deposit || 0))) + ' left'; } });
+  A.watch.push({ l: 'Events past due: update the status', noun: 'event', fn: function (rs, t) { return rs.filter(function (r) { return r.kind === 'event' && r.date && r.date < t && r.status !== 'Done' && r.status !== 'Cancelled'; }); }, sub: function (r) { return 'Was ' + fmt(r.date) + '. Mark it Done or Cancelled.'; } });
+
+  // Reports and tax summary: money in (paid invoices), business expenses, profit per event.
+  function paid() { return Q.byKind('invoice').filter(function (i) { return i.status === 'Paid'; }).map(function (i) { var d = U().isDate(i.paidOn) ? i.paidOn : i.date; return { date: d || '', amount: i.amount || 0, event: i.event, client: i.client }; }).filter(function (x) { return U().isDate(x.date); }); }
+  function exps() { return Q.byKind('expense').filter(function (e) { return U().isDate(e.date); }); }
+  function sum(rows) { var s = 0; rows.forEach(function (x) { s += x.amount || 0; }); return s; }
+  function summaryFor(year) { var by = {}, ex = 0; exps().filter(function (e) { return e.date.slice(0, 4) === year; }).forEach(function (e) { by[e.category || 'Other'] = (by[e.category || 'Other'] || 0) + (e.amount || 0); ex += e.amount || 0; }); return { year: year, income: sum(paid().filter(function (x) { return x.date.slice(0, 4) === year; })), expenses: ex, by: by }; }
+  function reportsView(v) {
+    var TL = Q.tools, now = new Date(), ym = U().ymd(now).slice(0, 7), yr = String(now.getFullYear()), td = U().today(), inc = paid(), ex = exps();
+    v.appendChild(el('h2', '', 'Reports')); var st = el('div', 'stat'), owed = 0;
+    Q.byKind('invoice').forEach(function (i) { if (i.status === 'Unpaid') owed += i.amount || 0; });
+    [[money(sum(inc.filter(function (x) { return x.date.slice(0, 7) === ym; }))), 'Received this month'], [money(sum(ex.filter(function (e) { return e.date.slice(0, 7) === ym; }))), 'Expenses'], [money(owed), 'Owed to you']].forEach(function (x) { var d = el('div'); d.appendChild(el('b', '', x[0])); d.appendChild(el('span', '', x[1])); st.appendChild(d); });
+    v.appendChild(st);
+    v.appendChild(el('h2', '', 'Who owes you')); var c1 = el('div', 'card'); v.appendChild(c1); var ag = [0, 0, 0];
+    Q.byKind('invoice').forEach(function (i) { if (i.status !== 'Unpaid') return; var days = i.due && U().isDate(i.due) ? U().diff(td, i.due) : 0; ag[days > 60 ? 2 : days > 30 ? 1 : 0] += i.amount || 0; });
+    [['Current or up to 30 days late', ag[0]], ['31 to 60 days late', ag[1]], ['Over 60 days late', ag[2]]].forEach(function (x) { var r = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', x[0])); r.appendChild(m); r.appendChild(el('span', 'amt', money(x[1]))); c1.appendChild(r); });
+    v.appendChild(el('h2', '', 'Last 6 months')); var c2 = el('div', 'card'); v.appendChild(c2); var months = [];
+    for (var i = 5; i >= 0; i--) months.push(U().ymd(new Date(now.getFullYear(), now.getMonth() - i, 1)).slice(0, 7));
+    var data = months.map(function (m) { return { m: m, i: sum(inc.filter(function (x) { return x.date.slice(0, 7) === m; })), e: sum(ex.filter(function (x) { return x.date.slice(0, 7) === m; })) }; }), mx = 0; data.forEach(function (d) { mx = Math.max(mx, d.i, d.e); });
+    data.forEach(function (d) { var w = el('div'); w.style.margin = '8px 0'; w.appendChild(el('b', '', TL.monthLabel(d.m))); w.appendChild(TL.bar(d.i, mx, '#2bd08a')); w.appendChild(el('div', 'hint', 'Received ' + money(d.i))); w.appendChild(TL.bar(d.e, mx, '#e5484d')); w.appendChild(el('div', 'hint', 'Expenses ' + money(d.e) + ' · Net ' + money(d.i - d.e))); c2.appendChild(w); });
+    v.appendChild(el('h2', '', 'Events: billed vs vendor costs')); var c3 = el('div', 'card'); v.appendChild(c3);
+    var evs = Q.byKind('event').filter(function (e) { return e.status !== 'Cancelled'; }).sort(function (a, b) { return (b.date || '') < (a.date || '') ? -1 : 1; }).slice(0, 10); if (!evs.length) c3.appendChild(el('div', 'empty', 'Add events to see this.'));
+    evs.forEach(function (e) { var billed = 0; Q.byKind('invoice').forEach(function (i) { if (i.event === e.id && i.status !== 'Void') billed += i.amount || 0; }); var vend = 0; Q.byKind('booking').forEach(function (b) { if (b.event === e.id && b.status !== 'Quoted') vend += b.cost || 0; }); var r = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', Q.title(e))); m.appendChild(el('span', '', 'Billed ' + money(billed) + ' · Vendors booked ' + money(vend))); r.appendChild(m); c3.appendChild(r); });
+    v.appendChild(el('h2', '', 'Tax summary')); var c5 = el('div', 'card'); v.appendChild(c5); var ys = el('select');
+    for (var y = now.getFullYear(); y >= now.getFullYear() - 3; y--) { var o = el('option', '', String(y)); o.value = String(y); ys.appendChild(o); } c5.appendChild(ys);
+    var b = el('div', 'btns'), sv = el('button', 'btn', 'View and share'), dl = el('button', 'btn ghost', 'Download CSV'); sv.type = dl.type = 'button'; b.appendChild(sv); b.appendChild(dl); c5.appendChild(b);
+    sv.onclick = function () { var s = summaryFor(ys.value), t = 'Income and expenses ' + s.year + '\n\nIncome (paid invoices): ' + money(s.income) + '\n\nExpenses: ' + money(s.expenses) + '\n'; Object.keys(s.by).sort().forEach(function (k) { t += '  ' + k + ': ' + money(s.by[k]) + '\n'; }); TL.showText('Income and expenses ' + s.year, t + '\nNet: ' + money(s.income - s.expenses) + '\n\nA record of what you entered, not tax advice.'); };
+    dl.onclick = function () { var s = summaryFor(ys.value), rows = [['Year', 'Item', 'Amount'], [s.year, 'Income', (s.income / 100).toFixed(2)]]; Object.keys(s.by).sort().forEach(function (k) { rows.push([s.year, k, (s.by[k] / 100).toFixed(2)]); }); rows.push([s.year, 'Net', ((s.income - s.expenses) / 100).toFixed(2)]); TL.download('events-summary-' + s.year + '.csv', TL.csv(rows)); };
+    c5.appendChild(el('div', 'note', 'Income counts invoices you marked paid. Vendor payments you pass through for a client are not counted as expenses here. This is a record of what you entered, not tax advice.'));
+  }
+  function boot() { Q.views.reports = reportsView; }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
