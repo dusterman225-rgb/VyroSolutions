@@ -30,9 +30,11 @@
     var out = el('button', 'mi out', 'Sign out'); out.type = 'button';
     out.addEventListener('click', async function () { try { await vyro.signOut(); } catch (e) { /* ignore */ } location.href = vyro.loginUrl(); });
     menu.appendChild(out);
-    wrap.appendChild(btn); wrap.appendChild(menu);
+    var lo = el('button', 'logout-sm', 'Log out'); lo.type = 'button';
+    lo.addEventListener('click', function () { out.click(); });
+    wrap.appendChild(lo); wrap.appendChild(btn); wrap.appendChild(menu);
     var css = document.createElement('style');
-    css.textContent = '.vmenu-wrap{position:absolute;top:0;right:0;z-index:30}.brand{position:relative}.wrap>.brand,.brand{padding-right:0}.vmenu-wrap .menu-btn{padding:8px 12px;font-size:.72rem}';
+    css.textContent = '.vmenu-wrap{position:absolute;top:0;right:0;z-index:30;display:flex;align-items:center;gap:8px}.logout-sm{background:none;border:1px solid var(--line,#27405c);color:inherit;border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px;cursor:pointer;opacity:.85}.brand{position:relative}.wrap>.brand,.brand{padding-right:0}.vmenu-wrap .menu-btn{padding:8px 12px;font-size:.72rem}';
     document.head.appendChild(css);
     host.style.position = 'relative'; host.appendChild(wrap);
     function set(o) { menu.classList.toggle('open', o); btn.setAttribute('aria-expanded', o ? 'true' : 'false'); }
