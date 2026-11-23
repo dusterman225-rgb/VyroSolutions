@@ -1,0 +1,15 @@
+{
+  "name": "vyqil-assistant",
+  "main": "worker.js",
+  "compatibility_date": "2025-01-01",
+  "vars": {
+    "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev",
+    "FIREBASE_PROJECT": "vyrocontractor",
+    // Models are tried left to right until one gives a good answer. Different companies on purpose, so one outage cannot stop the Assistant.
+    // 1 Qwen (very cheap, reads photos)  2 Claude Haiku  3 Gemini Flash-Lite  4 Claude Haiku straight from Anthropic (does not use OpenRouter; needs the ANTHROPIC_KEY secret)  5 Gemma free, last resort.
+    "CHAT_MODELS": "qwen/qwen3.7-flash,anthropic/claude-haiku-5.5,google/gemini-2.5-flash-lite,anthropic:claude-haiku-5-5,google/gemma-4-31b-it:free",
+    "SCAN_MODELS": "qwen/qwen3.7-flash,anthropic/claude-haiku-5.5,google/gemini-2.5-flash-lite,anthropic:claude-haiku-5-5,google/gemma-4-31b-it:free",
+    "TRIAL_DAYS": "30",
+    "MONTHLY_LIMIT": "600"
+  }
+}
