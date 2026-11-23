@@ -1,6 +1,6 @@
 /* VyqilEvents: wedding planner look. Ivory and white with soft gold, classic serif type.
    Loaded on top of ../vertical/engine.css only when the business picks "Wedding planner". */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Great+Vibes&family=Jost:wght@300;400;500&display=swap');
 
 :root{
   --bg:#FBF8F2; --card:#FFFFFF; --card2:#F6F0E4;
@@ -85,3 +85,51 @@ a,.link{color:#8A6A25}
 .ntile{background:#fff!important}
 hr{border-color:var(--line)}
 @media print{body{background:#fff!important}}
+
+
+/* ===== Fairytale polish: champagne foil, pearl and blush ===== */
+:root{--foil:linear-gradient(135deg,#8E6B22 0%,#D9B864 22%,#F7E7B0 38%,#C9A04A 55%,#E9CF8A 74%,#9A7733 100%);--script:'Great Vibes','Cormorant Garamond',cursive;--cap:'Cinzel','Cormorant Garamond',Georgia,serif;--blush:#F9ECE8;--pearl:#FFFDF9}
+body{background-color:#FBF7EE!important;background-image:
+ radial-gradient(1100px 420px at 50% -140px,rgba(233,207,138,.35),transparent 70%),
+ radial-gradient(600px 400px at 100% 30%,rgba(249,224,220,.55),transparent 70%),
+ radial-gradient(600px 400px at 0% 70%,rgba(246,235,208,.7),transparent 70%),
+ radial-gradient(circle at 20px 20px,rgba(201,160,74,.22) 1px,transparent 1.6px)!important;background-size:auto,auto,auto,46px 46px!important;background-attachment:fixed!important}
+/* titles: script for the big ones, foil-gold capitals for section headings */
+.auth h1,.sheet h3,.starter h3,.vq-note .t b{font-family:var(--script)!important;font-weight:400!important;letter-spacing:.02em!important;font-size:1.9rem;background:var(--foil);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent!important;line-height:1.25}
+.starter h3,.vq-note .t b{font-size:1.5rem}
+h2{font-family:var(--cap)!important;font-size:.95rem!important;letter-spacing:.32em!important;text-align:center;border:0!important;padding:14px 0 12px!important;background:var(--foil);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent!important;position:relative}
+h2::after{content:'';display:block;height:10px;margin:8px auto 0;width:150px;background:
+ linear-gradient(90deg,transparent,#C9A04A) left center/60px 1px no-repeat,
+ linear-gradient(90deg,#C9A04A,transparent) right center/60px 1px no-repeat,
+ radial-gradient(circle,#D9B864 0 2.5px,transparent 3px) center/10px 10px no-repeat}
+.stat b,.amt{background:var(--foil);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent!important}
+/* cards: pearl with a double gold frame */
+.card,.row,.stat div,.vq-drop,.vq-note{background:linear-gradient(180deg,#fff,var(--pearl) 60%,#FBF4E6)!important;border:1px solid rgba(201,160,74,.55)!important;border-radius:18px!important;box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 5px rgba(201,160,74,.28),0 10px 28px rgba(140,105,40,.12)!important}
+.row{border-radius:16px!important}
+.row.tap:active,.row.tap:hover{box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 5px rgba(201,160,74,.5),0 12px 30px rgba(201,160,74,.28)!important}
+/* buttons: polished champagne-gold foil with a soft shimmer */
+.btn{position:relative;overflow:hidden;border-radius:999px!important;border:1px solid #8E6B22!important;background:linear-gradient(180deg,#F3DE9C 0%,#D8B55E 38%,#B88E3A 70%,#D7B45C 100%)!important;color:#3B2A08!important;text-shadow:0 1px 0 rgba(255,255,255,.55);font-family:var(--cap)!important;font-weight:600;letter-spacing:.16em;box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -2px 4px rgba(120,84,18,.35),0 6px 16px rgba(176,141,70,.45)!important;transition:transform .15s,box-shadow .2s}
+.btn::after{content:'';position:absolute;top:0;left:-70%;width:45%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);transform:skewX(-20deg);animation:wedShine 5s ease-in-out infinite}
+@keyframes wedShine{0%,65%{left:-70%}100%{left:130%}}
+.btn:active{transform:translateY(1px) scale(.98)}
+.btn.sm{letter-spacing:.1em}
+.btn.ghost{background:linear-gradient(#fff,#fff) padding-box,var(--foil) border-box!important;border:1.5px solid transparent!important;color:#7A5A1A!important;text-shadow:none;box-shadow:0 3px 10px rgba(176,141,70,.18)!important}
+.btn.ghost::after{display:none}
+.btn.danger{background:#fff!important;color:var(--red)!important;border:1.5px solid var(--red)!important;text-shadow:none}.btn.danger::after{display:none}
+.subs button,.menu-btn{border-radius:999px!important;font-family:var(--cap)!important;letter-spacing:.12em}
+.subs button.on{background:linear-gradient(180deg,#FBEFC9,#EBD08A)!important;border-color:#B88E3A!important;color:#4A350C!important}
+/* notices glow like candlelight */
+.ntile{background:linear-gradient(180deg,#fff,#FBF3E0)!important;border-radius:20px!important}
+.ntile .k{font-family:var(--cap);letter-spacing:.2em;color:#7A5A1A}
+.ntile .n{font-family:var(--serif);font-style:italic}
+.card.glow{box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 5px rgba(180,72,62,.35),0 0 24px rgba(201,160,74,.45)!important}
+/* sheets and menu */
+.sheet{border-radius:26px 26px 0 0!important;border-top:2px solid #D9B864!important;background:linear-gradient(180deg,#FFFDF9,#FBF4E6)!important}
+.menu{border-radius:20px!important;border:1px solid rgba(201,160,74,.6)!important}
+input,select,textarea,.vq-sel{border-radius:12px!important;border:1px solid rgba(201,160,74,.6)!important;box-shadow:inset 0 1px 3px rgba(140,105,40,.1)}
+input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(233,207,138,.55)!important;border-color:#B88E3A!important}
+.topbar{background:linear-gradient(180deg,#FFFDF9,#FAF1DC)!important;border-bottom:1px solid transparent!important;border-image:var(--foil) 1!important;box-shadow:0 6px 20px rgba(176,141,70,.2)!important}
+.cal-cell.sel{background:linear-gradient(180deg,#FBEFC9,#F1DDA0)!important}
+.cal-cell.today{box-shadow:0 0 0 2px #D9B864,0 0 12px rgba(217,184,100,.6)}
+.pill,.stage{border-radius:999px!important;background:linear-gradient(180deg,#fff,#FBF1D8)!important}
+@media (prefers-reduced-motion:reduce){.btn::after{animation:none}}

@@ -135,14 +135,16 @@ window.VQ_APP = {
     [].forEach.call(document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]'), function (i) { i.href = ic; });
     try { localStorage.setItem('vq_events_style', s || ''); } catch (e) { /* optional */ }
   }
-  try { applyStyle(localStorage.getItem('vq_events_style') || ''); } catch (e) { /* optional */ }
+  // The look is chosen once and kept: saved on the business (every device and team member) and on this device.
+  function savedLook() { try { return localStorage.getItem('vq_events_style') || ''; } catch (e) { return ''; } }
+  applyStyle(savedLook());
   function chooseStyle(first) {
     Q.modal(function (s, close) {
       s.appendChild(el('h3', '', first ? 'What kind of planner are you?' : 'Choose your look'));
-      s.appendChild(el('p', 'hint', 'This sets how the app looks for your whole team. You can change it any time from the menu.'));
+      s.appendChild(el('p', 'hint', 'This is set once and kept for your whole team, so you will not be asked again.'));
       [['wedding', 'Wedding planner', 'Formal and elegant: ivory, white and gold with classic serif type.'], ['party', 'Party and event planner', 'The standard Vyqil look: dark and modern.']].forEach(function (o) {
         var b = el('button', 'btn ghost'); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0;text-align:left'; b.appendChild(el('b', '', o[1])); var sp = el('div', 'hint', o[2]); sp.style.marginTop = '4px'; b.appendChild(sp);
-        b.onclick = function () { applyStyle(o[0]); try { Q.S.biz.eventStyle = o[0]; Q.db.collection('businesses').doc(Q.S.biz.id).update({ eventStyle: o[0] }); } catch (e) { /* the look still applies on this device */ } close(); };
+        b.onclick = function () { applyStyle(o[0]); try { Q.S.biz.eventStyle = o[0]; Q.db.collection('businesses').doc(Q.S.biz.id).set({ eventStyle: o[0] }, { merge: true }).catch(function () { /* still kept on this device */ }); } catch (e) { /* kept on this device */ } close(); };
         s.appendChild(b);
       });
       if (!first) { var c = el('button', 'btn ghost', 'Cancel'); c.type = 'button'; c.onclick = close; s.appendChild(c); }
@@ -155,6 +157,7 @@ window.VQ_APP = {
     Q.onStart.push(function () {
       var b = Q.S.biz || {};
       if (b.eventStyle) applyStyle(b.eventStyle);
+      else if (savedLook()) { applyStyle(savedLook()); if (b.role === 'owner') { try { Q.db.collection('businesses').doc(b.id).set({ eventStyle: savedLook() }, { merge: true }).catch(function () {}); } catch (e) {} } }
       else if (b.role === 'owner') { var tries = 0, tm = setInterval(function () { tries++; if (tries > 50) { clearInterval(tm); return; } if (!Q.S.loaded) return; clearInterval(tm); setTimeout(function () { if (!document.querySelector('.modal') && !(Q.S.biz && Q.S.biz.eventStyle)) chooseStyle(true); }, 400); }, 400); }
     });
     Q.extras = Q.extras || [];
@@ -172,8 +175,7 @@ window.VQ_APP = {
       { h: 'Planning', items: [{ l: 'Events', tab: 'event' }, { l: 'Clients', tab: 'client' }, { l: 'Tasks', tab: 'task' }, { l: 'Day-of schedule', tab: 'timeline' }] },
       { h: 'People', items: [{ l: 'Guests', tab: 'guest' }, { l: 'Vendors', tab: 'vendor' }, { l: 'Vendor bookings and budget', tab: 'booking' }] },
       { h: 'Community', items: Q.communityMenu ? Q.communityMenu() : [] },
-      { h: 'Finances', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' }, { l: 'Budget and RSVP overview', tab: 'overview' }, { l: 'Reports and tax summary', tab: 'reports' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] },
-      { h: 'Look', items: [{ l: 'Choose wedding or party look', run: function () { F.style && F.style(); } }] }
+      { h: 'Finances', items: [{ l: 'Invoices', tab: 'invoice' }, { l: 'Expenses', tab: 'expense' }, { l: 'Budget and RSVP overview', tab: 'overview' }, { l: 'Reports and tax summary', tab: 'reports' }, { l: 'Pay with Vyqil setup', run: function () { var p = Q.payMenu()[0]; if (p) p.run(); } }] }
     ];
   };
   A.quick = [{ l: 'New client', form: 'client' }, { l: 'New event', form: 'event' }, { l: 'New task', form: 'task' }];
