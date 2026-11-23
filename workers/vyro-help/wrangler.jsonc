@@ -4,8 +4,10 @@
   "main": "worker.js",
   "compatibility_date": "2025-01-01",
   "vars": {
-    "ALLOWED_ORIGIN": "https://vyrosolutions.dusterman225.workers.dev",
-    "MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev",
+    // Help bot (site navigation and FAQ): level 1 free Gemma, then Qwen, then Claude Haiku. Separate from the paid Vyqil Assistant.
+    "HELP_MODELS": "google/gemma-4-31b-it:free,qwen/qwen3.7-flash,anthropic/claude-haiku-5.5",
+    "MODEL": "google/gemma-4-31b-it:free",
     "ASSISTANT_MODEL": "google/gemma-4-31b-it:free",
     "FALLBACK_MODEL": "",
     "FIREBASE_PROJECT": "vyrocontractor",
