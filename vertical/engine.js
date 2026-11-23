@@ -5,6 +5,8 @@
   'use strict';
   var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {}, eventSources: [], menuTop: [] };
   var S = Q.S;
+  // Vyqil Assistant and document scan live in assistant.js, next to this file.
+  try { var me = document.currentScript; if (me && me.src) { var as = document.createElement('script'); as.src = me.src.replace(/engine\.js(\?.*)?$/, 'assistant.js$1'); document.head.appendChild(as); } } catch (e) { }
 
   // ---------- small helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -289,7 +291,8 @@
     shownKinds().forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
     t.push({ id: 'more', l: 'More', i: '☰' }); return t;
   };
-  function menuGroups() {
+  function menuGroups() { var g = menuGroups0(); try { if (Q.assistantMenu) g = g.concat([{ h: 'Assistant', items: Q.assistantMenu() }]); } catch (e) { } return g; }
+  function menuGroups0() {
     if (C.menu) return typeof C.menu === 'function' ? C.menu() : C.menu;
     var work = []; if (!Q.communityMenu) Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
     var g = [{ h: 'Work', items: work }]; if (Q.communityMenu) g.push({ h: 'Community', items: Q.communityMenu() }); if (Q.views.reports || C.pay) g.push({ h: 'Money', items: (Q.views.reports ? [{ l: 'Reports', tab: 'reports' }] : []).concat(Q.payMenu()) }); return g;
@@ -627,6 +630,7 @@
     var kd = K(k), isNew = !rec, r = rec ? JSON.parse(JSON.stringify(rec)) : Object.assign({}, preset || {});
     modal(function (s, close) {
       s.appendChild(el('h3', '', (isNew ? 'New ' : '') + kd.label));
+      if (isNew && Q.scanButton && k !== 'mydate' && kd.fields.length >= 4) s.appendChild(Q.scanButton(k, close));
       var inputs = {}, dropEl = null, dropName = '';
       kd.fields.forEach(function (f, fi) {
         // Fields that share a "drop" name sit together in a drop-down. It opens by itself on a new record or when something inside is filled in.
