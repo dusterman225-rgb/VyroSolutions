@@ -5,7 +5,7 @@
   // The credits database. Create it once in the Cloudflare dashboard (README step 2) and paste its ID here, or add the binding in the dashboard.
   "d1_databases": [{ "binding": "DB", "database_name": "vyqil-credits", "database_id": "b6f85048-d401-478f-ad8e-18c585282f73" }],
   "vars": {
-    "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev",
+    "ALLOWED_ORIGIN": "https://vyrosolutions.dusterman225.workers.dev,https://vyrocontractor.dusterman225.workers.dev",
     "FIREBASE_PROJECT": "vyrocontractor",
     // Models are tried left to right until one gives a good answer. Different companies on purpose, so one outage cannot stop the Assistant.
     // 1 Qwen (very cheap, reads photos)  2 Claude Haiku  3 Gemini Flash-Lite  4 Claude Haiku straight from Anthropic (does not use OpenRouter; needs the ANTHROPIC_KEY secret)  5 Gemma free, last resort.
