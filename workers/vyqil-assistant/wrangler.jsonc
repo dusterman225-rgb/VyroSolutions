@@ -2,6 +2,8 @@
   "name": "vyqil-assistant",
   "main": "worker.js",
   "compatibility_date": "2025-01-01",
+  // The credits database. Create it once in the Cloudflare dashboard (README step 2) and paste its ID here, or add the binding in the dashboard.
+  "d1_databases": [{ "binding": "DB", "database_name": "vyqil-credits", "database_id": "PUT-THE-DATABASE-ID-HERE" }],
   "vars": {
     "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev",
     "FIREBASE_PROJECT": "vyrocontractor",
@@ -9,7 +11,11 @@
     // 1 Qwen (very cheap, reads photos)  2 Claude Haiku  3 Gemini Flash-Lite  4 Claude Haiku straight from Anthropic (does not use OpenRouter; needs the ANTHROPIC_KEY secret)  5 Gemma free, last resort.
     "CHAT_MODELS": "qwen/qwen3.7-flash,anthropic/claude-haiku-5.5,google/gemini-2.5-flash-lite,anthropic:claude-haiku-5-5,google/gemma-4-31b-it:free",
     "SCAN_MODELS": "qwen/qwen3.7-flash,anthropic/claude-haiku-5.5,google/gemini-2.5-flash-lite,anthropic:claude-haiku-5-5,google/gemma-4-31b-it:free",
+    // Full reports and proposals: a little stronger first, because they are long and the owner will read and share them.
+    "REPORT_MODELS": "qwen/qwen3.7-flash,anthropic/claude-haiku-5.5,google/gemini-2.5-flash-lite,anthropic:claude-haiku-5-5,google/gemma-4-31b-it:free",
     "TRIAL_DAYS": "30",
-    "MONTHLY_LIMIT": "600"
+    "ALLOWANCE_USD": "3",              // monthly credits included with the $7/month plan (and during the free trial)
+    "TOPUPS_EXPIRE_MONTHLY": "false",  // false = bought credits roll over; true = they expire with the month like the allowance
+    "RATES": "{\"default\":[0.10,0.50]}" // dollars per million tokens (in, out), only used for the direct Anthropic back-up
   }
 }
