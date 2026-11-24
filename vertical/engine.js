@@ -6,7 +6,7 @@
   var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {}, eventSources: [], menuTop: [] };
   var S = Q.S;
   // Vyqil Assistant and document scan live in assistant.js, next to this file.
-  try { var me = document.currentScript; if (me && me.src) { var as = document.createElement('script'); as.src = me.src.replace(/engine\.js(\?.*)?$/, 'assistant.js$1'); document.head.appendChild(as); } } catch (e) { }
+  try { var me = document.currentScript; if (me && me.src) { var as = document.createElement('script'); as.src = me.src.replace(/engine\.js(\?.*)?$/, 'assistant.js$1'); document.head.appendChild(as);  var bs = document.createElement('script'); bs.src = me.src.replace(/engine\.js(\?.*)?$/, 'beta.js$1'); document.head.appendChild(bs); } } catch (e) { }
 
   // ---------- small helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -291,7 +291,7 @@
     shownKinds().forEach(function (k) { t.push({ id: k, l: K(k).plural, i: K(k).icon || '■' }); });
     t.push({ id: 'more', l: 'More', i: '☰' }); return t;
   };
-  function menuGroups() { var g = menuGroups0(); try { if (Q.assistantMenu) g = g.concat([{ h: 'Assistant', items: Q.assistantMenu() }]); } catch (e) { } return g; }
+  function menuGroups() { var g = menuGroups0(); try { if (Q.assistantMenu) g = g.concat([{ h: 'Assistant', items: Q.assistantMenu() }]); } catch (e) { } try { if (Q.feedbackMenu) g = g.concat([{ h: 'Beta', items: Q.feedbackMenu() }]); } catch (e) { } return g; }
   function menuGroups0() {
     if (C.menu) return typeof C.menu === 'function' ? C.menu() : C.menu;
     var work = []; if (!Q.communityMenu) Q.tabsExtra.forEach(function (x) { work.push({ l: x.l, tab: x.id }); }); kinds().forEach(function (k) { work.push({ l: K(k).plural, tab: k }); });
