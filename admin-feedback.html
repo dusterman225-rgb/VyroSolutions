@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Vyqil Feedback (admin)</title>
+<style>
+:root{color-scheme:dark}body{margin:0;background:#05070A;color:#e8f1ff;font:15px/1.45 system-ui,sans-serif}
+.w{max-width:760px;margin:0 auto;padding:16px}h1{font-size:1.2rem;margin:6px 0 14px}
+input,button{font:inherit;border-radius:10px;border:1px solid #2f4a68;background:#0d1520;color:inherit;padding:10px 12px}
+button{cursor:pointer}button.p{background:#2b7bd8;border-color:transparent;color:#fff}button.g{background:#1c8f4e;border-color:transparent;color:#fff}
+.c{background:#0d1520;border:1px solid #1c2530;border-radius:14px;padding:12px;margin:10px 0}.m{font-size:.78rem;opacity:.7}.t{display:inline-block;font-size:.7rem;padding:2px 9px;border-radius:999px;background:#1d2b3d;margin-right:6px}
+.t.Bug{background:#7a2a2a}.t.Idea{background:#1f4d7a}.t.Question{background:#6b5a1d}.t.Love{background:#1f6b3d}.msg{white-space:pre-wrap;margin:8px 0}.row{display:flex;flex-wrap:wrap;gap:8px}.err{color:#ff9b9b}
+</style></head><body><div class="w">
+<h1>Vyqil Feedback (admin)</h1>
+<div id="login"><p class="m">Sign in with your own Vyqil account that you added as an admin.</p><div class="row"><input id="em" type="email" placeholder="Email" autocomplete="username"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><button class="p" id="go">Sign in</button></div><p class="err" id="le"></p></div>
+<div id="main" hidden>
+<div class="c"><b>Add credits to a business</b><p class="m">Use after someone buys a top-up, or to give a tester credits. Credits are per business and per app.</p>
+<div class="row"><input id="cb" placeholder="Business ID (shown on each feedback card)" style="flex:2 1 220px"><input id="ca" placeholder="App (events, landlord, realtor, photo, services)" style="flex:2 1 160px"><input id="cu" type="number" step="0.25" placeholder="$ of credits" style="flex:1 1 90px"><button class="g" id="cg">Add</button></div>
+<input id="cw" style="width:100%;margin-top:8px" placeholder="Assistant worker address" value="https://vyqil-assistant.dusterman225.workers.dev"><p class="m" id="cm"></p></div><div class="row" style="margin-bottom:8px"><button id="fnew" class="p">New</button><button id="fall">All</button><button id="out">Sign out</button></div><div id="list"></div></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="shared/firebase-config.js"></script>
+<script>
+var db=firebase.firestore(),auth=firebase.auth(),only='new';
+function $(i){return document.getElementById(i)}
+function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n}
+$('go').onclick=function(){$('le').textContent='';auth.signInWithEmailAndPassword($('em').value.trim(),$('pw').value).catch(function(e){$('le').textContent='Could not sign in: '+(e.code||e.message)})};
+$('cg').onclick=function(){var u=auth.currentUser,m=$('cm');m.textContent='Working...';
+  u.getIdToken().then(function(t){return fetch($('cw').value.replace(/\/$/,'')+'/admin',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({action:'topup',bizId:$('cb').value.trim(),app:$('ca').value.trim(),usd:parseFloat($('cu').value)})})})
+   .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.detail||j.error);return j})}).then(function(j){m.textContent='Done. That business now has $'+j.credits.left.toFixed(2)+' in credits for this app.'},function(e){m.textContent='Could not add: '+e.message})};
+$('out').onclick=function(){auth.signOut()};$('fnew').onclick=function(){only='new';load()};$('fall').onclick=function(){only='';load()};
+auth.onAuthStateChanged(function(u){$('login').hidden=!!u;$('main').hidden=!u;if(u)load()});
+function load(){
+  var l=$('list');l.textContent='Loading...';
+  db.collection('feedback').orderBy('createdAt','desc').limit(150).get().then(function(q){
+    l.textContent='';var n=0;
+    q.forEach(function(d){var f=d.data();if(only&&(f.status||'new')!==only)return;n++;l.appendChild(card(d.id,f))});
+    if(!n)l.textContent=only?'No new feedback.':'No feedback yet.';
+  },function(){l.textContent='';var e=el('div','c');e.appendChild(el('p','err','This account is not set up as a Vyqil admin.'));e.appendChild(el('p','m','In Firebase > Firestore, create a collection "admins" and a document whose ID is exactly this account\'s user ID:'));e.appendChild(el('b','',auth.currentUser.uid));l.appendChild(e)});
+}
+function card(id,f){
+  var c=el('div','c'),when=f.createdAt&&f.createdAt.toDate?f.createdAt.toDate().toLocaleString():'';
+  var h=el('div');var t=el('span','t '+String(f.kind||'').split(' ')[0],f.kind||'Idea');h.appendChild(t);h.appendChild(el('span','m',(f.app||'')+' · '+(f.bizName||'(no business)')+' · '+when+(f.bizId?' · ID '+f.bizId:'')));c.appendChild(h);
+  c.appendChild(el('div','msg',f.message||''));
+  c.appendChild(el('div','m',(f.email||'')+(f.tab?' · screen: '+f.tab:'')+(f.wantsToTest?' · WANTS TO BE A TESTER':'')+(f.contactOk?'':' · do not contact')+(f.status&&f.status!=='new'?' · '+f.status:'')));
+  var r=el('div','row');r.style.marginTop='8px';
+  var rw=el('button','g','Reward +30 days free');rw.onclick=function(){
+    if(!f.bizId){alert('This feedback has no business attached.');return}
+    if(!confirm('Give '+(f.bizName||'this business')+' another 30 days free?'))return;
+    var ref=db.collection('businesses').doc(f.bizId).collection('aiPlans').doc('trial');
+    db.runTransaction(function(tx){return tx.get(ref).then(function(s){var cur=s.exists?Number(s.data().extraDays)||0:0;tx.set(ref,{extraDays:cur+30,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})})})
+      .then(function(){return db.collection('feedback').doc(id).update({status:'rewarded'})}).then(function(){rw.textContent='Rewarded ✓';rw.disabled=true},function(e){alert('Could not reward: '+(e.code||e.message))});
+  };
+  var dn=el('button','','Mark done');dn.onclick=function(){db.collection('feedback').doc(id).update({status:'done'}).then(function(){c.remove()})};
+  r.appendChild(rw);r.appendChild(dn);
+  if(f.email&&f.contactOk!==false){var a=el('a','');a.href='mailto:'+f.email+'?subject='+encodeURIComponent('Your Vyqil feedback');a.appendChild(el('button','','Reply by email'));r.appendChild(a)}
+  c.appendChild(r);return c;
+}
+</script></body></html>
