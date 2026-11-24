@@ -30,7 +30,7 @@
             return r.json().catch(function () { return {}; }).then(function (j) {
               if (!r.ok) {
                 var fr = '', det = j.detail || j.error || ('status ' + r.status);
-                if (r.status === 402) { fr = 'The Vyqil Assistant is an add-on, and your free trial has ended. Add it to keep using it.'; det = ''; }
+                if (r.status === 402) { fr = 'The Vyqil Assistant is a ' + priceText() + ' add-on. Add it to start using it.'; det = ''; }
                 else if (r.status === 429 && (j.error === 'credits' || j.error === 'limit')) { fr = 'You are out of Assistant credits for this month' + (j.credits && j.credits.renews ? ' (they renew ' + j.credits.renews + ')' : '') + '. You can add credits any time.'; det = ''; if (j.credits) setCredits(j.credits); }
                 else if (r.status === 401 || r.status === 403) { if (j.detail && /Reports are for/.test(j.detail)) { fr = j.detail; det = ''; } else fr = 'I could not open your records. Please sign out and back in, then try again.'; }
                 throw { friendly: fr, detail: det };
@@ -158,9 +158,10 @@
       var holder = el('div'); holder.appendChild(el('p', 'hint', 'Checking your plan...')); v.appendChild(holder);
       api('/status', { app: C.id, bizId: S.biz.id, today: today() }).then(function (st) {
         holder.innerHTML = '';
-        if (!st.ok) { planCard(holder, 'Your free trial has ended. Add the Assistant to keep using it.'); return; }
-        if (st.credits) lastCredits = st.credits;
-        if (st.why === 'trial' || st.why === 'bonus') { var n = el('div', 'hint', 'Free trial: ' + st.daysLeft + ' day' + (st.daysLeft === 1 ? '' : 's') + ' left. After that it is ' + priceText() + '.'); n.style.cssText = 'text-align:center;margin-bottom:6px'; var a = el('a', '', ' Add it now'); a.href = '#'; a.onclick = function (e) { e.preventDefault(); buy(); }; n.appendChild(a); holder.appendChild(n); }
+        if (!st.ok) { planCard(holder, 'The Assistant is an optional add-on. It is not part of the free beta trial of the apps.'); return; }
+        lastCredits = st.credits || null;
+        if (st.why === 'admin') { var ad = el('div', 'hint', 'Owner testing mode: the Assistant is free for you and uses no credits.'); ad.style.cssText = 'text-align:center;margin-bottom:6px'; holder.appendChild(ad); }
+        else if (st.why === 'bonus') { var n = el('div', 'hint', 'Free Assistant time from Vyqil: ' + st.daysLeft + ' day' + (st.daysLeft === 1 ? '' : 's') + ' left. After that it is ' + priceText() + '.'); n.style.cssText = 'text-align:center;margin-bottom:6px'; var a = el('a', '', ' Add it now'); a.href = '#'; a.onclick = function (e) { e.preventDefault(); buy(); }; n.appendChild(a); holder.appendChild(n); }
         if (lastCredits) { meterEl = el('div', 'astmeter'); holder.appendChild(meterEl); var ac = el('a', '', ' Add credits'); ac.href = '#'; ac.onclick = function (e) { e.preventDefault(); addCredits(); }; meterEl.appendChild(ac); paintMeter(); }
         var keys = ['chat', 'reports', 'saved', 'memory'], tabs = el('div', 'asttabs'), body = el('div');
         [['chat', 'Chat'], ['reports', 'Reports'], ['saved', 'Saved'], ['memory', 'Memory']].forEach(function (t) { var b = el('button', t[0] === tab ? 'on' : '', t[1]); b.type = 'button'; b.onclick = function () { tab = t[0]; [].forEach.call(tabs.children, function (x, i) { x.className = keys[i] === tab ? 'on' : ''; }); draw(); }; tabs.appendChild(b); });

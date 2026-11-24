@@ -52,7 +52,7 @@
     function about() {
       Q.modal(function (s, close) {
         s.appendChild(el('h3', '', 'About the Beta'));
-        s.appendChild(el('p', 'hint', 'Vyqil apps are in Beta. Everyone who signs up gets a 30-day free trial for testing purposes. Features can change, and you may run into bugs. Please keep your own backup of anything important. Your feedback is how we make Vyqil better, and testers who actively help can earn another 30 days free.'));
+        s.appendChild(el('p', 'hint', 'Vyqil apps are in Beta. Everyone who signs up gets a 30-day free trial of the apps for testing purposes. The optional AI Assistant is a paid add-on and is not part of the free trial. Features can change, and you may run into bugs. Please keep your own backup of anything important. Your feedback is how we make Vyqil better, and testers who actively help can earn another 30 days free.'));
         var t = trialInfo(); if (t) s.appendChild(el('p', 'hint', t.left > 0 ? 'Your free trial has ' + t.left + ' day' + (t.left === 1 ? '' : 's') + ' left' + (t.extra ? ' (includes ' + t.extra + ' bonus days)' : '') + '.' : 'Your free trial has ended.'));
         var f = el('button', 'btn', 'Send feedback'), x = el('button', 'btn ghost', 'Close'); f.type = x.type = 'button'; f.style.marginRight = '8px'; f.onclick = function () { close(); feedback(); }; x.onclick = close;
         var bw = el('div'); bw.appendChild(f); bw.appendChild(x); s.appendChild(bw);
@@ -76,7 +76,7 @@
       } else if (bar) { bar.remove(); bar = null; }
       var au = app.querySelector('.auth');
       if (au && !au.querySelector('.betanote')) {
-        var n = el('div', 'betanote'); n.appendChild(document.createTextNode('Vyqil apps are in Beta. Everyone who signs up gets a 30-day free trial for testing purposes. '));
+        var n = el('div', 'betanote'); n.appendChild(document.createTextNode('Vyqil apps are in Beta. Everyone who signs up gets a 30-day free trial of the apps for testing purposes (the optional AI Assistant is a paid add-on). '));
         var f = el('a', '', 'Send feedback'); f.onclick = function () { feedback(); }; n.appendChild(f); au.appendChild(n);
       }
     }
