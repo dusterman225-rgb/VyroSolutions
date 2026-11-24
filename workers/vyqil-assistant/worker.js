@@ -46,16 +46,14 @@ async function member(env, token, uid, bizId) {
 }
 // The Assistant is an add-on. Allowed during the 30-day free trial (counted from when the business was created),
 // or while the add-on is switched on in businesses/{id}/aiPlans/assistant (only you can write that, from the Firebase console or a billing hook).
-async function entitled(env, token, bizId, biz, today) {
+async function entitled(env, token, uid, bizId, today) {
+  // You (a Vyqil admin, see admins/<your user id> in Firebase) use the Assistant free, in any business, so you can test.
+  try { if (await getDoc(env, token, 'admins/' + uid)) return { ok: true, why: 'admin' }; } catch (e) { }
+  // Everyone else needs the paid add-on. The Assistant is NOT part of the free beta trial.
+  // It is switched on in businesses/{id}/aiPlans/assistant: on = true (paid), or freeUntil = a date (free time you give a tester).
   let plan = null; try { plan = await getDoc(env, token, 'businesses/' + bizId + '/aiPlans/assistant'); } catch (e) { }
   if (plan && plan.on && (!plan.until || String(plan.until).slice(0, 10) >= today)) return { ok: true, why: 'plan', until: plan.until || '' };
-  let tr = null; try { tr = await getDoc(env, token, 'businesses/' + bizId + '/aiPlans/trial'); } catch (e) { }
-  const extraDays = tr && Number(tr.extraDays) > 0 ? Math.min(Number(tr.extraDays), 365) : 0; // bonus days you grant testers (see admin-feedback.html)
-  const t = biz && biz.createdAt ? Date.parse(biz.createdAt) : NaN, trialDays = parseInt(env.TRIAL_DAYS || '30', 10) + extraDays, now = Date.parse(today + 'T00:00:00Z');
-  const bonus = plan && plan.freeUntil && String(plan.freeUntil).slice(0, 10) >= today ? String(plan.freeUntil).slice(0, 10) : '';
-  const trialEnd = isFinite(t) ? t + trialDays * DAY : 0;
-  const endMs = Math.max(bonus ? Date.parse(bonus + 'T00:00:00Z') : 0, trialEnd);
-  if (endMs && now <= endMs) return { ok: true, why: bonus && Date.parse(bonus + 'T00:00:00Z') >= trialEnd ? 'bonus' : 'trial', daysLeft: Math.max(0, Math.ceil((endMs - now) / DAY)) };
+  if (plan && plan.freeUntil && String(plan.freeUntil).slice(0, 10) >= today) return { ok: true, why: 'bonus', daysLeft: Math.max(0, Math.ceil((Date.parse(String(plan.freeUntil).slice(0, 10) + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / DAY)) };
   return { ok: false };
 }
 // Counts one use per business per month with the person's own token (the Firestore rules only allow +1 each time).
@@ -101,8 +99,9 @@ async function settle(env, k, usd, model, note, wasted) {
   const micro = Math.ceil((usd || 0) * MICRO); if (micro > 0) await D.prepare('UPDATE acct SET used = used + MIN(?1, MAX(plan-used,0)), topup = MAX(0, topup - MAX(?1 - MAX(plan-used,0), 0)) WHERE k=?2').bind(micro, k).run();
   if (micro > 0 || wasted > 0) await D.prepare('INSERT INTO ledger (k,ts,kind,micro,model,note) VALUES (?1,?2,?3,?4,?5,?6)').bind(k, new Date().toISOString(), 'use', -micro, String(model || '').slice(0, 60), (note || '') + (wasted > 0 ? ' | retries not charged: $' + wasted.toFixed(5) : '')).run();
 }
-async function gate(env, token, bizId, biz, app) {
-  const today = sToday(), e = await entitled(env, token, bizId, biz, today); if (!e.ok) return { block: { status: 402, data: { error: 'plan' } } };
+async function gate(env, token, uid, bizId, app) {
+  const today = sToday(), e = await entitled(env, token, uid, bizId, today); if (!e.ok) return { block: { status: 402, data: { error: 'plan' } } };
+  if (e.why === 'admin') return { k: null }; // free for you: no credits are used
   if (env.DB) { const k = bizId + '|' + app, cv = await creditView(env, k); if (cv.left < 0.002) return { block: { status: 429, data: { error: 'credits', credits: cv } } }; return { k }; }
   try { const u = await countUse(env, token, bizId, today); if (!u.ok) return { block: { status: 429, data: { error: 'limit', limit: u.limit } } }; } catch (x) { return { block: { status: 502, data: { error: 'busy', detail: 'could not update the monthly counter. Publish the latest firestore.rules.' } } }; }
   return { k: null };
@@ -111,8 +110,8 @@ const appKey = a => /^[a-z]{3,12}$/.test(String(a || '')) ? String(a) : 'app';
 async function status(env, token, uid, body) {
   const bizId = String(body.bizId || ''); if (!bizId) return { status: 400, data: { error: 'bad' } };
   const today = sToday(); let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
-  const e = await entitled(env, token, bizId, m.biz, today); let credits = null;
-  try { if (env.DB) credits = await creditView(env, bizId + '|' + appKey(body.app)); } catch (x) { }
+  const e = await entitled(env, token, uid, bizId, today); let credits = null;
+  try { if (env.DB && e.why !== 'admin') credits = await creditView(env, bizId + '|' + appKey(body.app)); } catch (x) { }
   return { status: 200, data: { ok: !!e.ok, why: e.why || 'none', daysLeft: e.daysLeft == null ? null : e.daysLeft, until: e.until || '', credits, role: m.role } };
 }
 // What the owner has told the assistant about the business, plus what it has been asked to remember. Kept per app.
@@ -220,7 +219,7 @@ async function chat(env, token, uid, body) {
   let m, recs;
   try { m = await member(env, token, uid, bizId); recs = await listAll(env, token, 'businesses/' + bizId + '/' + col, 1500); }
   catch (e) { return { status: 403, data: { error: 'access', detail: 'could not read your business records (' + String(e && e.message || e).slice(0, 80) + ')' } }; }
-  const app = appKey(body.app), g = await gate(env, token, bizId, m.biz, app); if (g.block) return g.block;
+  const app = appKey(body.app), g = await gate(env, token, uid, bizId, app); if (g.block) return g.block;
   const appName = clip(body.appName || 'this app', 40), mem = await memoryText(env, token, bizId, app);
   const sys = PERSONA(appName) + '\n\nTODAY: ' + today + '\nBUSINESS: ' + clip(m.biz.name, 80) + ' | the person asking is the ' + m.role + '\n\n' + mem + 'RECORDS:\n' + briefing(recs, body.schema, m.role, today);
   const c = await chain(env, env.CHAT_MODELS, [{ role: 'system', content: sys }].concat(msgs), 1400, r => r.text && r.text.length > 2 ? r : null);
@@ -234,7 +233,7 @@ async function scan(env, token, uid, body) {
   if (!body.schema) return { status: 400, data: { error: 'bad' } };
   let mb; const bz = String(body.bizId || ''); try { mb = await member(env, token, uid, bz); } catch (e) { return { status: 403, data: { error: 'access' } }; }
   const sd = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || '')) ? body.today : new Date().toISOString().slice(0, 10);
-  const g = await gate(env, token, bz, mb.biz, appKey(body.app)); if (g.block) return g.block;
+  const g = await gate(env, token, uid, bz, appKey(body.app)); if (g.block) return g.block;
   const kinds = Object.keys(body.schema).map(k => {
     const kd = body.schema[k]; return k + ' = ' + kd.label + ': ' + (kd.fields || []).filter(f => f.t !== 'calc').map(f => f.k + ' (' + f.l + ', ' + f.t + (f.o ? ', one of: ' + f.o.join(' / ') : '') + (f.req ? ', required' : '') + ')').join('; ');
   }).join('\n');
@@ -307,7 +306,7 @@ async function report(env, token, uid, body) {
   const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || '')) ? body.today : sToday();
   let m, recs; try { m = await member(env, token, uid, bizId); recs = await listAll(env, token, 'businesses/' + bizId + '/' + col, 1500); } catch (e) { return { status: 403, data: { error: 'access' } }; }
   if (['owner', 'gm', 'admin', 'supervisor'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Reports are for owners and managers.' } };
-  const app = appKey(body.app), g = await gate(env, token, bizId, m.biz, app); if (g.block) return g.block;
+  const app = appKey(body.app), g = await gate(env, token, uid, bizId, app); if (g.block) return g.block;
   const rng = rangeOf(String(body.period || 'month'), today), mem = await memoryText(env, token, bizId, app), ask1 = clip(body.custom || '', 600);
   if ((body.type === 'proposal' || body.type === 'custom') && ask1.length < 5) return { status: 400, data: { error: 'bad', detail: 'Tell me what the ' + (body.type === 'proposal' ? 'proposal is for' : 'report should cover') + '.' } };
   const sys = PERSONA(clip(body.appName || 'this app', 40)) + `
