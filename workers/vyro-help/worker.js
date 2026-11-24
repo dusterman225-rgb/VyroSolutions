@@ -20,9 +20,12 @@ function systemFor(page) {
   return RULES + '\n' + COMMON + '\n' + (customerSide ? CUSTOMER : CONTRACTOR) + '\nKeep every answer under about 150 words. Use at most 6 short steps. Always finish your last sentence.';
 }
 
+// ALLOWED_ORIGIN can list several site addresses, separated by commas.
+const originList = env => String(env.ALLOWED_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);
 function cors(env, origin) {
   return {
-    'Access-Control-Allow-Origin': origin === env.ALLOWED_ORIGIN ? origin : env.ALLOWED_ORIGIN,
+    'Access-Control-Allow-Origin': originList(env).indexOf(origin) >= 0 ? origin : originList(env)[0],
+    'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Vary': 'Origin'
@@ -37,7 +40,7 @@ export default {
     const origin = req.headers.get('Origin') || '';
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
     if (req.method !== 'POST') return json(env, origin, { error: 'POST only', detail: 'The helper is running. Open your site and use the chat.' }, 405);
-    if (origin !== env.ALLOWED_ORIGIN) return json(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN in wrangler.jsonc must equal your site address exactly; this request came from ' + origin + ')' }, 403);
+    if (originList(env).indexOf(origin) < 0) return json(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN in wrangler.jsonc must equal your site address exactly; this request came from ' + origin + ')' }, 403);
 
     let body;
     try { body = await req.json(); } catch (e) { return json(env, origin, { error: 'Bad request' }, 400); }
