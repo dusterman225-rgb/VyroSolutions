@@ -3,7 +3,7 @@
   "main": "worker.js",
   "compatibility_date": "2025-01-01",
   // The credits database. Create it once in the Cloudflare dashboard (README step 2) and paste its ID here, or add the binding in the dashboard.
-  "d1_databases": [{ "binding": "DB", "database_name": "vyqil-credits", "database_id": "PUT-THE-DATABASE-ID-HERE" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "vyqil-credits", "database_id": "b6f85048-d401-478f-ad8e-18c585282f73" }],
   "vars": {
     "ALLOWED_ORIGIN": "https://vyrocontractor.dusterman225.workers.dev",
     "FIREBASE_PROJECT": "vyrocontractor",
