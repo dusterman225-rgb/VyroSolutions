@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070A">
+<title>Vyqil Assistant - Vyqil Business</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">Vyqil Assistant</div>
+  </div>
+  <div id="ai" style="margin-top:10px"><p class="note">Loading...</p></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ai.js"></script>
+<script>
+  vyro.start(async function (ctx) {
+    var host = document.getElementById('ai'); host.innerHTML = '';
+    window.vqContractorAI(ctx, host);
+    if (location.hash === '#scan') { var t = setInterval(function () { if (window.vqScan && window.Q && window.Q.scanFlow) { clearInterval(t); window.vqScan(); } }, 200); setTimeout(function () { clearInterval(t); }, 8000); }
+  });
+</script>
+</body>
+</html>

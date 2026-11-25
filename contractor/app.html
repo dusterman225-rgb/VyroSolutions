@@ -56,8 +56,15 @@
           <summary class="mg">Tools</summary>
           <a class="mi" href="timelog.html">Time and mileage</a>
           <a class="mi" id="miSub" href="subs.html">Subcontractors</a>
-          <a class="mi" href="assistant.html">Assistant</a>
+          <a class="mi" href="ai.html">Vyqil Assistant (AI)</a>
+          <a class="mi" href="ai.html#scan">Scan a document</a>
+          <a class="mi" href="assistant.html">Quick help</a>
           <a class="mi" id="miData" href="data.html" style="display:none">Data and activity</a>
+        </details>
+        <details>
+          <summary class="mg">Beta</summary>
+          <a class="mi" href="#" id="miFb">Send feedback</a>
+          <a class="mi" href="#" id="miAbout">About the Beta</a>
         </details>
         <details>
           <summary class="mg">Business</summary>
@@ -141,7 +148,7 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
   window.addEventListener('unhandledrejection', function (e) { if (window.vyroSigningOut) e.preventDefault(); });
   $('logoutTop').addEventListener('click', function () { $('out').click(); });
-  $('out').addEventListener('click', function () { var go = function () { location.href = vyro.loginUrl(); }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
+  $('out').addEventListener('click', function () { var go = function () { location.href = '/dashboard.html'; }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
 
   // ---- Get started checklist (same idea as VyqilLandlord): shows what is done, what is next, and can be hidden ----
   async function getStarted(ctx) {
@@ -200,6 +207,13 @@
   }
 
   vyro.start(async function (ctx) {
+    (function () {
+      function lb(fn) { if (window.vqBeta) return fn(); var sc = document.createElement('script'); sc.src = 'js/cbeta.js'; sc.onload = fn; document.head.appendChild(sc); }
+      lb(function () { window.vqBeta.mount(ctx); });
+      var f = document.getElementById('miFb'), a = document.getElementById('miAbout');
+      if (f) f.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.feedback(); }); });
+      if (a) a.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.about(); }); });
+    })();
     getStarted(ctx);
     if (ctx.biz.product === 'restaurant' && !(ctx.biz.apps && ctx.biz.apps.contractor)) { location.replace('/restaurant/index.html'); return; }
     var canMoney = ctx.role === 'owner' || ctx.role === 'supervisor';
