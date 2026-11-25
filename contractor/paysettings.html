@@ -20,6 +20,8 @@
 
   <div id="testBanner" style="display:none;margin:8px 0;padding:6px 12px;border:1px solid #d4af37;border-radius:999px;text-align:center;font-size:.78rem;color:#d4af37">TEST MODE: no real money</div>
 
+  <div id="pmHost"></div>
+
   <div class="card">
     <h2>Get paid in crypto</h2>
     <p>Customers scan a QR on your invoice. Money goes straight to your wallet. Vyqil's fee is 2%.</p>
@@ -55,6 +57,19 @@
       $('msg').textContent = 'Only the owner can change payment settings.';
     }
     $('wallet').value = ctx.biz.payWallet || '';
+    (function () {
+      var sc = document.createElement('script'); sc.src = '../shared/paymethods.js';
+      sc.onload = function () {
+        var host = $('pmHost');
+        if (ctx.role !== 'owner' && ctx.role !== 'gm') { VQPayMethods.view(host, ctx.biz.payMethods, { title: 'How customers pay you', intro: 'Only the owner can change these.' }); return; }
+        VQPayMethods.editor(host, ctx.biz.payMethods, async function (list) {
+          await ctx.bizRef.update({ payMethods: list, updatedAt: vyro.stamp() }); ctx.biz.payMethods = list;
+          try { var sn = await vyro.db.collection('portals').where('bizId', '==', ctx.bizId).get(), b = vyro.db.batch(), n = 0; sn.forEach(function (d) { if (n < 400) { b.update(d.ref, { payMethods: list }); n++; } }); if (n) await b.commit(); } catch (e) { /* customers get it on the next sync */ }
+          try { await vyro.audit(ctx, 'payment methods changed', list.length + ' listed'); } catch (e) { /* optional */ }
+        });
+      };
+      document.head.appendChild(sc);
+    })();
     var coins = ctx.biz.payCoins || [];
     $('cUsdc').checked = true;
     $('save').addEventListener('click', async function () {

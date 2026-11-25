@@ -54,6 +54,7 @@
       <div id="invList"></div>
       <div class="note" id="invNone"></div>
     </div>
+    <div id="payHost"></div>
     <div class="card" id="docCard" style="display:none">
       <h2>Documents</h2>
       <div class="note" id="dReturn"></div>
@@ -154,6 +155,12 @@
     $('mPaid').textContent = vutil.fmt(p.paidCents || 0);
     $('mOwed').textContent = vutil.fmt(p.owedCents || 0);
     if (p.owedCents) $('mOwed').className = 'late';
+    if (Array.isArray(p.payMethods) && p.payMethods.length) {
+      (function () {
+        function go() { try { $('payHost').textContent = ''; VQPayMethods.view($('payHost'), p.payMethods, { cls: 'card', title: 'How to pay', intro: 'Pay ' + (p.businessName || 'your contractor') + ' directly with any of these. They will mark your invoice paid.' }); } catch (e) { /* optional */ } }
+        if (window.VQPayMethods) go(); else { var sc = document.createElement('script'); sc.src = '../shared/paymethods.js'; sc.onload = go; document.head.appendChild(sc); }
+      })();
+    }
 
     var ref = db.collection('portals').doc(id);
     try { localStorage.setItem('vyroPortalSeen_' + id, String(Date.now())); } catch (e) { /* optional */ }
