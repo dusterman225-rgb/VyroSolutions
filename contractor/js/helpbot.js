@@ -67,7 +67,7 @@
   }
   function showChips() {
     chips.textContent = '';
-    ['How do I get started?', 'I\'m lost, where do I go?', 'How do I contact support?'].forEach(function (t) {
+    (window.VYRO_HELP_CHIPS || ['How do I get started?', 'I\'m lost, where do I go?', 'How do I contact support?']).forEach(function (t) {
       var c = el('button', '', '', t); c.type = 'button'; c.addEventListener('click', function () { inp.value = t; go(); }); chips.appendChild(c);
     });
   }
@@ -132,7 +132,7 @@
     bubble('me', t); if (red.changed) bubble('bot', 'I removed what looked like personal details before sending your message. Please do not share them here.', null, true); S.hist.push({ role: 'user', content: t }); S.pending = true; save();
     var wait = dots();
     try {
-      var r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: S.hist, page: location.pathname }) });
+      var r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: S.hist, page: location.pathname, app: window.VYRO_HELP_APP || '' }) });
       var d = await r.json();
       if (!d.reply) { var er = new Error('x'); er.detail = d.detail || d.error || ('status ' + r.status); throw er; }
       var text = d.reply.replace(/\*\*/g, '').replace(/^#+\s*/gm, '');

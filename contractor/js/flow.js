@@ -16,11 +16,16 @@
   function myName(ctx) { return String(first(ctx.me && ctx.me.name, window.vyro && vyro.who && vyro.who(ctx), ctx.user && ctx.user.displayName, ctx.biz.name)).trim(); }
 
   // The one message used for every document.
+  var PM_NAMES = { link: 'Card or online link', paypal: 'PayPal', venmo: 'Venmo', cashapp: 'Cash App', zelle: 'Zelle', ach: 'Bank transfer', check: 'Check', cash: 'Cash', other: 'Other' };
+  function payText(ctx) {
+    var L = Array.isArray(ctx.biz.payMethods) ? ctx.biz.payMethods.slice(0, 6) : []; if (!L.length) return '';
+    return '\n\nHow to pay:\n' + L.map(function (m) { return '- ' + (PM_NAMES[m.t] || 'Other') + (m.v ? ': ' + m.v : '') + (m.n ? ' (' + m.n + ')' : ''); }).join('\n');
+  }
   function message(ctx, to) {
     var link = portalLink(ctx);
     return {
       to: to || '', subject: myName(ctx) + ' sent you a new document',
-      body: myName(ctx) + ' sent you a new document for you to review. Please check your customer portal.\n\n' + link + '\n\nThank you,\n' + (ctx.biz.name || '')
+      body: myName(ctx) + ' sent you a new document for you to review. Please check your customer portal.\n\n' + link + payText(ctx) + '\n\nThank you,\n' + (ctx.biz.name || '')
     };
   }
 

@@ -98,6 +98,7 @@
       status: job.status || '', startDate: job.startDate || '', targetEndDate: job.targetEndDate || '',
       title: job.title || '', address: job.address || '', contractCents: job.contractCents || 0,
       paidCents: paid, owedCents: owed,
+      payMethods: Array.isArray(ctx.biz.payMethods) ? ctx.biz.payMethods.slice(0, 6) : [],
       businessName: ctx.biz.name || '', businessPhone: ctx.biz.phone || '', businessEmail: ctx.biz.email || '',
       updatedAt: vyro.stamp()
     });
