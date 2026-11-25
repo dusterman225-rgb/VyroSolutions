@@ -133,3 +133,8 @@ input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(2
 .cal-cell.today{box-shadow:0 0 0 2px #D9B864,0 0 12px rgba(217,184,100,.6)}
 .pill,.stage{border-radius:999px!important;background:linear-gradient(180deg,#fff,#FBF1D8)!important}
 @media (prefers-reduced-motion:reduce){.btn::after{animation:none}}
+/* menu letters: bolder and a little darker so they are easy to read */
+.menu .mi{font-weight:700!important;color:#2F2820!important;font-size:.95rem!important;letter-spacing:.03em}
+.menu summary,.menu .mg{font-weight:700!important;color:#5E4A1C!important}
+.menu .mh small{font-weight:600!important;color:#4A423A!important}
+.menu .mi.out{font-weight:700!important}
