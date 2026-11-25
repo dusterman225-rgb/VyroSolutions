@@ -34,7 +34,7 @@
 <script>
   var $ = function (id) { return document.getElementById(id); };
   function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
-  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = vyro.loginUrl(); });
+  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = '/dashboard.html'; });
   vyro.start(async function (ctx) {
     if (!onlyRestaurant(ctx)) return;
     var ids = ['menu', 'team', 'paysettings', 'signinlink', 'worklocation', 'theme', 'profile', 'locations', 'records'];

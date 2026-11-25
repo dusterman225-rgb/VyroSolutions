@@ -84,7 +84,7 @@
   function onlyRestaurant(ctx) { if (ctx.biz.product && ctx.biz.product !== 'takeout' && !(ctx.biz.apps && ctx.biz.apps.takeout)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
   function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
 
-  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = vyro.loginUrl(); });
+  $('out').addEventListener('click', async function () { await vyro.signOut(); location.href = '/dashboard.html'; });
   vyro.start(async function (ctx) {
     if (!onlyRestaurant(ctx)) return;
     var R = vroles, role = ctx.role, staff = R.isStaff(ctx);
