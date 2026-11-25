@@ -3,6 +3,7 @@
   if (window.__vyroMenu || document.getElementById('menuBtn')) return;
   window.__vyroMenu = true;
   function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
+  function loadBeta(fn) { if (window.vqBeta) return fn(); var sc = document.createElement('script'); sc.src = 'js/cbeta.js'; sc.onload = fn; document.head.appendChild(sc); }
   window.vmenu = { mount: function (ctx) {
     var role = ctx.role, money = role === 'owner' || role === 'supervisor';
     var host = document.querySelector('.brand') || document.querySelector('.wrap');
@@ -23,12 +24,15 @@
     group('Community', [['Nearby requests and Vyqil members', 'community.html'], ['Need A Vyqil Member', 'community.html#need'], ['My community listing', 'community.html#listing']]);
     group('Customers', [['Customers', 'customers.html'], money && ['Contracts', 'documents.html'], ['Messages', 'messages.html']]);
     group('Money', money ? [['Invoices', 'invoices.html'], ['Expenses and bills', 'expenses.html'], ['Recurring bills', 'recurring.html'], role === 'owner' && ['Finances', 'finances.html'], role === 'owner' && ['Pay with Vyqil', 'paysettings.html']] : []);
-    group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], ['Assistant', 'assistant.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
+    group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], ['Vyqil Assistant (AI)', 'ai.html'], ['Scan a document', 'ai.html#scan'], ['Quick help', 'assistant.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
+    group('Beta', [['Send feedback', '#feedback'], ['About the Beta', '#about']]);
     group('Business', [['Business profile', 'profile.html'], ['Team', 'team.html'], role === 'owner' && ['Sign-in link', 'signinlink.html']]);
+    try { menu.addEventListener('click', function (e) { var h = e.target && e.target.getAttribute && e.target.getAttribute('href'); if (h === '#feedback' || h === '#about') { e.preventDefault(); set(false); loadBeta(function () { h === '#feedback' ? vqBeta.feedback() : vqBeta.about(); }); } }); } catch (e) { /* ignore */ }
+    loadBeta(function () { vqBeta.mount(ctx); });
     var al = el('button', 'mi', 'Phone alerts'); al.type = 'button'; al.addEventListener('click', function () { set(false); vutil.pushPanel('team', ctx); }); menu.appendChild(al);
     menu.appendChild(Object.assign(el('a', 'mi', 'Switch business'), { href: '/dashboard.html' }));
     var out = el('button', 'mi out', 'Sign out'); out.type = 'button';
-    out.addEventListener('click', async function () { try { await vyro.signOut(); } catch (e) { /* ignore */ } location.href = vyro.loginUrl(); });
+    out.addEventListener('click', async function () { try { await vyro.signOut(); } catch (e) { /* ignore */ } location.href = '/dashboard.html'; });
     menu.appendChild(out);
     var lo = el('button', 'logout-sm', 'Log out'); lo.type = 'button';
     lo.addEventListener('click', function () { out.click(); });
