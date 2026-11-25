@@ -63,7 +63,7 @@
   function nameOf(r) { return String(r[(P && P.name) || 'name'] || '').slice(0, 80); }
   function portalDoc(r) {
     var inv = []; try { inv = P.invoices ? P.invoices(r, S().recs).slice(0, 8) : []; } catch (e) { inv = []; }
-    return { bizId: bid(), recId: r.id, custEmail: emailOf(r), custName: nameOf(r), bizName: String(S().biz.name || '').slice(0, 80), bizPhone: bizPhone(), invoices: inv, updatedAt: Q.FV.serverTimestamp() };
+    return { bizId: bid(), recId: r.id, custEmail: emailOf(r), custName: nameOf(r), bizName: String(S().biz.name || '').slice(0, 80), bizPhone: bizPhone(), invoices: inv, payMethods: (Array.isArray(S().biz.payMethods) ? S().biz.payMethods : []).slice(0, 6), updatedAt: Q.FV.serverTimestamp() };
   }
   function portalLink(r) {
     var url = portalBase() + '?e=' + encodeURIComponent(emailOf(r));
@@ -82,7 +82,7 @@
   function syncPortals() {
     if (!P || !bid()) return;
     S().recs.forEach(function (r) {
-      if (r.kind !== P.kind || !r.portalId) return; var d = portalDoc(r), h = JSON.stringify([d.custEmail, d.custName, d.bizName, d.bizPhone, d.invoices]), key = 'vq_cp_' + r.portalId;
+      if (r.kind !== P.kind || !r.portalId) return; var d = portalDoc(r), h = JSON.stringify([d.custEmail, d.custName, d.bizName, d.bizPhone, d.invoices, d.payMethods]), key = 'vq_cp_' + r.portalId;
       try { if (localStorage.getItem(key) === h) return; } catch (e) { /* ignore */ }
       Q.db.collection('custPortals').doc(r.portalId).set(d).then(function () { try { localStorage.setItem(key, h); } catch (e) { /* ignore */ } }, function () { /* try again later */ });
     });

@@ -6,6 +6,8 @@
   var C = window.VQ_APP, Q = window.Q = { S: { recs: [], biz: null, user: null, tab: 'today', filter: {}, q: '' }, extras: [], onStart: [], banners: [], tabsExtra: [], views: {}, eventSources: [], menuTop: [] };
   var S = Q.S;
   // Vyqil Assistant and document scan live in assistant.js, next to this file.
+  // Help bubble for every engine app. The server picks the right app knowledge from VYRO_HELP_APP.
+  try { window.VYRO_HELP_APP = (window.VQ_APP && window.VQ_APP.id) || ''; window.VYRO_HELP_CHIPS = ['How do I get started?', 'How do customers pay me?', 'How does the AI Assistant work?', 'How do I contact support?']; var hc = document.createElement('script'); hc.src = '/shared/helpbot-config.js'; hc.onload = function () { var hb = document.createElement('script'); hb.src = '/shared/helpbot.js'; document.head.appendChild(hb); }; document.head.appendChild(hc); } catch (e) { /* the help bubble is optional */ }
   try { var me = document.currentScript; if (me && me.src) { var as = document.createElement('script'); as.src = me.src.replace(/engine\.js(\?.*)?$/, 'assistant.js$1'); document.head.appendChild(as);  var bs = document.createElement('script'); bs.src = me.src.replace(/engine\.js(\?.*)?$/, 'beta.js$1'); document.head.appendChild(bs); } } catch (e) { }
 
   // ---------- small helpers ----------
@@ -721,12 +723,19 @@
     var card = el('div', 'card'); card.appendChild(el('div', 'hint', 'Signed in as ' + (S.user.email || '') + ' (' + roleLabel(S.biz.role) + ')')); v.appendChild(card);
     function btn(label, fn, ghost) { var b = el('button', 'btn' + (ghost === false ? '' : ' ghost'), label); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0'; b.onclick = fn; card.appendChild(b); }
     btn('Phone alerts', function () { Q.push.panel(); });
+    if (isAdmin()) btn('How customers pay you', payMethodsModal);
     if (isAdmin()) btn('Team', teamModal);
     if (isAdmin()) btn('Rename business', function () { modal(function (s, close) { s.appendChild(el('h3', '', 'Business name')); var i = el('input'); i.value = S.biz.name; i.maxLength = 80; s.appendChild(i); var b = el('div', 'btns'), sv = el('button', 'btn', 'Save'); sv.type = 'button'; b.appendChild(sv); s.appendChild(b); sv.onclick = async function () { if (!i.value.trim()) return; try { await db.collection('businesses').doc(S.biz.id).update({ name: i.value.trim().slice(0, 80) }); S.biz.name = i.value.trim(); close(); shell(); render(); } catch (e) { toast(friendly(e)); } }; }); });
     if (isAdmin()) kinds().forEach(function (k) { btn('Download ' + K(k).plural.toLowerCase() + ' (CSV)', function () { download(C.id + '-' + k + '.csv', toCsv(k), 'text/csv'); }); });
     if (isAdmin()) btn('Download everything (backup)', function () { download(C.id + '-backup-' + today() + '.json', JSON.stringify(S.recs.map(function (r) { var o = Object.assign({}, r); delete o.createdAt; delete o.updatedAt; return o; }), null, 1), 'application/json'); });
     btn('Sign out', function () { signOutNow(); });
     var n = el('div', 'note'); n.textContent = 'This is a first version. It keeps your records and reminders for you and your team; it does not send emails, take payments or have a customer portal yet.'; v.appendChild(n);
+  }
+
+  // ---------- how customers pay you (their own existing payment methods, shown on customer portals) ----------
+  function payMethodsModal() {
+    function go() { modal(function (s, close) { var host = el('div'); s.appendChild(host); window.VQPayMethods.editor(host, S.biz.payMethods, function (list) { return db.collection('businesses').doc(S.biz.id).update({ payMethods: list, updatedAt: FV.serverTimestamp() }).then(function () { S.biz.payMethods = list; }); }); var x = el('button', 'btn ghost', 'Close'); x.type = 'button'; x.style.marginTop = '10px'; x.onclick = close; s.appendChild(x); }); }
+    if (window.VQPayMethods) return go(); var sc = document.createElement('script'); sc.src = '/shared/paymethods.js'; sc.onload = go; sc.onerror = function () { toast('Could not load. Please try again.'); }; document.head.appendChild(sc);
   }
 
   // ---------- team ----------

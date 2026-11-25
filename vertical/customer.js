@@ -7,6 +7,7 @@
   var db = firebase.firestore(), auth = firebase.auth ? firebase.auth() : null, FV = firebase.firestore.FieldValue;
   function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
   function money(c) { c = Math.round(+c || 0); return '$' + Math.floor(c / 100).toLocaleString('en-US') + '.' + ('0' + (c % 100)).slice(-2); }
+  try { window.VYRO_HELP_APP = 'customer'; window.VYRO_HELP_CHIPS = ['How do I request an appointment?', 'How do I pay?', 'I forgot my password', 'How do I contact support?']; var hc = document.createElement('script'); hc.src = '/shared/helpbot-config.js'; hc.onload = function () { var hb = document.createElement('script'); hb.src = '/shared/helpbot.js'; document.head.appendChild(hb); }; document.head.appendChild(hc); } catch (e) { /* optional */ }
   var qs = new URLSearchParams(location.search), PUSH = String(window.VYQIL_PUSH_URL || 'https://vyqil-push.dusterman225.workers.dev').replace(/\/$/, '');
   function friendly(e) { var m = { 'auth/invalid-credential': 'That email and password do not match.', 'auth/wrong-password': 'That email and password do not match.', 'auth/user-not-found': 'That email and password do not match.', 'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.', 'permission-denied': 'That was not allowed. Please sign in again.', unavailable: 'No connection. Try again.' }; return m[e && (e.code || '')] || (e && e.message) || 'Something went wrong. Try again.'; }
   function shell(title, sub) {
@@ -16,6 +17,8 @@
   function field(parent, label, input, note) { parent.appendChild(el('label', 'f', label)); parent.appendChild(input); if (note) parent.appendChild(el('div', 'note', note)); return input; }
   function api(path, body, tok) { var h = { 'Content-Type': 'application/json' }; if (tok) h.Authorization = 'Bearer ' + tok; return fetch(PUSH + path, { method: 'POST', headers: h, body: JSON.stringify(body) }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; }); }); }
   function notify(kind, id) { if (!auth || !auth.currentUser) return; auth.currentUser.getIdToken().then(function (t) { return api('/community', { kind: kind, requestId: id }, t); }).catch(function () { /* alerts are optional */ }); }
+  function loadPM(fn) { if (window.VQPayMethods) return fn(); var sc = document.createElement('script'); sc.src = '../shared/paymethods.js'; sc.onload = fn; document.head.appendChild(sc); }
+  function payBox(parent, list) { var holder = el('div'); parent.appendChild(holder); loadPM(function () { try { window.VQPayMethods.view(holder, list, { cls: 'card', intro: 'Pay this business directly with any of these. They will mark your invoice paid.' }); } catch (e) { /* optional */ } }); }
   function tzOf(pg) { return (pg && pg.tz) || 'America/Los_Angeles'; }
   function status(r, pg) {
     var tz = tzOf(pg), c = el('div', 'card'); c.appendChild(el('b', '', r.typeName || 'Appointment')); c.lastChild.style.color = '#fff';
@@ -137,6 +140,7 @@
         var cn = el('button', 'btn sm ghost', r.status === 'accepted' ? 'Cancel appointment' : 'Cancel request'); cn.type = 'button'; cn.onclick = function () { if (!confirm('Cancel this?')) return; db.collection('apptRequests').doc(r.id).update({ status: 'canceled', updatedAt: FV.serverTimestamp() }).then(function () { notify('aupd', r.id); }, function (e) { alert(friendly(e)); }); }; row.appendChild(cn); s.appendChild(row); c.appendChild(s);
       });
       past.forEach(function (r) { var rr = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', r.typeName)); m.appendChild(el('span', '', B.fmtRange(tz, r.start, r.end))); rr.appendChild(m); rr.appendChild(el('span', 'pill ' + (r.status === 'accepted' ? 'ok' : 'bad'), r.status === 'accepted' ? 'Done' : r.status)); c.appendChild(rr); });
+      if ((p.payMethods || []).length) payBox(c, p.payMethods);
       if ((p.invoices || []).length) { c.appendChild(el('h2', '', 'Invoices')); p.invoices.forEach(function (n) { var rr = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', (n.n ? '#' + n.n + ' · ' : '') + (n.t || 'Invoice'))); m.appendChild(el('span', '', n.d ? 'Due ' + n.d : '')); rr.appendChild(m); rr.appendChild(el('span', 'amt', money(n.a))); rr.appendChild(el('span', 'pill ' + (n.s === 'Paid' ? 'ok' : 'warn'), n.s || '')); c.appendChild(rr); }); }
       return c;
     }
