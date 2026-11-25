@@ -5,9 +5,6 @@
   // ===== The only settings you may need to change =====
   var SETTINGS = {
     price: '$7/month',          // the price shown to customers (includes $3 of credits every month)
-    buyUrl: '',                 // payment link for the $7/month Assistant (for example a Stripe Payment Link)
-    topup1Url: '',              // payment link: $1 buys $0.25 of credits
-    topup5Url: '',              // payment link: $5 buys $2.50 of credits
     workerUrl: ''               // leave empty unless your worker address is not https://vyqil-assistant.dusterman225.workers.dev
   };
   function start() {
@@ -16,6 +13,7 @@
     function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
     function base() { return String(window.VYQIL_ASSISTANT_URL || SETTINGS.workerUrl || 'https://vyqil-assistant.dusterman225.workers.dev').replace(/\/$/, ''); }
     function kindsAll() { return Object.keys(C.kinds).filter(function (k) { return !C.kinds[k].hidden || k === 'mydate'; }); }
+    function scanAll() { return Object.keys(C.scanKinds || C.kinds).filter(function (k) { return k !== 'mydate' && (!C.kinds[k].hidden); }); }
     function schema(only) {
       var o = {}; (only || kindsAll()).forEach(function (k) {
         var kd = C.kinds[k]; if (!kd) return;
@@ -36,10 +34,16 @@
                 throw { friendly: fr, detail: det };
               }
               if (j && j.credits) setCredits(j.credits);
+              if (j && j.dev) showDev(j.dev);
               return j;
             });
           }, function () { throw { friendly: '', detail: 'could not reach the assistant. Check your connection.' }; });
       });
+    }
+    // Test info, only the server sends this and only for a Vyqil admin account: which model answered and what it cost.
+    function showDev(d) {
+      var p = document.getElementById('astdev'); if (!p) { p = el('div'); p.id = 'astdev'; p.style.cssText = 'position:fixed;left:8px;bottom:8px;max-width:calc(100% - 16px);z-index:150;background:#1a1f29;color:#9fe3b0;border:1px solid #2f4a68;border-radius:10px;padding:6px 10px;font:12px/1.3 monospace;opacity:.95'; p.onclick = function () { p.remove(); }; document.body.appendChild(p); }
+      p.textContent = 'ADMIN TEST  model: ' + d.model + ' (level ' + d.tier + ')  cost: $' + (Number(d.usd) || 0).toFixed(5) + (d.wasted > 0 ? '  retries: $' + Number(d.wasted).toFixed(5) : '') + '   (tap to hide)';
     }
     var lastCredits = null, meterEl = null;
     function usd(n) { return '$' + (Math.floor((n || 0) * 100) / 100).toFixed(2); }
@@ -119,18 +123,21 @@
 
     // ---------- plan and credits ----------
     function priceText() { return String(window.VYQIL_ASSISTANT_PRICE || SETTINGS.price); }
-    function pay(url, tag) {
-      if (!url) { Q.toast('Buying opens very soon. We will let you know.'); return; }
-      var em = (firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
-      window.open(url + (url.indexOf('?') < 0 ? '?' : '&') + 'client_reference_id=' + encodeURIComponent(S.biz.id + '|' + C.id + (tag ? '|' + tag : '')) + '&prefilled_email=' + encodeURIComponent(em), '_blank');
+    function pay(kind) { // opens secure Stripe checkout for the plan or a credit top-up, then returns here
+      var u = firebase.auth().currentUser; Q.toast('Opening secure checkout...');
+      api('/checkout', { app: C.id, appName: C.name || 'Vyqil', bizId: S.biz.id, kind: kind, email: (u && u.email) || '', returnUrl: location.href.split('#')[0] })
+        .then(function (d) { if (d && d.url) location.href = d.url; else Q.toast('Could not open checkout. Please try again.'); }, function (e) { Q.toast((e && (e.detail || e.friendly)) || 'Could not open checkout. Please try again.'); });
     }
-    function buy() { pay(String(window.VYQIL_ASSISTANT_BUY_URL || SETTINGS.buyUrl), 'plan'); }
+    function manage() {
+      api('/portal', { app: C.id, bizId: S.biz.id, returnUrl: location.href.split('#')[0] }).then(function (d) { if (d && d.url) location.href = d.url; }, function (e) { Q.toast((e && (e.detail || e.friendly)) || 'Could not open billing.'); });
+    }
+    function buy() { pay('plan'); }
     function addCredits() {
       Q.modal(function (s, close) {
         s.appendChild(el('h3', '', 'Add credits'));
         s.appendChild(el('p', 'hint', 'Your ' + priceText() + ' plan includes $3.00 of credits every month. They renew each month, and unused allowance does not carry over. Extra credits are used after your monthly allowance.'));
-        [['$1', '$0.25 in credits', SETTINGS.topup1Url, 't1'], ['$5', '$2.50 in credits', SETTINGS.topup5Url, 't5']].forEach(function (o) {
-          var b = el('button', 'btn', 'Add ' + o[1] + ' for ' + o[0]); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0'; b.onclick = function () { pay(o[2], o[3]); }; s.appendChild(b);
+        [['$1', '$0.25 in credits', 'top1'], ['$5', '$2.50 in credits', 'top5']].forEach(function (o) {
+          var b = el('button', 'btn', 'Add ' + o[1] + ' for ' + o[0]); b.type = 'button'; b.style.cssText = 'display:block;width:100%;margin:8px 0'; b.onclick = function () { pay(o[2]); }; s.appendChild(b);
         });
         var x = el('button', 'btn ghost', 'Close'); x.type = 'button'; x.onclick = close; s.appendChild(x);
       });
@@ -158,11 +165,12 @@
       var holder = el('div'); holder.appendChild(el('p', 'hint', 'Checking your plan...')); v.appendChild(holder);
       api('/status', { app: C.id, bizId: S.biz.id, today: today() }).then(function (st) {
         holder.innerHTML = '';
+        var justPaid = /[?&]paid=1/.test(location.search); if (!st.ok && justPaid && (window.__astRetry = (window.__astRetry || 0) + 1) <= 6) { holder.appendChild(el('p', 'hint', 'Thank you! Activating your plan... this takes a few seconds.')); setTimeout(function () { Q.render(); }, 3000); return; }
         if (!st.ok) { planCard(holder, 'The Assistant is an optional add-on. It is not part of the free beta trial of the apps.'); return; }
         lastCredits = st.credits || null;
         if (st.why === 'admin') { var ad = el('div', 'hint', 'Owner testing mode: the Assistant is free for you and uses no credits.'); ad.style.cssText = 'text-align:center;margin-bottom:6px'; holder.appendChild(ad); }
         else if (st.why === 'bonus') { var n = el('div', 'hint', 'Free Assistant time from Vyqil: ' + st.daysLeft + ' day' + (st.daysLeft === 1 ? '' : 's') + ' left. After that it is ' + priceText() + '.'); n.style.cssText = 'text-align:center;margin-bottom:6px'; var a = el('a', '', ' Add it now'); a.href = '#'; a.onclick = function (e) { e.preventDefault(); buy(); }; n.appendChild(a); holder.appendChild(n); }
-        if (lastCredits) { meterEl = el('div', 'astmeter'); holder.appendChild(meterEl); var ac = el('a', '', ' Add credits'); ac.href = '#'; ac.onclick = function (e) { e.preventDefault(); addCredits(); }; meterEl.appendChild(ac); paintMeter(); }
+        if (lastCredits) { meterEl = el('div', 'astmeter'); holder.appendChild(meterEl); var ac = el('a', '', ' Add credits'); ac.href = '#'; ac.onclick = function (e) { e.preventDefault(); addCredits(); }; meterEl.appendChild(ac); if (st.managed) { var mg = el('a', '', ' · Manage subscription'); mg.href = '#'; mg.onclick = function (e) { e.preventDefault(); manage(); }; meterEl.appendChild(mg); } paintMeter(); }
         var keys = ['chat', 'reports', 'saved', 'memory'], tabs = el('div', 'asttabs'), body = el('div');
         [['chat', 'Chat'], ['reports', 'Reports'], ['saved', 'Saved'], ['memory', 'Memory']].forEach(function (t) { var b = el('button', t[0] === tab ? 'on' : '', t[1]); b.type = 'button'; b.onclick = function () { tab = t[0]; [].forEach.call(tabs.children, function (x, i) { x.className = keys[i] === tab ? 'on' : ''; }); draw(); }; tabs.appendChild(b); });
         holder.appendChild(tabs); holder.appendChild(body);
@@ -296,32 +304,54 @@
       if (nf && res.text) { var head = 'Scanned from a photo of the original document:\n'; p[nf.k] = ((p[nf.k] ? p[nf.k] + '\n\n' : '') + head + res.text).slice(0, 1480); }
       return { p: p, notes: notes };
     }
+    // Opens the phone camera right inside the app (works even where the file picker ignores "take a photo").
+    function liveCamera(onShot, fallback) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fallback(); return; }
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false }).then(function (stream) {
+        var bg = el('div'); bg.style.cssText = 'position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column';
+        var v = document.createElement('video'); v.setAttribute('playsinline', ''); v.muted = true; v.autoplay = true; v.srcObject = stream; v.style.cssText = 'flex:1;min-height:0;width:100%;object-fit:contain;background:#000';
+        var bar = el('div'); bar.style.cssText = 'display:flex;gap:10px;justify-content:center;align-items:center;padding:14px 12px calc(14px + env(safe-area-inset-bottom));background:#000';
+        function stop() { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { } bg.remove(); }
+        var snap = el('button', 'btn', 'Take photo'), cn = el('button', 'btn ghost', 'Cancel'), up = el('button', 'btn ghost', 'Use a file instead');
+        [snap, cn, up].forEach(function (b) { b.type = 'button'; bar.appendChild(b); });
+        cn.onclick = stop; up.onclick = function () { stop(); fallback(); };
+        snap.onclick = function () {
+          if (!v.videoWidth) return; var c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+          c.toBlob(function (b) { stop(); if (b) onShot(new File([b], 'photo.jpg', { type: 'image/jpeg' })); else fallback(); }, 'image/jpeg', 0.92);
+        };
+        bg.appendChild(v); bg.appendChild(bar); document.body.appendChild(bg); v.play && v.play().catch(function () { });
+      }, function () { fallback(); });
+    }
     function scanFlow(prefer, closeForm) {
       Q.modal(function (s, close) {
         s.appendChild(el('h3', '', 'Scan a document'));
         s.appendChild(el('p', 'hint', 'Take a clear, straight-on photo of a contract, lease, invoice, estimate, receipt or bill. Vyqil reads it and fills in the form. Anything it cannot read is left blank for you to complete.'));
         var sel = el('select'); var a = el('option', '', 'Let Vyqil decide what it is'); a.value = ''; sel.appendChild(a);
-        kindsAll().filter(function (k) { return k !== 'mydate'; }).forEach(function (k) { var o = el('option', '', C.kinds[k].label); o.value = k; sel.appendChild(o); }); if (prefer) sel.value = prefer;
+        scanAll().forEach(function (k) { var o = el('option', '', C.kinds[k].label); o.value = k; sel.appendChild(o); }); if (prefer) sel.value = prefer;
         var lab = el('label', 'f', 'This is a'); lab.appendChild(sel); s.appendChild(lab);
         var msg = el('div', 'hint'); msg.style.margin = '8px 0';
-        function pick(cam) { var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; if (cam) i.setAttribute('capture', 'environment'); i.onchange = function () { if (i.files && i.files[0]) run(i.files[0]); }; i.click(); }
+        function pick(cam) {
+          function fileInput(capture) { var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/jpeg,image/png,image/webp,image/heic,image/*'; if (capture) i.setAttribute('capture', 'environment'); i.style.cssText = 'position:fixed;left:-9999px;opacity:0'; document.body.appendChild(i); i.onchange = function () { var f = i.files && i.files[0]; i.remove(); if (f) run(f); }; i.click(); }
+          if (!cam) { fileInput(false); return; }
+          liveCamera(function (file) { run(file); }, function () { fileInput(true); });
+        }
         var b1 = el('button', 'btn', 'Take a photo'), b2 = el('button', 'btn ghost', 'Choose a photo'), cn = el('button', 'btn ghost', 'Cancel');
         [b1, b2, cn].forEach(function (b) { b.type = 'button'; b.style.margin = '4px 6px 4px 0'; }); b1.onclick = function () { pick(true); }; b2.onclick = function () { pick(false); }; cn.onclick = close;
         var bw = el('div'); bw.appendChild(b1); bw.appendChild(b2); bw.appendChild(cn); s.appendChild(msg); s.appendChild(bw);
         function run(file) {
           bw.style.display = 'none'; msg.textContent = 'Reading your document... this can take up to a minute.';
-          shrink(file).then(function (img) { return api('/scan', { app: C.id, bizId: S.biz.id, schema: schema(kindsAll().filter(function (k) { return k !== 'mydate'; })), image: img, today: new Date().toISOString().slice(0, 10), hint: sel.value ? C.kinds[sel.value].label : '' }); })
+          shrink(file).then(function (img) { return api('/scan', { app: C.id, bizId: S.biz.id, schema: schema(scanAll()), image: img, today: new Date().toISOString().slice(0, 10), hint: sel.value ? C.kinds[sel.value].label : '' }); })
             .then(function (d) { close(); if (closeForm) closeForm(); review(d.result, sel.value); })
             .catch(function (e) { msg.textContent = (e && (e.message || e.friendly)) ? (e.message || e.friendly) + (e.detail ? ' [' + e.detail + ']' : '') : 'Sorry, that did not work. ' + ((e && e.detail) || ''); bw.style.display = ''; });
         }
       });
     }
     function review(res, prefer) {
-      var kind = C.kinds[res.kind] ? res.kind : (prefer && C.kinds[prefer] ? prefer : kindsAll().filter(function (k) { return k !== 'mydate'; })[0]);
+      var kind = C.kinds[res.kind] ? res.kind : (prefer && C.kinds[prefer] ? prefer : scanAll()[0]);
       Q.modal(function (s, close) {
         s.appendChild(el('h3', '', 'Here is what I found'));
         if (res.title) s.appendChild(el('p', 'hint', res.title));
-        var sel = el('select'); kindsAll().filter(function (k) { return k !== 'mydate'; }).forEach(function (k) { var o = el('option', '', C.kinds[k].label); o.value = k; sel.appendChild(o); }); sel.value = kind;
+        var sel = el('select'); scanAll().forEach(function (k) { var o = el('option', '', C.kinds[k].label); o.value = k; sel.appendChild(o); }); sel.value = kind;
         var lab = el('label', 'f', 'Save it as'); lab.appendChild(sel); s.appendChild(lab);
         var box = el('div'); s.appendChild(box);
         function draw() {

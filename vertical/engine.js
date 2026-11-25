@@ -43,7 +43,7 @@
   function signOutNow() {
     var p = Promise.resolve();
     try { if (Q.push && Q.push.on()) p = Promise.race([Q.push.disable().catch(function () { /* ignore */ }), new Promise(function (r) { setTimeout(r, 2000); })]); } catch (x) { /* ignore */ }
-    p.then(function () { return auth.signOut(); }).catch(function () { /* still reload */ }).then(function () { setTimeout(function () { location.reload(); }, 300); });
+    p.then(function () { return auth.signOut(); }).catch(function () { /* still reload */ }).then(function () { setTimeout(function () { location.href = '/dashboard.html'; }, 300); });
   }
   function ask(msg, yes, fn) { modal(function (s, close) { s.appendChild(el('p', '', msg)); var b = el('div', 'btns'), y = el('button', 'btn danger', yes), n = el('button', 'btn ghost', 'Cancel'); y.type = n.type = 'button'; y.onclick = function () { close(); fn(); }; n.onclick = close; b.appendChild(y); b.appendChild(n); s.appendChild(b); }); }
   function download(name, text, type) { var a = el('a'); a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
