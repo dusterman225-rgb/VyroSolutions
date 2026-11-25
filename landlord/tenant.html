@@ -27,6 +27,9 @@ button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="../shared/firebase-config.js"></script>
+<script>window.VYRO_HELP_APP = 'customer'; window.VYRO_HELP_CHIPS = ['How do I pay my rent?', 'How do I report a repair?', 'I forgot my password', 'How do I contact support?'];</script>
+<script src="../shared/helpbot-config.js"></script>
+<script src="../shared/helpbot.js"></script>
 <script>
 (function () {
   firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
@@ -57,6 +60,7 @@ button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px
     box.appendChild(el('h2', '', 'Payments')); box.lastChild.style.marginTop = '14px';
     if (!(p.ledger || []).length) box.appendChild(el('div', 'mute', 'No payments recorded yet.'));
     (p.ledger || []).forEach(function (l) { var rr = el('div', 'row'); rr.appendChild(el('span', '', (l.m || '') + (l.y ? ' · ' + l.y : ''))); rr.appendChild(el('span', '', money(l.a) + (l.d ? ' on ' + fmt(l.d) : ''))); box.appendChild(rr); });
+    if ((p.payMethods || []).length) { var pmh = el('div'); box.appendChild(pmh); (function () { function go() { try { window.VQPayMethods.view(pmh, p.payMethods, { cls: 'card', title: 'How to pay your rent', intro: 'Pay your landlord directly with any of these. They will record your payment.' }); } catch (e) { /* optional */ } } if (window.VQPayMethods) go(); else { var sc = document.createElement('script'); sc.src = '../shared/paymethods.js'; sc.onload = go; document.head.appendChild(sc); } })(); }
     if ((p.invoices || []).length) { box.appendChild(el('h2', '', 'Invoices')); box.lastChild.style.marginTop = '14px'; p.invoices.forEach(function (n) { var rr = el('div', 'row'); rr.appendChild(el('span', '', (n.n ? n.n + ' · ' : '') + (n.t || 'Invoice') + (n.due ? ' · due ' + fmt(n.due) : ''))); rr.appendChild(el('span', n.s === 'Paid' ? 'ok' : '', money(n.a) + ' ' + (n.s === 'Paid' ? 'paid' : 'due'))); box.appendChild(rr); }); }
     var mc = el('div', 'card'); $('portals').appendChild(mc); mc.appendChild(el('h2', '', 'Messages')); mc.appendChild(el('div', 'mute', 'Write to ' + (p.landlordName || 'your landlord') + '. They are not watching this page all day, so for emergencies call' + (p.landlordPhone ? ' ' + p.landlordPhone : ' them') + '.'));
     var th = el('div'); th.style.cssText = 'max-height:260px;overflow:auto;margin-top:8px'; mc.appendChild(th); var mi = el('textarea'); mi.maxLength = 1000; mi.placeholder = 'Write a message'; mi.style.marginTop = '8px'; var mb = el('button', '', 'Send message'), me = el('div', 'err'); mb.type = 'button'; mc.appendChild(mi); mc.appendChild(mb); mc.appendChild(me);
