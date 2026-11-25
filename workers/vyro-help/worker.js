@@ -1,5 +1,5 @@
 // Vyro help chatbot relay. Holds the OpenRouter key so it never appears in the website.
-import { COMMON, CONTRACTOR, CUSTOMER } from './kb.js';
+import { COMMON, APPS, ALIASES } from './kb.js';
 import { handleAssistant } from './assistant.js';
 
 const RULES = `You are the Vyro help assistant. Help people who are lost on the Vyro website or app: be short, warm, step by step, plain words.
@@ -15,17 +15,21 @@ function tidyCut(t, finish) {
   return (cut > 40 ? t.slice(0, cut + 1) : t).trim() + '\n\n(Ask me to continue if you want more.)';
 }
 
-function systemFor(page) {
-  const customerSide = /accept|portal/i.test(page || '');
-  return RULES + '\n' + COMMON + '\n' + (customerSide ? CUSTOMER : CONTRACTOR) + '\nKeep every answer under about 150 words. Use at most 6 short steps. Always finish your last sentence.';
+function systemFor(page, app) {
+  let key = String(app || '').toLowerCase().replace(/[^a-z-]/g, '');
+  if (key === 'tenant' || !APPS[key]) {
+    const p = String(page || '').toLowerCase(), last = p.split('/').filter(Boolean).pop() || '';
+    const stem = last.replace(/\.html$/, '');
+    key = ALIASES[stem] || (/accept|portal/.test(p) ? 'customer' : (APPS[key] ? key : 'contractor'));
+  }
+  if (ALIASES[key]) key = ALIASES[key];
+  // the customer-facing pages of every app share one customer entry; the business entry tells the bot which app it is in
+  return RULES + '\n' + COMMON + '\n' + (APPS[key] || APPS.contractor) + '\nKeep every answer under about 150 words. Use at most 6 short steps. Always finish your last sentence. If the question is about a feature this text does not mention, say you are not sure and suggest the Send feedback form in the menu or contacting the business.';
 }
 
-// ALLOWED_ORIGIN can list several site addresses, separated by commas.
-const originList = env => String(env.ALLOWED_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);
 function cors(env, origin) {
   return {
-    'Access-Control-Allow-Origin': originList(env).indexOf(origin) >= 0 ? origin : originList(env)[0],
-    'Vary': 'Origin',
+    'Access-Control-Allow-Origin': origin === env.ALLOWED_ORIGIN ? origin : env.ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Vary': 'Origin'
@@ -40,7 +44,7 @@ export default {
     const origin = req.headers.get('Origin') || '';
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
     if (req.method !== 'POST') return json(env, origin, { error: 'POST only', detail: 'The helper is running. Open your site and use the chat.' }, 405);
-    if (originList(env).indexOf(origin) < 0) return json(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN in wrangler.jsonc must equal your site address exactly; this request came from ' + origin + ')' }, 403);
+    if (origin !== env.ALLOWED_ORIGIN) return json(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN in wrangler.jsonc must equal your site address exactly; this request came from ' + origin + ')' }, 403);
 
     let body;
     try { body = await req.json(); } catch (e) { return json(env, origin, { error: 'Bad request' }, 400); }
@@ -53,7 +57,7 @@ export default {
                .map(m => ({ role: m.role, content: m.content.slice(0, 600) }));
     if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return json(env, origin, { error: 'Bad request' }, 400);
 
-    const messages = [{ role: 'system', content: systemFor(String(body.page || '').slice(0, 80)) }].concat(msgs);
+    const messages = [{ role: 'system', content: systemFor(String(body.page || '').slice(0, 80), String(body.app || '').slice(0, 20)) }].concat(msgs);
     let why = '';
     async function ask(model) {
       if (!env.OPENROUTER_KEY) { why = 'key-not-set (add the OPENROUTER_KEY secret in Cloudflare)'; return null; }
