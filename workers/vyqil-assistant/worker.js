@@ -46,9 +46,11 @@ async function member(env, token, uid, bizId) {
 }
 // The Assistant is an add-on. Allowed during the 30-day free trial (counted from when the business was created),
 // or while the add-on is switched on in businesses/{id}/aiPlans/assistant (only you can write that, from the Firebase console or a billing hook).
-async function entitled(env, token, uid, bizId, today) {
+async function entitled(env, token, uid, bizId, today, app) {
   // You (a Vyqil admin, see admins/<your user id> in Firebase) use the Assistant free, in any business, so you can test.
   try { if (await getDoc(env, token, 'admins/' + uid)) return { ok: true, why: 'admin' }; } catch (e) { }
+  // Paid through Stripe: the webhook keeps the plan row in D1 up to date (per business and app).
+  try { if (env.DB && app) { const D = await D1(env), p = await D.prepare('SELECT * FROM plans WHERE k=?1').bind(bizId + '|' + app).first(); if (p && p.until && p.until >= today) return { ok: true, why: 'plan', until: p.until, managed: !!p.cust }; } } catch (e) { }
   // Everyone else needs the paid add-on. The Assistant is NOT part of the free beta trial.
   // It is switched on in businesses/{id}/aiPlans/assistant: on = true (paid), or freeUntil = a date (free time you give a tester).
   let plan = null; try { plan = await getDoc(env, token, 'businesses/' + bizId + '/aiPlans/assistant'); } catch (e) { }
@@ -74,6 +76,8 @@ async function D1(env) {
   if (!env.DB) return null;
   if (!tablesReady) { await env.DB.batch([
     env.DB.prepare('CREATE TABLE IF NOT EXISTS acct (k TEXT PRIMARY KEY, period TEXT, plan INTEGER, used INTEGER, topup INTEGER DEFAULT 0)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS plans (k TEXT PRIMARY KEY, cust TEXT, sub TEXT, status TEXT, until TEXT)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS pay_events (id TEXT PRIMARY KEY, ts TEXT)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT, ts TEXT, kind TEXT, micro INTEGER, model TEXT, note TEXT)')]); tablesReady = true; }
   return env.DB;
 }
@@ -100,8 +104,8 @@ async function settle(env, k, usd, model, note, wasted) {
   if (micro > 0 || wasted > 0) await D.prepare('INSERT INTO ledger (k,ts,kind,micro,model,note) VALUES (?1,?2,?3,?4,?5,?6)').bind(k, new Date().toISOString(), 'use', -micro, String(model || '').slice(0, 60), (note || '') + (wasted > 0 ? ' | retries not charged: $' + wasted.toFixed(5) : '')).run();
 }
 async function gate(env, token, uid, bizId, app) {
-  const today = sToday(), e = await entitled(env, token, uid, bizId, today); if (!e.ok) return { block: { status: 402, data: { error: 'plan' } } };
-  if (e.why === 'admin') return { k: null }; // free for you: no credits are used
+  const today = sToday(), e = await entitled(env, token, uid, bizId, today, app); if (!e.ok) return { block: { status: 402, data: { error: 'plan' } } };
+  if (e.why === 'admin') return { k: null, admin: true }; // free for you: no credits are used
   if (env.DB) { const k = bizId + '|' + app, cv = await creditView(env, k); if (cv.left < 0.002) return { block: { status: 429, data: { error: 'credits', credits: cv } } }; return { k }; }
   try { const u = await countUse(env, token, bizId, today); if (!u.ok) return { block: { status: 429, data: { error: 'limit', limit: u.limit } } }; } catch (x) { return { block: { status: 502, data: { error: 'busy', detail: 'could not update the monthly counter. Publish the latest firestore.rules.' } } }; }
   return { k: null };
@@ -110,9 +114,9 @@ const appKey = a => /^[a-z]{3,12}$/.test(String(a || '')) ? String(a) : 'app';
 async function status(env, token, uid, body) {
   const bizId = String(body.bizId || ''); if (!bizId) return { status: 400, data: { error: 'bad' } };
   const today = sToday(); let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
-  const e = await entitled(env, token, uid, bizId, today); let credits = null;
+  const e = await entitled(env, token, uid, bizId, today, appKey(body.app)); let credits = null;
   try { if (env.DB && e.why !== 'admin') credits = await creditView(env, bizId + '|' + appKey(body.app)); } catch (x) { }
-  return { status: 200, data: { ok: !!e.ok, why: e.why || 'none', daysLeft: e.daysLeft == null ? null : e.daysLeft, until: e.until || '', credits, role: m.role } };
+  return { status: 200, data: { ok: !!e.ok, why: e.why || 'none', daysLeft: e.daysLeft == null ? null : e.daysLeft, until: e.until || '', managed: !!e.managed, credits, role: m.role } };
 }
 // What the owner has told the assistant about the business, plus what it has been asked to remember. Kept per app.
 async function memoryText(env, token, bizId, app) {
@@ -122,7 +126,21 @@ async function memoryText(env, token, bizId, app) {
     return (d.profile ? "OWNER'S PROFILE OF THE BUSINESS (written by the owner; facts and preferences to follow):\n" + String(d.profile).slice(0, 3000) + '\n\n' : '') + (notes ? 'REMEMBERED NOTES:\n' + notes + '\n\n' : '');
   } catch (e) { return ''; }
 }
-const okCol = c => /^records(_[a-z]{3,12})?$/.test(String(c || ''));
+const okCol = c => /^records(_[a-z]{3,12})?$/.test(String(c || '')) || c === '@contractor';
+// Contractor keeps its data in separate collections (jobs, invoices ...), not in one records collection.
+// '@contractor' reads exactly this fixed list for ONE business, and each row is tagged with its kind so the briefing works the same way.
+const CONTRACTOR = { jobs: 'job', estimates: 'estimate', invoices: 'invoice', customers: 'customer', expenses: 'expense', leads: 'lead', contracts: 'contract', subs: 'sub', recurring: 'recurring' };
+async function loadRecs(env, token, bizId, col) {
+  if (col !== '@contractor') return listAll(env, token, 'businesses/' + bizId + '/' + col, 1500);
+  const names = Object.keys(CONTRACTOR), res = await Promise.all(names.map(n => listAll(env, token, 'businesses/' + bizId + '/' + n, 400).catch(e => null)));
+  if (res.every(r => r === null)) throw new Error('no access');
+  const all = [];
+  res.forEach((rows, i) => (rows || []).forEach(r => {
+    r.kind = CONTRACTOR[names[i]]; if (r.kind === 'invoice') r.balanceCents = /void/i.test(String(r.status || '')) ? 0 : Math.max(0, (Number(r.totalCents) || 0) - (Number(r.paidCents) || 0));
+    all.push(r);
+  }));
+  return all;
+}
 
 // ---- builds the whole-company briefing the assistant works from. Totals are added up HERE so the model never does arithmetic.
 function briefing(recs, schema, role, today) {
@@ -217,7 +235,7 @@ async function chat(env, token, uid, body) {
   if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return { status: 400, data: { error: 'bad' } };
   const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || '')) ? body.today : new Date().toISOString().slice(0, 10);
   let m, recs;
-  try { m = await member(env, token, uid, bizId); recs = await listAll(env, token, 'businesses/' + bizId + '/' + col, 1500); }
+  try { m = await member(env, token, uid, bizId); recs = await loadRecs(env, token, bizId, col); }
   catch (e) { return { status: 403, data: { error: 'access', detail: 'could not read your business records (' + String(e && e.message || e).slice(0, 80) + ')' } }; }
   const app = appKey(body.app), g = await gate(env, token, uid, bizId, app); if (g.block) return g.block;
   const appName = clip(body.appName || 'this app', 40), mem = await memoryText(env, token, bizId, app);
@@ -225,7 +243,7 @@ async function chat(env, token, uid, body) {
   const c = await chain(env, env.CHAT_MODELS, [{ role: 'system', content: sys }].concat(msgs), 1400, r => r.text && r.text.length > 2 ? r : null);
   if (c.err) return { status: 502, data: { error: 'busy', detail: c.err } };
   await settle(env, g.k, c.cost, c.model, 'chat', c.wasted); const credits = g.k ? await creditView(env, g.k) : null;
-  return { status: 200, data: { reply: tidyCut(c.res.text, c.res.finish), tier: c.tier, credits } };
+  return { status: 200, data: { dev: g.admin ? { model: c.model, tier: c.tier, usd: c.cost, wasted: c.wasted } : undefined, reply: tidyCut(c.res.text, c.res.finish), tier: c.tier, credits } };
 }
 
 async function scan(env, token, uid, body) {
@@ -253,7 +271,7 @@ KINDS:\n` + kinds + (body.hint ? '\nThe user says this is a: ' + clip(body.hint,
   const c = await chain(env, env.SCAN_MODELS, msg, 2500, parse);
   if (c.err) return { status: 502, data: { error: 'busy', detail: c.err === 'answer not good enough' ? 'could not read that photo. Try a clearer, straight-on picture.' : c.err } };
   const j = c.value; await settle(env, g.k, c.cost, c.model, 'scan', c.wasted); const credits = g.k ? await creditView(env, g.k) : null;
-  return { status: 200, data: { tier: c.tier, credits, result: { kind: j.kind, title: clip(j.title, 80), fields: j.fields && typeof j.fields === 'object' ? j.fields : {}, text: String(j.text || '').slice(0, 6000), missing: Array.isArray(j.missing) ? j.missing.slice(0, 20) : [], note: clip(j.note, 200) } } };
+  return { status: 200, data: { dev: g.admin ? { model: c.model, tier: c.tier, usd: c.cost, wasted: c.wasted } : undefined, tier: c.tier, credits, result: { kind: j.kind, title: clip(j.title, 80), fields: j.fields && typeof j.fields === 'object' ? j.fields : {}, text: String(j.text || '').slice(0, 6000), missing: Array.isArray(j.missing) ? j.missing.slice(0, 20) : [], note: clip(j.note, 200) } } };
 }
 
 // ---------- reports ----------
@@ -304,7 +322,7 @@ function figures(recs, schema, rng, today) {
 async function report(env, token, uid, body) {
   const bizId = String(body.bizId || ''), col = String(body.col || ''), T = REPORTS[body.type]; if (!bizId || !okCol(col) || !body.schema || !T) return { status: 400, data: { error: 'bad' } };
   const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || '')) ? body.today : sToday();
-  let m, recs; try { m = await member(env, token, uid, bizId); recs = await listAll(env, token, 'businesses/' + bizId + '/' + col, 1500); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  let m, recs; try { m = await member(env, token, uid, bizId); recs = await loadRecs(env, token, bizId, col); } catch (e) { return { status: 403, data: { error: 'access' } }; }
   if (['owner', 'gm', 'admin', 'supervisor'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Reports are for owners and managers.' } };
   const app = appKey(body.app), g = await gate(env, token, uid, bizId, app); if (g.block) return g.block;
   const rng = rangeOf(String(body.period || 'month'), today), mem = await memoryText(env, token, bizId, app), ask1 = clip(body.custom || '', 600);
@@ -321,7 +339,7 @@ RULES: every number must come from COMPUTED FIGURES or RECORDS. Never guess a mi
   if (c.err) return { status: 502, data: { error: 'busy', detail: c.err } };
   await settle(env, g.k, c.cost, c.model, 'report ' + body.type, c.wasted); const credits = g.k ? await creditView(env, g.k) : null;
   let text = tidyCut(c.res.text, c.res.finish).replace(/\[\[REMEMBER:[^\]]*\]\]/g, '').trim(); const h = /^#\s+(.+)$/m.exec(text);
-  return { status: 200, data: { title: clip(h ? h[1] : T[0], 90), body: text, credits, period: rng[2] } };
+  return { status: 200, data: { dev: g.admin ? { model: c.model, tier: c.tier, usd: c.cost, wasted: c.wasted } : undefined, title: clip(h ? h[1] : T[0], 90), body: text, credits, period: rng[2] } };
 }
 // For you only: adds bought credits to one business and app (used by the admin page, later by the payment hook).
 async function admin(env, token, uid, body) {
@@ -338,9 +356,78 @@ async function admin(env, token, uid, body) {
   return { status: 200, data: { credits: await creditView(env, k) } };
 }
 
+// ---------- payments (Stripe Checkout). Prices are created on the fly, so there is nothing to set up in Stripe except two secrets. ----------
+const PRICES = { plan: { usd: 7, credit: 0, name: 'Vyqil Assistant (monthly)' }, top1: { usd: 1, credit: 0.25, name: 'Assistant credits: $0.25' }, top5: { usd: 5, credit: 2.5, name: 'Assistant credits: $2.50' } };
+async function stripe(env, path, params) {
+  if (!env.STRIPE_SECRET_KEY) throw new Error('payments are not switched on yet (STRIPE_SECRET_KEY is not set)');
+  const r = await fetch('https://api.stripe.com/v1/' + path, { method: 'POST', headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params).toString() });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error((j.error && j.error.message) || ('stripe ' + r.status)); return j;
+}
+function okReturn(env, u) { u = String(u || ''); return origins(env).some(o => u.indexOf(o + '/') === 0) && u.length < 500; }
+async function checkout(env, token, uid, body) {
+  const bizId = String(body.bizId || ''), app = appKey(body.app), P = PRICES[body.kind];
+  if (!bizId || !P || !okReturn(env, body.returnUrl)) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (['owner', 'gm', 'admin'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Only the owner can buy or change the Assistant.' } };
+  const D = await D1(env); if (!D) return { status: 400, data: { error: 'no database', detail: 'the credits database (DB) is not connected' } };
+  const k = bizId + '|' + app, plan = await D.prepare('SELECT * FROM plans WHERE k=?1').bind(k).first();
+  const md = { bizId, app, kind: body.kind, uid }, sep = body.returnUrl.indexOf('?') < 0 ? '?' : '&';
+  if (body.kind !== 'plan') { const e = await entitled(env, token, uid, bizId, sToday(), app); if (!e.ok || e.why === 'admin') return { status: 400, data: { error: 'noplan', detail: 'Add the Assistant plan first, then you can buy extra credits.' } }; }
+  const p = { 'success_url': body.returnUrl + sep + 'paid=1', 'cancel_url': body.returnUrl, 'client_reference_id': k, 'allow_promotion_codes': 'false',
+    'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': 'usd', 'line_items[0][price_data][unit_amount]': String(P.usd * 100), 'line_items[0][price_data][product_data][name]': P.name + ' - ' + clip(body.appName || app, 30) };
+  for (const x in md) { p['metadata[' + x + ']'] = String(md[x]); }
+  if (body.kind === 'plan') { p.mode = 'subscription'; p['line_items[0][price_data][recurring][interval]'] = 'month'; for (const x in md) p['subscription_data[metadata][' + x + ']'] = String(md[x]); }
+  else { p.mode = 'payment'; p['payment_intent_data[metadata][bizId]'] = bizId; }
+  if (plan && plan.cust) p.customer = plan.cust; else if (m.email || body.email) p.customer_email = String(body.email || '').slice(0, 120);
+  const s = await stripe(env, 'checkout/sessions', p); return { status: 200, data: { url: s.url } };
+}
+async function portal(env, token, uid, body) {
+  const bizId = String(body.bizId || ''), app = appKey(body.app); if (!bizId || !okReturn(env, body.returnUrl)) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (['owner', 'gm', 'admin'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Only the owner can manage billing.' } };
+  const D = await D1(env), plan = D && await D.prepare('SELECT * FROM plans WHERE k=?1').bind(bizId + '|' + app).first();
+  if (!plan || !plan.cust) return { status: 400, data: { error: 'noplan', detail: 'No subscription was found to manage.' } };
+  const s = await stripe(env, 'billing_portal/sessions', { customer: plan.cust, return_url: body.returnUrl }); return { status: 200, data: { url: s.url } };
+}
+async function verifySig(env, raw, header) {
+  const parts = {}; String(header || '').split(',').forEach(x => { const i = x.indexOf('='); if (i > 0) { (parts[x.slice(0, i).trim()] = parts[x.slice(0, i).trim()] || []).push(x.slice(i + 1)); } });
+  const t = (parts.t || [])[0]; if (!t || !env.STRIPE_WEBHOOK_SECRET || Math.abs(Date.now() / 1000 - Number(t)) > 600) return false;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + raw)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return (parts.v1 || []).some(v => v.length === sig.length && v === sig);
+}
+async function stripeHook(env, req) {
+  const raw = await req.text(); if (!(await verifySig(env, raw, req.headers.get('Stripe-Signature')))) return new Response('bad signature', { status: 400 });
+  const ev = JSON.parse(raw), o = ev.data && ev.data.object || {}, D = await D1(env); if (!D) return new Response('no db', { status: 500 });
+  const first = await D.prepare('INSERT OR IGNORE INTO pay_events (id, ts) VALUES (?1,?2)').bind(ev.id, new Date().toISOString()).run();
+  if (first.meta && first.meta.changes === 0) return new Response('ok'); // already handled
+  try {
+    if (ev.type === 'checkout.session.completed') {
+      const md = o.metadata || {}, k = String(md.bizId || '') + '|' + appKey(md.app);
+      if (o.mode === 'subscription' && md.bizId) {
+        await D.prepare('INSERT INTO plans (k,cust,sub,status,until) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(k) DO UPDATE SET cust=?2, sub=?3').bind(k, o.customer || '', o.subscription || '', 'active', new Date(Date.now() + 3 * DAY).toISOString().slice(0, 10)).run();
+      } else if (o.mode === 'payment' && o.payment_status === 'paid' && PRICES[md.kind] && PRICES[md.kind].credit && md.bizId) {
+        await acct(env, k); const micro = Math.round(PRICES[md.kind].credit * MICRO);
+        await D.prepare('UPDATE acct SET topup = topup + ?1 WHERE k=?2').bind(micro, k).run();
+        await D.prepare('INSERT INTO ledger (k,ts,kind,micro,model,note) VALUES (?1,?2,?3,?4,?5,?6)').bind(k, new Date().toISOString(), 'topup', micro, '', 'bought ' + md.kind + ' (' + (o.id || '') + ')').run();
+      }
+    } else if (/^customer\.subscription\.(created|updated|deleted)$/.test(ev.type)) {
+      const md = o.metadata || {}, k = String(md.bizId || '') + '|' + appKey(md.app);
+      if (md.bizId) {
+        const end = o.current_period_end || (o.items && o.items.data && o.items.data[0] && o.items.data[0].current_period_end) || 0;
+        const live = ev.type !== 'customer.subscription.deleted' && ['active', 'trialing', 'past_due'].indexOf(o.status) >= 0;
+        const until = live && end ? new Date((end + 86400) * 1000).toISOString().slice(0, 10) : new Date(Date.now() - DAY).toISOString().slice(0, 10);
+        await D.prepare('INSERT INTO plans (k,cust,sub,status,until) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(k) DO UPDATE SET cust=?2, sub=?3, status=?4, until=?5').bind(k, o.customer || '', o.id || '', o.status || '', until).run();
+      }
+    }
+  } catch (e) { await D.prepare('DELETE FROM pay_events WHERE id=?1').bind(ev.id).run().catch(() => { }); return new Response('retry', { status: 500 }); }
+  return new Response('ok');
+}
+
 export default {
   async fetch(req, env) {
     const origin = req.headers.get('Origin') || '';
+    if (req.method === 'POST' && new URL(req.url).pathname === '/stripe-webhook') return stripeHook(env, req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
     if (req.method !== 'POST') return out(env, origin, { error: 'POST only', detail: 'The Vyqil assistant is running.' }, 405);
     if (origins(env).indexOf(origin) < 0) return out(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN must list your site address exactly)' }, 403);
@@ -348,7 +435,7 @@ export default {
     if (!uid) return out(env, origin, { error: 'signin' }, 401);
     let body; try { body = await req.json(); } catch (e) { return out(env, origin, { error: 'bad' }, 400); }
     const path = new URL(req.url).pathname; let res;
-    try { res = path === '/scan' ? await scan(env, token, uid, body) : path === '/status' ? await status(env, token, uid, body) : path === '/report' ? await report(env, token, uid, body) : path === '/admin' ? await admin(env, token, uid, body) : path === '/chat' ? await chat(env, token, uid, body) : { status: 404, data: { error: 'not found' } }; }
+    try { res = path === '/scan' ? await scan(env, token, uid, body) : path === '/status' ? await status(env, token, uid, body) : path === '/report' ? await report(env, token, uid, body) : path === '/admin' ? await admin(env, token, uid, body) : path === '/checkout' ? await checkout(env, token, uid, body) : path === '/portal' ? await portal(env, token, uid, body) : path === '/chat' ? await chat(env, token, uid, body) : { status: 404, data: { error: 'not found' } }; }
     catch (e) { res = { status: 502, data: { error: 'busy', detail: String(e && e.message || e).slice(0, 100) } }; }
     return out(env, origin, res.data, res.status);
   }
