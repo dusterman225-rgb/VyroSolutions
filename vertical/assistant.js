@@ -124,12 +124,12 @@
     // ---------- plan and credits ----------
     function priceText() { return String(window.VYQIL_ASSISTANT_PRICE || SETTINGS.price); }
     function pay(kind) { // opens secure Stripe checkout for the plan or a credit top-up, then returns here
-      var u = firebase.auth().currentUser; Q.toast('Opening secure checkout...');
-      api('/checkout', { app: C.id, appName: C.name || 'Vyqil', bizId: S.biz.id, kind: kind, email: (u && u.email) || '', returnUrl: location.href.split('#')[0] })
+      var u = firebase.auth().currentUser; Q.toast('Opening PayPal...');
+      api(kind === 'topup5' || kind === 'topup1' || kind === 'topup' ? '/pp/topup' : '/pp/subscribe', { app: C.id, appName: C.name || 'Vyqil', bizId: S.biz.id, kind: (kind === 'plan' ? 'assistant' : kind), pack: kind, email: (u && u.email) || '', returnUrl: location.href.split('#')[0] })
         .then(function (d) { if (d && d.url) location.href = d.url; else Q.toast('Could not open checkout. Please try again.'); }, function (e) { Q.toast((e && (e.detail || e.friendly)) || 'Could not open checkout. Please try again.'); });
     }
     function manage() {
-      api('/portal', { app: C.id, bizId: S.biz.id, returnUrl: location.href.split('#')[0] }).then(function (d) { if (d && d.url) location.href = d.url; }, function (e) { Q.toast((e && (e.detail || e.friendly)) || 'Could not open billing.'); });
+      if (!confirm('Cancel the AI Assistant add-on? It stays active until the end of the paid period.')) return; api('/pp/cancel', { app: C.id, bizId: S.biz.id, kind: 'assistant' }).then(function () { Q.toast('Assistant subscription cancelled.'); Q.render(); }, function (e) { Q.toast((e && (e.detail || e.friendly)) || 'Could not cancel.'); });
     }
     function buy() { pay('plan'); }
     function addCredits() {

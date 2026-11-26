@@ -144,7 +144,7 @@
       }
       if (!found) { var inv = await pendingInvites(user); found = inv.length ? await inviteScreen(inv, user) : await createBiz(user); }
       if (!found) return;
-      S.biz = found; startApp(); loadPay();
+      S.biz = found; startApp(); loadPay(); try { var vs = document.createElement('script'); vs.src = '/shared/subscribe.js'; vs.onload = function () { try { VQSub.start({ app: (window.VQ_APP || {}).id, appName: (window.VQ_APP || {}).name, bizId: S.biz.id }); } catch (e) {} }; document.head.appendChild(vs); } catch (e) {}
     } catch (e) { root.textContent = ''; var w = el('div', 'auth'); w.appendChild(el('p', 'err', friendly(e))); var o = el('button', 'btn ghost', 'Sign out'); o.onclick = function () { auth.signOut(); }; w.appendChild(o); root.appendChild(w); }
   }
   async function pendingInvites(user) {

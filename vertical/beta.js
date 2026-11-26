@@ -48,7 +48,7 @@
       });
     }
     Q.feedback = feedback;
-    Q.feedbackMenu = function () { return [{ l: 'Send feedback', run: function () { feedback(); } }, { l: 'About the Beta', run: about }]; };
+    Q.feedbackMenu = function () { return [{ l: 'Send feedback', run: function () { feedback(); } }, { l: 'Subscription', run: function () { if (window.VQSub) VQSub.open(); else Q.toast('Subscription is loading, try again.'); } }, { l: 'About the Beta', run: about }]; };
     function about() {
       Q.modal(function (s, close) {
         s.appendChild(el('h3', '', 'About the Beta'));
