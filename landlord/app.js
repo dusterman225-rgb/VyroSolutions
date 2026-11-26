@@ -227,7 +227,7 @@ window.VQ_APP = {
   var reqCount = 0, reqs = [];
   function listenRequests() {
     if (!Q.S.biz || listenRequests.on) return; listenRequests.on = true;
-    Q.db.collection('tenantRequests').where('bizId', '==', Q.S.biz.id).where('status', '==', 'new').onSnapshot(function (s) {
+    Q.db.collection('tenantRequests').where('bizId', '==', Q.S.biz.id).where('status', '==', 'new').limit(200).onSnapshot(function (s) {
       var before = reqCount; reqs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); reqCount = reqs.length; if (reqCount > before) Q.toast(reqCount + ' tenant repair request' + (reqCount === 1 ? '' : 's') + ' waiting. See your home screen.'); if (Q.S.tab === 'today') Q.render();
     }, function () { /* optional */ });
   }
@@ -468,7 +468,7 @@ window.VQ_APP = {
   function unread() { return msgs.filter(function (m) { return m.from === 'tenant' && m.status === 'new'; }).length; }
   function bindMessages() {
     if (msgBound || !Q.S.biz) return; msgBound = true;
-    Q.db.collection('tenantMsgs').where('bizId', '==', Q.S.biz.id).onSnapshot(function (s) {
+    Q.db.collection('tenantMsgs').where('bizId', '==', Q.S.biz.id).limit(400).onSnapshot(function (s) {
       msgs = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }); var n = unread();
       if (lastUnread >= 0 && n > lastUnread) Q.toast('New message from a tenant. See More > Messages.'); lastUnread = n;
       if (Q.S.tab === 'more' || Q.S.tab === 'messages' || Q.S.tab === 'today') Q.render();
