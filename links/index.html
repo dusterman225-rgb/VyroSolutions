@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#05070A">
+<title>Vyqil - Sign in</title>
+<link rel="icon" href="/icons/icon-192.png"><link rel="apple-touch-icon" href="/icons/icon-192.png">
+<style>
+:root{--bg:#05070A;--card:#0C1117;--line:rgba(201,209,217,.14);--blue:#4B9CD3;--glow:rgba(75,156,211,.45);--text:#C9D1D9;--mut:#8B96A3}
+*{box-sizing:border-box}html,body{margin:0}
+body{min-height:100vh;color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(900px 500px at 50% -10%,rgba(75,156,211,.22),transparent 60%),var(--bg)}
+.wrap{max-width:440px;margin:0 auto;padding:34px 18px 50px;text-align:center}
+.logo{width:min(80vw,300px);height:auto;display:block;margin:0 auto 10px;filter:drop-shadow(0 0 18px var(--glow))}
+h1{margin:6px 0 4px;color:#fff;font-size:1.25rem;letter-spacing:.04em}p{color:var(--mut);margin:0 0 22px;font-size:.92rem}
+.big{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;margin:12px 0;border-radius:14px;border:1px solid var(--blue);background:linear-gradient(180deg,rgba(75,156,211,.28),rgba(75,156,211,.08));box-shadow:0 0 18px rgba(75,156,211,.25);color:#fff;font:700 .95rem system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;cursor:pointer}
+.big.ghost{background:transparent;border-color:rgba(201,209,217,.3);box-shadow:none}
+.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:6px;text-align:left}
+.panel.open{display:block}
+label{display:block;margin:0 0 6px;color:var(--mut);font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+select{width:100%;background:rgba(5,7,10,.7);border:1px solid var(--line);color:#fff;border-radius:12px;padding:12px;font:16px system-ui,sans-serif;min-height:46px;outline:none;color-scheme:dark}
+select:focus{border-color:var(--blue);box-shadow:0 0 14px var(--glow)}
+.small{color:var(--mut);font-size:.8rem;margin-top:10px}.foot{margin-top:28px;font-size:.8rem;color:var(--mut)}.foot a{color:var(--blue)}
+</style></head><body><div class="wrap">
+<img class="logo" src="/images/vyqil-solutions.png" alt="VyqilSolutions">
+<h1>Welcome</h1><p>Sign in to run your business, or open your client portal.</p>
+<a class="big" id="own" href="/login.html">Owner sign in</a>
+<button class="big ghost" id="cli" type="button" aria-expanded="false">Client sign in</button>
+<div class="panel" id="pn"><label for="sel">Choose your portal</label><select id="sel"></select>
+<button class="big" id="go" type="button" style="margin-bottom:0">Continue</button>
+<div class="small">Not sure? Pick the kind of business you work with. Your invitation email says which one.</div></div>
+<div class="foot">Powered by <a href="/">VyqilSolutions</a></div>
+</div>
+<script>
+(function () {
+  var P = [['Contractor customer portal', '/contractor/portal-login.html'], ['Tenant portal (Landlord)', '/landlord/tenant.html'], ['Real estate client portal', '/realtor/portal.html'], ['Salon, barber and spa client portal', '/salon/portal.html'], ['Photo and video client portal', '/photo/portal.html'], ['Event planning client portal', '/events/portal.html'], ['Auto shop customer portal', '/auto/portal.html'], ['Lessons student portal', '/lessons/portal.html'], ['Cleaning, lawn and pool customer portal', '/services/portal.html']];
+  var sel = document.getElementById('sel'), pn = document.getElementById('pn'), cli = document.getElementById('cli');
+  var ph = document.createElement('option'); ph.value = ''; ph.textContent = 'Select...'; sel.appendChild(ph);
+  P.forEach(function (p) { var o = document.createElement('option'); o.value = p[1]; o.textContent = p[0]; sel.appendChild(o); });
+  function open(v) { pn.classList.toggle('open', v); cli.setAttribute('aria-expanded', v ? 'true' : 'false'); }
+  cli.onclick = function () { open(!pn.classList.contains('open')); };
+  document.getElementById('go').onclick = function () { if (sel.value) location.href = sel.value; else sel.focus(); };
+  sel.onchange = function () { if (sel.value) location.href = sel.value; };
+  // A business can link straight to its own portal type: /links?app=salon
+  var a = new URLSearchParams(location.search).get('app');
+  if (a) { for (var i = 0; i < P.length; i++) if (P[i][1].indexOf('/' + a + '/') === 0) { sel.value = P[i][1]; open(true); break; } }
+})();
+</script></body></html>
