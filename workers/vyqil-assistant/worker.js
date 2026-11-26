@@ -424,10 +424,142 @@ async function stripeHook(env, req) {
   return new Response('ok');
 }
 
+// ---------- PayPal: app subscriptions ($7/month per app) and the Assistant add-on ($7/month per app), plus credit top-ups ----------
+// One monthly $7 PayPal plan serves both; custom_id says what was bought. The free 30-day trial is counted here in code, not by PayPal.
+const PP_KINDS = { app: { name: 'Vyqil app (monthly)', pre: 'app:' }, assistant: { name: 'Vyqil Assistant (monthly)', pre: '' } };
+let ppTok = null;
+const ppBase = env => env.PAYPAL_ENV === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+async function ppFetch(env, path, method, body) {
+  if (!env.PAYPAL_CLIENT_ID || !env.PAYPAL_SECRET) throw new Error('payments are not switched on yet (PayPal keys are not set)');
+  if (!ppTok || ppTok.exp < Date.now()) {
+    const r = await fetch(ppBase(env) + '/v1/oauth2/token', { method: 'POST', headers: { Authorization: 'Basic ' + btoa(env.PAYPAL_CLIENT_ID + ':' + env.PAYPAL_SECRET), 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=client_credentials' });
+    const j = await r.json().catch(() => ({})); if (!r.ok || !j.access_token) throw new Error('PayPal sign-in failed (check the client id and secret)'); ppTok = { t: j.access_token, exp: Date.now() + (Math.max(60, (j.expires_in || 600) - 120)) * 1000 };
+  }
+  const r = await fetch(ppBase(env) + path, { method: method || 'GET', headers: { Authorization: 'Bearer ' + ppTok.t, 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: body ? JSON.stringify(body) : undefined });
+  const t = await r.text(); let j = {}; try { j = t ? JSON.parse(t) : {}; } catch (e) { }
+  if (!r.ok) throw new Error((j.message || (j.details && j.details[0] && j.details[0].description) || ('PayPal ' + r.status)).slice(0, 160)); return j;
+}
+const ppKey = (kind, bizId, app) => PP_KINDS[kind].pre + bizId + '|' + app;
+async function ppPlanId(env) { // the $7 monthly plan. Created once by an admin (see ppSetup) and stored in PAYPAL_PLAN_ID or in D1.
+  if (env.PAYPAL_PLAN_ID) return env.PAYPAL_PLAN_ID; const D = await D1(env), r = D && await D.prepare("SELECT status FROM plans WHERE k='pp:plan'").first(); if (r && r.status) return r.status; throw new Error('The PayPal plan is not set up yet (admin: run Set up PayPal)');
+}
+async function ppSetup(env) {
+  const prod = await ppFetch(env, '/v1/catalogs/products', 'POST', { name: 'Vyqil monthly subscription', type: 'SERVICE', category: 'SOFTWARE' });
+  const plan = await ppFetch(env, '/v1/billing/plans', 'POST', { product_id: prod.id, name: 'Vyqil $7 monthly', status: 'ACTIVE',
+    billing_cycles: [{ frequency: { interval_unit: 'MONTH', interval_count: 1 }, tenure_type: 'REGULAR', sequence: 1, total_cycles: 0, pricing_scheme: { fixed_price: { value: '7.00', currency_code: 'USD' } } }],
+    payment_preferences: { auto_bill_outstanding: true, payment_failure_threshold: 2 } });
+  const D = await D1(env); if (D) await D.prepare("INSERT INTO plans (k,cust,sub,status,until) VALUES ('pp:plan','','',?1,'') ON CONFLICT(k) DO UPDATE SET status=?1").bind(plan.id).run();
+  return plan.id;
+}
+// Reads the subscription from PayPal (the source of truth) and updates the plan row. Safe to call again and again.
+async function ppRefresh(env, subId) {
+  const sb = await ppFetch(env, '/v1/billing/subscriptions/' + encodeURIComponent(subId)), cid = String(sb.custom_id || '').split('~');
+  const kind = cid[0], bizId = cid[1], app = appKey(cid[2]); if (!PP_KINDS[kind] || !bizId) throw new Error('unknown subscription');
+  const k = ppKey(kind, bizId, app), bi = sb.billing_info || {}, st = String(sb.status || '');
+  const next = bi.next_billing_time ? Date.parse(bi.next_billing_time) : 0, last = bi.last_payment && bi.last_payment.time ? Date.parse(bi.last_payment.time) : 0;
+  let until = '';
+  if (st === 'ACTIVE' && next) until = new Date(next + 3 * DAY).toISOString().slice(0, 10);           // paid through the next bill date, plus 3 days for a late payment
+  else if (st === 'ACTIVE' && last) until = new Date(last + 34 * DAY).toISOString().slice(0, 10);
+  else if ((st === 'CANCELLED' || st === 'SUSPENDED' || st === 'EXPIRED') && last) until = new Date(last + 31 * DAY).toISOString().slice(0, 10); // already paid for this month
+  else until = new Date(Date.now() - DAY).toISOString().slice(0, 10);
+  const D = await D1(env); await D.prepare('INSERT INTO plans (k,cust,sub,status,until) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(k) DO UPDATE SET cust=?2, sub=?3, status=?4, until=?5').bind(k, 'paypal', sb.id, st, until).run();
+  return { kind, bizId, app, status: st, until };
+}
+async function ppSubscribe(env, token, uid, body) {
+  const kind = String(body.kind || ''), bizId = String(body.bizId || ''), app = appKey(body.app);
+  if (!PP_KINDS[kind] || !bizId || !okReturn(env, body.returnUrl)) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (['owner', 'gm', 'admin'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Only the owner can subscribe.' } };
+  if (!(await D1(env))) return { status: 400, data: { error: 'no database', detail: 'the database (DB) is not connected to the worker' } };
+  const sep = body.returnUrl.indexOf('?') < 0 ? '?' : '&', p = { plan_id: await ppPlanId(env), custom_id: kind + '~' + bizId + '~' + app,
+    application_context: { brand_name: 'Vyqil', locale: 'en-US', user_action: 'SUBSCRIBE_NOW', shipping_preference: 'NO_SHIPPING', payment_method: { payer_selected: 'PAYPAL', payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED' }, return_url: body.returnUrl + sep + 'pp=sub', cancel_url: body.returnUrl } };
+  if (body.email) p.subscriber = { email_address: String(body.email).slice(0, 120) };
+  // Still inside the free trial? Then the first bill is on the day the trial ends.
+  if (kind === 'app') { const t = await trialInfo(env, token, bizId); if (t && t.left > 1) p.start_time = new Date(t.end + 3600 * 1000).toISOString(); }
+  const sb = await ppFetch(env, '/v1/billing/subscriptions', 'POST', p), a = (sb.links || []).find(l => l.rel === 'approve');
+  return a ? { status: 200, data: { url: a.href } } : { status: 502, data: { error: 'busy', detail: 'PayPal did not give a checkout link' } };
+}
+async function ppTopup(env, token, uid, body) {
+  const bizId = String(body.bizId || ''), app = appKey(body.app), P = PRICES[body.kind];
+  if (!bizId || !P || !P.credit || !okReturn(env, body.returnUrl)) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (['owner', 'gm', 'admin'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Only the owner can buy credits.' } };
+  const e = await entitled(env, token, uid, bizId, sToday(), app); if (!e.ok || e.why === 'admin') return { status: 400, data: { error: 'noplan', detail: 'Add the Assistant plan first, then you can buy extra credits.' } };
+  const sep = body.returnUrl.indexOf('?') < 0 ? '?' : '&';
+  const o = await ppFetch(env, '/v2/checkout/orders', 'POST', { intent: 'CAPTURE', purchase_units: [{ custom_id: 'topup~' + body.kind + '~' + bizId + '~' + app, description: P.name, amount: { currency_code: 'USD', value: P.usd.toFixed(2) } }],
+    payment_source: { paypal: { experience_context: { brand_name: 'Vyqil', user_action: 'PAY_NOW', shipping_preference: 'NO_SHIPPING', return_url: body.returnUrl + sep + 'pp=order', cancel_url: body.returnUrl } } } });
+  const a = (o.links || []).find(l => l.rel === 'payer-action' || l.rel === 'approve');
+  return a ? { status: 200, data: { url: a.href } } : { status: 502, data: { error: 'busy', detail: 'PayPal did not give a checkout link' } };
+}
+async function ppCapture(env, orderId) { // credits are added once per order
+  const D = await D1(env); let o; try { o = await ppFetch(env, '/v2/checkout/orders/' + encodeURIComponent(orderId) + '/capture', 'POST', {}); } catch (e) { o = await ppFetch(env, '/v2/checkout/orders/' + encodeURIComponent(orderId)); }
+  const pu = (o.purchase_units || [])[0] || {}, cap = ((pu.payments || {}).captures || [])[0] || {}, cid = String(pu.custom_id || cap.custom_id || '').split('~');
+  if (o.status !== 'COMPLETED' || cid[0] !== 'topup' || !PRICES[cid[1]]) return { done: false };
+  const first = await D.prepare('INSERT OR IGNORE INTO pay_events (id, ts) VALUES (?1,?2)').bind('pp:' + orderId, new Date().toISOString()).run();
+  if (first.meta && first.meta.changes === 0) return { done: true };
+  const k = cid[2] + '|' + appKey(cid[3]), micro = Math.round(PRICES[cid[1]].credit * MICRO); await acct(env, k);
+  await D.prepare('UPDATE acct SET topup = topup + ?1 WHERE k=?2').bind(micro, k).run();
+  await D.prepare('INSERT INTO ledger (k,ts,kind,micro,model,note) VALUES (?1,?2,?3,?4,?5,?6)').bind(k, new Date().toISOString(), 'topup', micro, '', 'PayPal ' + cid[1] + ' (' + orderId + ')').run();
+  return { done: true };
+}
+async function ppConfirm(env, token, uid, body) { // the customer came back from PayPal
+  const bizId = String(body.bizId || ''); try { await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (body.subscriptionId) { const r = await ppRefresh(env, String(body.subscriptionId).slice(0, 60)); if (r.bizId !== bizId) return { status: 403, data: { error: 'access' } }; return { status: 200, data: { ok: true, kind: r.kind, status: r.status } }; }
+  if (body.orderId) { const r = await ppCapture(env, String(body.orderId).slice(0, 60)); return { status: 200, data: { ok: r.done, kind: 'topup' } }; }
+  return { status: 400, data: { error: 'bad' } };
+}
+async function ppCancel(env, token, uid, body) {
+  const kind = String(body.kind || ''), bizId = String(body.bizId || ''), app = appKey(body.app); if (!PP_KINDS[kind] || !bizId) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  if (['owner', 'gm', 'admin'].indexOf(m.role) < 0) return { status: 403, data: { error: 'role', detail: 'Only the owner can cancel.' } };
+  const D = await D1(env), row = D && await D.prepare('SELECT * FROM plans WHERE k=?1').bind(ppKey(kind, bizId, app)).first();
+  if (!row || !row.sub) return { status: 400, data: { error: 'noplan', detail: 'No subscription was found to cancel.' } };
+  await ppFetch(env, '/v1/billing/subscriptions/' + encodeURIComponent(row.sub) + '/cancel', 'POST', { reason: 'Cancelled by the owner in the app' });
+  const r = await ppRefresh(env, row.sub); return { status: 200, data: { ok: true, status: r.status, until: r.until } };
+}
+async function ppAdminSetup(env, token, uid) {
+  let ok = false; try { ok = !!(await getDoc(env, token, 'admins/' + uid)); } catch (e) { }
+  if (!ok) return { status: 403, data: { error: 'admin only' } };
+  const id = await ppSetup(env); return { status: 200, data: { planId: id, mode: env.PAYPAL_ENV === 'live' ? 'live' : 'sandbox' } };
+}
+async function ppHook(env, req) {
+  const raw = await req.text(); let ev; try { ev = JSON.parse(raw); } catch (e) { return new Response('bad', { status: 400 }); }
+  if (!env.PAYPAL_WEBHOOK_ID) return new Response('no webhook id', { status: 500 });
+  const h = n => req.headers.get(n) || '';
+  const v = await ppFetch(env, '/v1/notifications/verify-webhook-signature', 'POST', { auth_algo: h('paypal-auth-algo'), cert_url: h('paypal-cert-url'), transmission_id: h('paypal-transmission-id'), transmission_sig: h('paypal-transmission-sig'), transmission_time: h('paypal-transmission-time'), webhook_id: env.PAYPAL_WEBHOOK_ID, webhook_event: ev }).catch(() => ({}));
+  if (v.verification_status !== 'SUCCESS') return new Response('bad signature', { status: 400 });
+  const r = ev.resource || {};
+  try {
+    if (/^BILLING\.SUBSCRIPTION\./.test(ev.event_type) && r.id) await ppRefresh(env, r.id);
+    else if (ev.event_type === 'PAYMENT.SALE.COMPLETED' && r.billing_agreement_id) await ppRefresh(env, r.billing_agreement_id);
+    else if (ev.event_type === 'CHECKOUT.ORDER.APPROVED' && r.id) await ppCapture(env, r.id);
+  } catch (e) { return new Response('retry', { status: 500 }); }
+  return new Response('ok');
+}
+// ---------- app subscription status: free trial in code, then $7/month ----------
+async function trialInfo(env, token, bizId) {
+  const biz = await getDoc(env, token, 'businesses/' + bizId); if (!biz) return null;
+  let extra = 0; try { const t = await getDoc(env, token, 'businesses/' + bizId + '/aiPlans/trial'); extra = Number(t && t.extraDays) || 0; } catch (e) { }
+  const created = biz.createdAt ? Date.parse(biz.createdAt) : 0; if (!created) return { left: 999, end: Date.now() + 30 * DAY, extra }; // no date on an old business: never lock it by mistake
+  const end = created + (Number(env.TRIAL_DAYS || 30) + extra) * DAY; return { end, extra, left: Math.ceil((end - Date.now()) / DAY) };
+}
+async function subStatus(env, token, uid, body) {
+  const bizId = String(body.bizId || ''), app = appKey(body.app), today = sToday(); if (!bizId) return { status: 400, data: { error: 'bad' } };
+  let m; try { m = await member(env, token, uid, bizId); } catch (e) { return { status: 403, data: { error: 'access' } }; }
+  const base = { role: m.role, price: '$7/month', canBuy: ['owner', 'gm', 'admin'].indexOf(m.role) >= 0 };
+  try { if (await getDoc(env, token, 'admins/' + uid)) return { status: 200, data: Object.assign(base, { state: 'free', why: 'admin' }) }; } catch (e) { }
+  try { const D = await D1(env), p = D && await D.prepare('SELECT * FROM plans WHERE k=?1').bind(ppKey('app', bizId, app)).first(); if (p && p.until && p.until >= today) return { status: 200, data: Object.assign(base, { state: 'active', until: p.until, managed: !!p.sub, cancelled: p.status !== 'ACTIVE' }) }; } catch (e) { }
+  try { const c = await getDoc(env, token, 'businesses/' + bizId + '/aiPlans/appsub'); if (c && c.on && (!c.until || String(c.until).slice(0, 10) >= today)) return { status: 200, data: Object.assign(base, { state: 'free', why: 'comp' }) }; } catch (e) { }
+  const t = await trialInfo(env, token, bizId);
+  if (!t || t.left > 0) return { status: 200, data: Object.assign(base, { state: 'trial', daysLeft: t ? t.left : 30, trialEnd: t ? new Date(t.end).toISOString().slice(0, 10) : '' }) };
+  return { status: 200, data: Object.assign(base, { state: 'locked', trialEnd: new Date(t.end).toISOString().slice(0, 10) }) };
+}
+
 export default {
   async fetch(req, env) {
     const origin = req.headers.get('Origin') || '';
     if (req.method === 'POST' && new URL(req.url).pathname === '/stripe-webhook') return stripeHook(env, req);
+    if (req.method === 'POST' && new URL(req.url).pathname === '/paypal-webhook') return ppHook(env, req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env, origin) });
     if (req.method !== 'POST') return out(env, origin, { error: 'POST only', detail: 'The Vyqil assistant is running.' }, 405);
     if (origins(env).indexOf(origin) < 0) return out(env, origin, { error: 'Not allowed', detail: 'origin-not-allowed (ALLOWED_ORIGIN must list your site address exactly)' }, 403);
@@ -435,7 +567,7 @@ export default {
     if (!uid) return out(env, origin, { error: 'signin' }, 401);
     let body; try { body = await req.json(); } catch (e) { return out(env, origin, { error: 'bad' }, 400); }
     const path = new URL(req.url).pathname; let res;
-    try { res = path === '/scan' ? await scan(env, token, uid, body) : path === '/status' ? await status(env, token, uid, body) : path === '/report' ? await report(env, token, uid, body) : path === '/admin' ? await admin(env, token, uid, body) : path === '/checkout' ? await checkout(env, token, uid, body) : path === '/portal' ? await portal(env, token, uid, body) : path === '/chat' ? await chat(env, token, uid, body) : { status: 404, data: { error: 'not found' } }; }
+    try { res = path === '/scan' ? await scan(env, token, uid, body) : path === '/status' ? await status(env, token, uid, body) : path === '/report' ? await report(env, token, uid, body) : path === '/admin' ? await admin(env, token, uid, body) : path === '/sub/status' ? await subStatus(env, token, uid, body) : path === '/pp/subscribe' ? await ppSubscribe(env, token, uid, body) : path === '/pp/topup' ? await ppTopup(env, token, uid, body) : path === '/pp/confirm' ? await ppConfirm(env, token, uid, body) : path === '/pp/cancel' ? await ppCancel(env, token, uid, body) : path === '/pp/setup' ? await ppAdminSetup(env, token, uid) : path === '/checkout' ? await checkout(env, token, uid, body) : path === '/portal' ? await portal(env, token, uid, body) : path === '/chat' ? await chat(env, token, uid, body) : { status: 404, data: { error: 'not found' } }; }
     catch (e) { res = { status: 502, data: { error: 'busy', detail: String(e && e.message || e).slice(0, 100) } }; }
     return out(env, origin, res.data, res.status);
   }
