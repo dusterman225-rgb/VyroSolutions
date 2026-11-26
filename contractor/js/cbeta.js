@@ -59,7 +59,7 @@
   window.vqBeta = {
     feedback: feedback, about: about,
     mount: function (ctx) {
-      CTX = ctx; paint();
+      CTX = ctx; paint(); try { if (!window.VQSub) { var vs = document.createElement('script'); vs.src = '/shared/subscribe.js'; vs.onload = function () { VQSub.start({ app: 'contractor', appName: 'VyqilContractor', bizId: ctx.bizId }); }; document.head.appendChild(vs); } } catch (e) { }
       try { firebase.firestore().collection('businesses').doc(ctx.bizId).collection('aiPlans').doc('trial').get().then(function (d) { extra = (d.exists && Number(d.data().extraDays)) || 0; paint(); }, function () { }); } catch (e) { }
     },
     note: function () { // sign-in and sign-up screens
