@@ -15,6 +15,12 @@
 <div id="flash"></div><div id="alerts"></div>
 <div class="card hide" id="inv"><h2>Invitations</h2><div id="invList"></div></div>
 <div id="list"></div>
+<div class="card" id="plink"><h2>Customer portal link</h2>
+  <div class="note">Share this one link with your customers. It opens your Vyqil home page with Owner sign in and Client sign in. Clients pick their portal from a list.</div>
+  <div class="note"><b id="plUrl" style="word-break:break-all"></b></div>
+  <button class="btn ghost" id="plCopy" type="button">Copy link</button> <a class="btn ghost" id="plOpen" href="/links" target="_blank" style="text-decoration:none">Open</a>
+  <div class="note" id="plMsg"></div></div>
+<script>(function(){var u=location.origin+'/links';document.getElementById('plUrl').textContent=u;document.getElementById('plCopy').onclick=function(){var m=document.getElementById('plMsg');try{navigator.clipboard.writeText(u).then(function(){m.textContent='Copied.'},function(){m.textContent='Press and hold the link to copy it.'})}catch(e){m.textContent='Press and hold the link to copy it.'}}})();</script>
 <div class="card hide" id="mk"><h2 id="mkh">Add a business</h2>
   <div class="note">Each business has its own name, team and data. Pick the kind of business and Vyqil gives it the right app. You can add more apps to it later.</div>
   <label>Business name</label><input id="bn" maxlength="80">
