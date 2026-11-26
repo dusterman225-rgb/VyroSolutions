@@ -130,7 +130,17 @@ const okCol = c => /^records(_[a-z]{3,12})?$/.test(String(c || '')) || c === '@c
 // Contractor keeps its data in separate collections (jobs, invoices ...), not in one records collection.
 // '@contractor' reads exactly this fixed list for ONE business, and each row is tagged with its kind so the briefing works the same way.
 const CONTRACTOR = { jobs: 'job', estimates: 'estimate', invoices: 'invoice', customers: 'customer', expenses: 'expense', leads: 'lead', contracts: 'contract', subs: 'sub', recurring: 'recurring' };
+// A short memory so a chat of several questions reads the business once, not once per question (saves Firestore reads).
+// Kept per business and per signed-in person (the token is checked by Firestore on the first read), 90 seconds.
+const RECS_CACHE = new Map();
 async function loadRecs(env, token, bizId, col) {
+  const ck = bizId + '|' + col + '|' + token.slice(-24), hit = RECS_CACHE.get(ck);
+  if (hit && Date.now() - hit.t < 90000) return hit.v.map(r => Object.assign({}, r));
+  const v = await loadRecs0(env, token, bizId, col);
+  if (RECS_CACHE.size > 60) RECS_CACHE.clear(); RECS_CACHE.set(ck, { t: Date.now(), v });
+  return v.map(r => Object.assign({}, r));
+}
+async function loadRecs0(env, token, bizId, col) {
   if (col !== '@contractor') return listAll(env, token, 'businesses/' + bizId + '/' + col, 1500);
   const names = Object.keys(CONTRACTOR), res = await Promise.all(names.map(n => listAll(env, token, 'businesses/' + bizId + '/' + n, 400).catch(e => null)));
   if (res.every(r => r === null)) throw new Error('no access');
