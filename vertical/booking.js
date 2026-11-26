@@ -263,7 +263,7 @@
   function start() {
     if (started) return; started = true;
     Q.db.collection('bookingPages').doc(bid()).onSnapshot(function (d) { page = d.exists ? d.data() : null; refresh(); soonSync(); }, function () { /* not set up */ });
-    Q.db.collection('apptRequests').where('bizId', '==', bid()).onSnapshot(function (sn) { reqs = sn.docs.map(function (x) { var o = x.data(); o.id = x.id; return o; }); refresh(); soonSync(); autoApplicants(); }, function () { /* ignore */ });
+    Q.db.collection('apptRequests').where('bizId', '==', bid()).limit(400).onSnapshot(function (sn) { reqs = sn.docs.map(function (x) { var o = x.data(); o.id = x.id; return o; }); refresh(); soonSync(); autoApplicants(); }, function () { /* ignore */ });
     setInterval(function () { syncNow(); syncPortals(); }, 45000); setTimeout(syncPortals, 6000);
   }
   function boot() {
