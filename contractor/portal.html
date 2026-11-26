@@ -157,7 +157,7 @@
     if (p.owedCents) $('mOwed').className = 'late';
     if (Array.isArray(p.payMethods) && p.payMethods.length) {
       (function () {
-        function go() { try { $('payHost').textContent = ''; VQPayMethods.view($('payHost'), p.payMethods, { cls: 'card', title: 'How to pay', intro: 'Pay ' + (p.businessName || 'your contractor') + ' directly with any of these. They will mark your invoice paid.' }); } catch (e) { /* optional */ } }
+        function go() { try { $('payHost').textContent = ''; VQPayMethods.view($('payHost'), p.payMethods, { title: 'Pay ' + (p.businessName || 'your contractor'), amountCents: p.owedCents || 0, note: 'Invoice payment', intro: 'Choose how you would like to pay' + (p.owedCents ? ' (' + vutil.fmt(p.owedCents) + ' due)' : '') + '. It opens right to the payment, then they mark your invoice paid.' }); } catch (e) { /* optional */ } }
         if (window.VQPayMethods) go(); else { var sc = document.createElement('script'); sc.src = '../shared/paymethods.js'; sc.onload = go; document.head.appendChild(sc); }
       })();
     }

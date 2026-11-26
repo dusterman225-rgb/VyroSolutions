@@ -56,15 +56,18 @@
           <summary class="mg">Tools</summary>
           <a class="mi" href="timelog.html">Time and mileage</a>
           <a class="mi" id="miSub" href="subs.html">Subcontractors</a>
-          <a class="mi" href="ai.html">Vyqil Assistant (AI)</a>
+          <a class="mi" id="miData" href="data.html" style="display:none">Data and activity</a>
+        </details>
+        <details>
+          <summary class="mg">Assistant</summary>
+          <a class="mi" href="ai.html">Vyqil Assistant</a>
           <a class="mi" href="ai.html#scan">Scan a document</a>
           <a class="mi" href="assistant.html">Quick help</a>
-          <a class="mi" id="miData" href="data.html" style="display:none">Data and activity</a>
         </details>
         <details>
           <summary class="mg">Beta</summary>
           <a class="mi" href="#" id="miFb">Send feedback</a>
-          <a class="mi" href="#" id="miSub">Subscription</a>
+          <a class="mi" href="#" id="miSubscr">Subscription</a>
           <a class="mi" href="#" id="miAbout">About the Beta</a>
         </details>
         <details>
@@ -213,7 +216,7 @@
       lb(function () { window.vqBeta.mount(ctx); });
       var f = document.getElementById('miFb'), a = document.getElementById('miAbout');
       if (f) f.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.feedback(); }); });
-      var sb = document.getElementById('miSub'); if (sb) sb.addEventListener('click', function (e) { e.preventDefault(); if (window.VQSub) window.VQSub.open(); });
+      var sb = document.getElementById('miSubscr'); if (sb) sb.addEventListener('click', function (e) { e.preventDefault(); if (window.VQSub) window.VQSub.open(); });
       if (a) a.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.about(); }); });
     })();
     getStarted(ctx);
