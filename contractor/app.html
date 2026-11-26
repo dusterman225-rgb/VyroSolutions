@@ -64,6 +64,7 @@
         <details>
           <summary class="mg">Beta</summary>
           <a class="mi" href="#" id="miFb">Send feedback</a>
+          <a class="mi" href="#" id="miSub">Subscription</a>
           <a class="mi" href="#" id="miAbout">About the Beta</a>
         </details>
         <details>
@@ -148,7 +149,7 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
   window.addEventListener('unhandledrejection', function (e) { if (window.vyroSigningOut) e.preventDefault(); });
   $('logoutTop').addEventListener('click', function () { $('out').click(); });
-  $('out').addEventListener('click', function () { var go = function () { location.href = '/dashboard.html'; }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
+  $('out').addEventListener('click', function () { var go = function () { location.href = vyro.loginUrl(); }; try { vyro.signOut().then(go, go); setTimeout(go, 1500); } catch (x) { go(); } });
 
   // ---- Get started checklist (same idea as VyqilLandlord): shows what is done, what is next, and can be hidden ----
   async function getStarted(ctx) {
@@ -212,6 +213,7 @@
       lb(function () { window.vqBeta.mount(ctx); });
       var f = document.getElementById('miFb'), a = document.getElementById('miAbout');
       if (f) f.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.feedback(); }); });
+      var sb = document.getElementById('miSub'); if (sb) sb.addEventListener('click', function (e) { e.preventDefault(); if (window.VQSub) window.VQSub.open(); });
       if (a) a.addEventListener('click', function (e) { e.preventDefault(); lb(function () { window.vqBeta.about(); }); });
     })();
     getStarted(ctx);
