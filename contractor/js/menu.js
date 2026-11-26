@@ -24,7 +24,8 @@
     group('Community', [['Nearby requests and Vyqil members', 'community.html'], ['Need A Vyqil Member', 'community.html#need'], ['My community listing', 'community.html#listing']]);
     group('Customers', [['Customers', 'customers.html'], money && ['Contracts', 'documents.html'], ['Messages', 'messages.html']]);
     group('Money', money ? [['Invoices', 'invoices.html'], ['Expenses and bills', 'expenses.html'], ['Recurring bills', 'recurring.html'], role === 'owner' && ['Finances', 'finances.html'], role === 'owner' && ['Pay with Vyqil', 'paysettings.html']] : []);
-    group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], ['Vyqil Assistant (AI)', 'ai.html'], ['Scan a document', 'ai.html#scan'], ['Quick help', 'assistant.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
+    group('Tools', [['Time and mileage', 'timelog.html'], money && ['Subcontractors', 'subs.html'], (role === 'owner' || role === 'gm') && ['Data and activity', 'data.html']]);
+    group('Assistant', [['Vyqil Assistant', 'ai.html'], ['Scan a document', 'ai.html#scan'], ['Quick help', 'assistant.html']]);
     group('Beta', [['Send feedback', '#feedback'], ['Subscription', '#subscription'], ['About the Beta', '#about']]);
     group('Business', [['Business profile', 'profile.html'], ['Team', 'team.html'], role === 'owner' && ['Sign-in link', 'signinlink.html']]);
     try { menu.addEventListener('click', function (e) { var h = e.target && e.target.getAttribute && e.target.getAttribute('href'); if (h === '#feedback' || h === '#about' || h === '#subscription') { e.preventDefault(); set(false); if (h === '#subscription') { if (window.VQSub) VQSub.open(); return; } loadBeta(function () { h === '#feedback' ? vqBeta.feedback() : vqBeta.about(); }); } }); } catch (e) { /* ignore */ }

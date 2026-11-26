@@ -388,10 +388,6 @@
         Array.prototype.forEach.call(document.querySelectorAll('img.mark-small'), function (im) {
           if (im.closest('a')) return; var a = document.createElement('a'); a.href = 'app.html'; a.setAttribute('aria-label', 'Go to dashboard'); im.parentNode.insertBefore(a, im); a.appendChild(im); a.style.cssText = 'display:inline-block;line-height:0';
         });
-        var b = document.createElement('button'); b.id = 'vqLogout'; b.type = 'button'; b.textContent = 'Log out';
-        b.style.cssText = 'position:fixed;bottom:10px;left:10px;z-index:900;background:rgba(5,7,10,.75);color:#cfd8e3;border:1px solid #27405c;border-radius:999px;padding:5px 11px;font:13px system-ui,sans-serif;cursor:pointer';
-        b.onclick = function () { signOut().then(function () { location.href = 'login.html'; }, function () { location.href = 'login.html'; }); };
-        document.body.appendChild(b);
       };
       var go = function () { auth.onAuthStateChanged(chrome); };
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();

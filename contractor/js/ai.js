@@ -74,7 +74,14 @@
     // the scan screens read their choices from VQ_APP.kinds, so give them only the kinds that can be saved from a photo,
     // while chat and reports use the full list (the worker reads the fixed Contractor collections itself).
     var realKinds = kinds; C.kinds = realKinds; C.scanKinds = scanKinds;
-    var css = document.createElement('style'); css.textContent = '.aitoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1c2530;color:#fff;padding:10px 16px;border-radius:12px;z-index:99;font-size:.9rem}.aimodal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:80;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto}.aibox{background:#0a0f16;color:#e8eef6;width:100%;max-width:560px;max-height:92dvh;overflow-y:auto;border-radius:18px 18px 0 0;padding:18px;box-sizing:border-box}.aif{display:block;margin:0 0 10px;font-size:.84rem}.aif span{display:block;opacity:.75;margin-bottom:3px}.aif input,.aif select,.aif textarea{width:100%;box-sizing:border-box;margin:0}.hint{opacity:.75;font-size:.84rem}.hint.err{color:#ff8a8a;opacity:1}';
+    var css = document.createElement('style'); css.textContent = '.aitoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0C1117;color:#C9D1D9;border:1px solid rgba(75,156,211,.5);box-shadow:0 0 14px rgba(75,156,211,.45);padding:10px 16px;border-radius:12px;z-index:99;font-size:.9rem}' +
+      '.aimodal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:80;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto}' +
+      '.aibox{background:#0a0f15;color:#C9D1D9;border:1px solid rgba(201,209,217,.14);width:100%;max-width:560px;max-height:92dvh;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box;box-shadow:0 -10px 40px rgba(0,0,0,.6)}' +
+      '.aibox h3{margin:0 0 10px;color:#fff;letter-spacing:.06em;text-transform:uppercase;font-size:.95rem}' +
+      '.aif{display:block;margin:12px 0 4px}.aif span{display:block;margin-bottom:4px;color:#8B96A3;font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}' +
+      '.aif input,.aif select,.aif textarea{width:100%;box-sizing:border-box;margin:0;background:rgba(5,7,10,.7);border:1px solid rgba(201,209,217,.14);color:#fff;border-radius:12px;padding:12px;font:16px system-ui,sans-serif;min-height:44px;outline:none;color-scheme:dark}' +
+      '.aif textarea{min-height:80px;resize:vertical}.aif input:focus,.aif select:focus,.aif textarea:focus{border-color:#4B9CD3;box-shadow:0 0 14px rgba(75,156,211,.45)}' +
+      '.aibox .btn{margin-top:10px}.hint{color:#8B96A3;font-size:.84rem}.hint.err{color:#ff8a8a}';
     document.head.appendChild(css);
     var s = document.createElement('script'); s.src = '../vertical/assistant.js';
     s.onload = function () { var n = 0, t = setInterval(function () { if (Q.views.assistant) { clearInterval(t); Q.render(); } else if (++n > 60) { clearInterval(t); host.textContent = 'Could not start the Assistant. Please refresh.'; } }, 50); };
