@@ -24,8 +24,6 @@
   .check{display:flex;gap:10px;align-items:flex-start;margin:14px 0;line-height:1.4}
   .check input{width:auto;margin-top:4px}
 </style>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
 <div class="wrap">
@@ -40,10 +38,12 @@
   <div class="card" id="acceptCard" style="display:none">
     <h2>Accept this estimate</h2>
     <label class="check"><input type="checkbox" id="agree"><span>I have read this estimate and its terms, and I agree to them.</span></label>
+    <label class="check"><input type="checkbox" id="esign"><span>I agree to use electronic records and signatures for this estimate (<a href="/esign.html" target="_blank">E-Sign disclosure</a>).</span></label>
     <label class="field"><span>Type your full name</span><input id="who" type="text" maxlength="120" autocomplete="name"></label>
+    <div class="field"><span>Draw your signature (recommended)</span><div id="sigHost"></div></div>
     <button class="btn" id="go" type="button">Accept estimate</button>
     <div class="note" id="msg"></div>
-    <div class="note">By typing your name and tapping Accept, you are accepting this estimate. The date and time are recorded.</div>
+    <div class="note">By typing your name, signing, and tapping Accept, you are signing this estimate electronically. The date, time, and a fingerprint of the estimate are recorded. You can ask the company for a paper copy.</div>
   </div>
 
   <div id="callBox" style="display:none"><a class="btn ghost" id="callBtn" href="#">Call</a></div>
@@ -52,8 +52,9 @@
 
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="../shared/firebase-config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/util.js"></script>
+<script src="/shared/esign.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
   function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -119,13 +120,17 @@
     if (e.validUntil && e.validUntil < vutil.todayStr()) { showStatus('This estimate expired on ' + e.validUntil + '. Please call ' + (e.businessName || 'the company') + ' for an updated one.'); return; }
 
     $('acceptCard').style.display = 'block';
+    var pad = window.VQSign ? VQSign.pad($('sigHost')) : null;
     $('go').addEventListener('click', async function () {
       var name = $('who').value.trim();
       if (!$('agree').checked) { $('msg').textContent = 'Please tick the box to confirm you agree.'; $('msg').className = 'note err'; return; }
+      if (!$('esign').checked) { $('msg').textContent = 'Please tick the box to agree to sign electronically.'; $('msg').className = 'note err'; return; }
       if (name.length < 2) { $('msg').textContent = 'Please type your full name.'; $('msg').className = 'note err'; return; }
       this.disabled = true; $('msg').textContent = 'Saving...'; $('msg').className = 'note';
       try {
-        await ref.update({ status: 'Accepted', acceptedBy: name, acceptedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        var upd = { status: 'Accepted', acceptedBy: name, acceptedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        if (window.VQSign) { try { var fp = await VQSign.hash({ n: e.number, t: e.title, li: e.lineItems, st: e.subtotalCents, d: e.discountCents, tx: e.taxCents, tot: e.totalCents, dep: e.depositPct, terms: e.terms, biz: e.businessName, cust: e.customerName }); upd.sig = VQSign.record({ name: name, email: e.customerEmail || '', drawn: pad ? pad.png() : '', docHash: fp }); } catch (x2) { /* signature extras are optional */ } }
+        await ref.update(upd);
         $('acceptCard').style.display = 'none';
         showStatus('Thank you, ' + name + '! Your estimate is accepted. ' + (e.businessName || 'The company') + ' will be in touch.');
         window.scrollTo(0, 0);
@@ -137,7 +142,7 @@
     });
   })();
 </script>
-<script src="../shared/helpbot-config.js"></script>
+<script src="js/helpbot-config.js"></script>
 <script src="js/helpbot.js"></script>
 </body>
 </html>
