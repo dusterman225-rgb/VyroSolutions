@@ -140,6 +140,18 @@
         var cn = el('button', 'btn sm ghost', r.status === 'accepted' ? 'Cancel appointment' : 'Cancel request'); cn.type = 'button'; cn.onclick = function () { if (!confirm('Cancel this?')) return; db.collection('apptRequests').doc(r.id).update({ status: 'canceled', updatedAt: FV.serverTimestamp() }).then(function () { notify('aupd', r.id); }, function (e) { alert(friendly(e)); }); }; row.appendChild(cn); s.appendChild(row); c.appendChild(s);
       });
       past.forEach(function (r) { var rr = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', r.typeName)); m.appendChild(el('span', '', B.fmtRange(tz, r.start, r.end))); rr.appendChild(m); rr.appendChild(el('span', 'pill ' + (r.status === 'accepted' ? 'ok' : 'bad'), r.status === 'accepted' ? 'Done' : r.status)); c.appendChild(rr); });
+      if ((p.picks || []).length) {
+        c.appendChild(el('h2', '', 'Properties you may like'));
+        (p.picks || []).forEach(function (k) {
+          var card = el('div', 'row'); card.style.cssText = 'display:block;padding:0;overflow:hidden;margin:10px 0';
+          if (k.img && /^data:image\/jpeg;base64,/.test(k.img)) { var im = el('img'); im.src = k.img; im.alt = ''; im.loading = 'lazy'; im.style.cssText = 'display:block;width:100%;max-height:260px;object-fit:cover'; card.appendChild(im); }
+          var bd = el('div'); bd.style.padding = '12px'; var t = el('b', '', String(k.t || 'Property').slice(0, 120)); t.style.color = '#fff'; bd.appendChild(t);
+          if (k.pr) { var pr = el('div', '', String(k.pr).slice(0, 40)); pr.style.cssText = 'color:#4B9CD3;font-weight:700;margin-top:2px'; bd.appendChild(pr); }
+          if (k.n) { var nn = el('div', 'hint', String(k.n).slice(0, 300)); nn.style.marginTop = '4px'; bd.appendChild(nn); }
+          if (k.u && /^https:\/\//i.test(k.u)) { var lk = el('a', 'btn sm', 'View listing'); lk.href = k.u; lk.target = '_blank'; lk.rel = 'noopener noreferrer'; lk.style.cssText = 'display:inline-block;margin-top:8px;text-decoration:none'; bd.appendChild(lk); }
+          card.appendChild(bd); c.appendChild(card);
+        });
+      }
       if ((p.payMethods || []).length) payBox(c, p.payMethods);
       if ((p.invoices || []).length) { c.appendChild(el('h2', '', 'Invoices')); p.invoices.forEach(function (n) { var rr = el('div', 'row'), m = el('div', 'm'); m.appendChild(el('b', '', (n.n ? '#' + n.n + ' · ' : '') + (n.t || 'Invoice'))); m.appendChild(el('span', '', n.d ? 'Due ' + n.d : '')); rr.appendChild(m); rr.appendChild(el('span', 'amt', money(n.a))); rr.appendChild(el('span', 'pill ' + (n.s === 'Paid' ? 'ok' : 'warn'), n.s || '')); c.appendChild(rr); }); }
       return c;

@@ -353,18 +353,26 @@
         if (res.title) s.appendChild(el('p', 'hint', res.title));
         var sel = el('select'); scanAll().forEach(function (k) { var o = el('option', '', C.kinds[k].label); o.value = k; sel.appendChild(o); }); sel.value = kind;
         var lab = el('label', 'f', 'Save it as'); lab.appendChild(sel); s.appendChild(lab);
-        var box = el('div'); s.appendChild(box);
+        var box = el('div'), picks = {}; s.appendChild(box);
         function draw() {
           box.innerHTML = ''; var kd = C.kinds[sel.value], pr = preset(sel.value, res), shown = 0;
           kd.fields.forEach(function (f) { if (pr.p[f.k] == null || f.t === 'area') return; var v = pr.p[f.k]; if (f.t === 'money') v = Q.tools && Q.tools.cents ? '$' + (v / 100).toFixed(2) : v; if (f.t === 'link') v = Q.title(Q.get(v)); var r = el('div', 'scanrow'); r.appendChild(el('span', '', f.l)); r.appendChild(el('b', '', String(v))); box.appendChild(r); shown++; });
           if (!shown) box.appendChild(el('p', 'hint', 'I could not read specific fields, but I saved the text of the document so you can copy from it.'));
+          // Which job / property / client / group does this belong to? Let the person pick it right here.
+          picks = {}; kd.fields.forEach(function (f) {
+            if (f.t !== 'link' || !f.to || !C.kinds[f.to]) return; var list = Q.byKind(f.to).slice().sort(function (x, y) { return String(Q.title(x)).localeCompare(String(Q.title(y))); }); if (!list.length) return;
+            var ls = el('select'), o0 = el('option', '', 'None / not sure'); o0.value = ''; ls.appendChild(o0);
+            list.slice(0, 300).forEach(function (r) { var o = el('option', '', Q.title(r)); o.value = r.id; ls.appendChild(o); });
+            ls.value = pr.p[f.k] || ''; picks[f.k] = ls; var ll = el('label', 'f', 'Belongs to: ' + f.l.toLowerCase()); ll.appendChild(ls); ll.style.display = 'block'; ll.style.marginTop = '10px'; box.appendChild(ll);
+          });
+          pr.notes = pr.notes.filter(function (n) { return !/^Pick the /.test(n); });
           var miss = (res.missing || []).concat(pr.notes); if (miss.length) { var m = el('p', 'hint', 'Still needed from you: ' + miss.join('; ') + '.'); m.style.marginTop = '10px'; box.appendChild(m); }
           if (res.note) box.appendChild(el('p', 'hint', res.note));
         }
         sel.onchange = draw; draw();
         s.appendChild(el('p', 'hint', 'Check everything against the original before saving. The form opens next so you can fix or finish anything.'));
         var go = el('button', 'btn', 'Open the form'), cn = el('button', 'btn ghost', 'Cancel'); go.type = cn.type = 'button'; go.style.marginRight = '8px';
-        go.onclick = function () { close(); Q.openForm(sel.value, null, preset(sel.value, res).p); }; cn.onclick = close;
+        go.onclick = function () { var pp = preset(sel.value, res).p; Object.keys(picks).forEach(function (k) { if (picks[k].value) pp[k] = picks[k].value; else delete pp[k]; }); close(); Q.openForm(sel.value, null, pp); }; cn.onclick = close;
         var bw = el('div'); bw.appendChild(go); bw.appendChild(cn); s.appendChild(bw);
       });
     }
