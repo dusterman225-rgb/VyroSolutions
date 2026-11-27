@@ -84,9 +84,55 @@ function comm(r) { var p = r.price || 0, c = (r.commPct == null || r.commPct ===
     inbound: { addKind: 'client', addDefaults: { stage: 'Lead', source: 'Vyqil Community' }, addLabel: 'Add as client', inboxTitle: 'Requests from landlords and others', listTitle: 'My realtor listing', catLabel: 'What you help with' } };
   function call(r) { if (r.phone) window.location.href = 'tel:' + String(r.phone).replace(/[^\d+]/g, ''); }
   function text(r) { if (r.phone) window.location.href = 'sms:' + String(r.phone).replace(/[^\d+]/g, ''); }
+  // ----- Properties you may like: photos and details the client sees in their portal -----
+  function shrinkPhoto(file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader(); fr.onerror = function () { rej(); };
+      fr.onload = function () { var im = new Image(); im.onerror = function () { rej(); }; im.onload = function () {
+        var w = 640, q = 0.72, s = Math.min(1, w / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        var out = c.toDataURL('image/jpeg', q); while (out.length > 90000 && q > 0.35) { q -= 0.08; out = c.toDataURL('image/jpeg', q); } res(out); }; im.src = fr.result; };
+      fr.readAsDataURL(file);
+    });
+  }
+  function picksModal(r) {
+    var U = Q.u, el = U.el, list = (Array.isArray(r.picks) ? r.picks : []).slice();
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', 'Properties you may like'));
+      s.appendChild(el('p', 'hint', 'Add up to 8 homes. ' + (r.name || 'Your client') + ' sees them with the photo in their portal.' + (r.portalId ? '' : ' Invite them to the portal first so they can see these.')));
+      var box = el('div'), msg = el('p', 'hint'); s.appendChild(box);
+      function save() { return Q.recs().doc(r.id).update({ picks: list, updatedAt: Q.FV.serverTimestamp() }).then(function () { r.picks = list; msg.textContent = 'Saved.'; }, function (e) { msg.textContent = 'Could not save: ' + Q.friendly(e); }); }
+      function draw() {
+        box.textContent = '';
+        list.forEach(function (k, i) {
+          var row = el('div', 'row'); if (k.img) { var im = el('img'); im.src = k.img; im.alt = ''; im.style.cssText = 'width:64px;height:64px;object-fit:cover;border-radius:10px;margin-right:10px'; row.appendChild(im); }
+          var m = el('div', 'm'); m.appendChild(el('b', '', k.t)); m.appendChild(el('span', '', [k.pr, k.n].filter(Boolean).join(' · '))); row.appendChild(m);
+          var rm = el('button', 'btn sm ghost', 'Remove'); rm.type = 'button'; rm.onclick = function () { list.splice(i, 1); draw(); save(); }; row.appendChild(rm); box.appendChild(row);
+        });
+        if (!list.length) box.appendChild(el('p', 'hint', 'None yet.'));
+      }
+      draw();
+      if (list.length < 8) {
+        s.appendChild(el('h3', '', 'Add a property'));
+        function inp(label, ph, max) { var l = el('label', 'f', label), i = el('input'); i.maxLength = max; i.placeholder = ph || ''; l.appendChild(i); s.appendChild(l); return i; }
+        var t = inp('Address or name', '123 Maple St', 120), pr = inp('Price', '$425,000', 30), n = inp('Note for the client', 'Open floor plan, big yard', 300), u = inp('Listing link (optional, https)', 'https://...', 300);
+        var fl = el('label', 'f', 'Photo'), fi = el('input'); fi.type = 'file'; fi.accept = 'image/*'; fl.appendChild(fi); s.appendChild(fl);
+        var add = el('button', 'btn', 'Add it'); add.type = 'button';
+        add.onclick = function () {
+          if (!t.value.trim()) { msg.textContent = 'Add the address or a name.'; return; }
+          if (u.value.trim() && !/^https:\/\//i.test(u.value.trim())) { msg.textContent = 'The link must start with https://'; return; }
+          add.disabled = true; msg.textContent = 'Saving...';
+          var go = function (img) { list.push({ t: t.value.trim(), pr: pr.value.trim(), n: n.value.trim(), u: u.value.trim(), img: img || '' }); save().then(function () { close(); picksModal(r); }); };
+          if (fi.files && fi.files[0]) shrinkPhoto(fi.files[0]).then(go, function () { add.disabled = false; msg.textContent = 'That photo could not be read.'; }); else go('');
+        };
+        s.appendChild(add);
+      }
+      s.appendChild(msg); var done = el('button', 'btn ghost', 'Done'); done.type = 'button'; done.onclick = close; done.style.marginTop = '10px'; s.appendChild(done);
+    });
+  }
   K.client.actions = [
     { l: 'Call', show: function (r) { return !!r.phone; }, run: call },
     { l: 'Text', show: function (r) { return !!r.phone; }, run: text },
+    { l: 'Properties you may like (shown in their portal)', run: function (r) { picksModal(r); } },
     { l: 'Add a showing for this client', run: function (r) { Q.openForm('showing', null, { client: r.id, status: 'Scheduled' }); } },
     { l: 'Start a deal for this client', run: function (r) { Q.openForm('deal', null, { client: r.id, status: 'Pending', side: r.type === 'Sell' ? 'Seller' : 'Buyer' }); } },
     { l: 'Find rental space for this client', run: function (r) { Q.community.find(r, { target: 'landlord', cat: 'Apartment', title: 'Rental for a client', details: r.budget ? 'Budget about ' + Q.u.money(r.budget) + ' a month.' : '' }); } },
