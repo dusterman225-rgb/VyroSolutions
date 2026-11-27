@@ -48,6 +48,15 @@
             else { i = document.createElement('input'); i.type = f.t === 'date' ? 'date' : 'text'; i.value = v; }
             lab.appendChild(i); s.appendChild(lab); inputs[f.k] = i;
           });
+          // Expenses: which job does this cost belong to? (None = business overhead)
+          var jobSel = null, jobs = {};
+          if (kind === 'expense') {
+            jobSel = document.createElement('select'); var j0 = el('option', '', 'None (business overhead)'); j0.value = ''; jobSel.appendChild(j0);
+            var jl = el('label', 'aif'); jl.appendChild(el('span', '', 'Belongs to job')); jl.appendChild(jobSel); s.appendChild(jl);
+            db.collection('businesses').doc(ctx.bizId).collection('jobs').where('status', 'in', ['Not Started', 'In Progress', 'On Hold']).limit(100).get().then(function (sn) {
+              sn.docs.forEach(function (d) { var j = d.data(); jobs[d.id] = j; var o = el('option', '', (j.customerName || 'Customer') + (j.title ? ' \u00b7 ' + j.title : '')); o.value = d.id; jobSel.appendChild(o); });
+            }, function () { /* optional */ });
+          }
           var msg = el('p', 'hint', 'Check everything against the original first. Nothing is saved until you tap Save.'); s.appendChild(msg);
           var go = el('button', 'btn', 'Save'), cn = el('button', 'btn ghost', 'Cancel'); go.type = cn.type = 'button'; go.style.marginRight = '8px'; cn.onclick = close;
           go.onclick = function () {
@@ -60,7 +69,7 @@
             if (kind === 'document') pr = base.collection('aiDocs').add({ app: 'contractor', title: d.title.slice(0, 120), body: String(d.notes || '').slice(0, 55000), kind: 'scan', period: '', by: (ctx.user.email || '').toLowerCase(), createdAt: ts });
             else {
               if (kind === 'customer') d.nameLower = d.name.toLowerCase();
-              if (kind === 'expense') { if (d.status !== 'Paid') { d.status = 'Unpaid'; } else { d.paidOn = d.date; d.dueDate = ''; } d.jobId = ''; d.jobLabel = ''; d.method = d.method || ''; }
+              if (kind === 'expense') { if (d.status !== 'Paid') { d.status = 'Unpaid'; } else { d.paidOn = d.date; d.dueDate = ''; } var jj = jobSel && jobSel.value ? jobs[jobSel.value] : null; d.jobId = jj ? jobSel.value : ''; d.jobLabel = jj ? (jj.customerName || '') + (jj.title ? ' \u00b7 ' + jj.title : '') : ''; d.method = d.method || ''; }
               if (kind === 'lead') { d.status = d.status || 'New'; d.source = d.source || 'Scanned document'; }
               d.createdAt = ts; d.updatedAt = ts; d.createdBy = ctx.user.uid; pr = base.collection(col).add(d);
             }
