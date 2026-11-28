@@ -82,17 +82,25 @@
     var m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 24) return h + ' hr ago'; var d = Math.round(h / 24); return d + (d === 1 ? ' day ago' : ' days ago');
   }
   function phoneHref(p) { var d = String(p || '').replace(/[^0-9+]/g, ''); return d.length >= 7 ? 'tel:' + d : ''; }
+  // Remembers for 15 minutes that a business still exists, so reopening a list does not re-check each one (saves Firestore reads).
+  function aliveKey(id) { return 'vq_alive_' + id; }
+  function aliveCached(id) { try { var t = +sessionStorage.getItem(aliveKey(id)); return t && Date.now() - t < 900000; } catch (e) { return false; } }
+  function aliveNote(id) { try { sessionStorage.setItem(aliveKey(id), String(Date.now())); } catch (e) { /* optional */ } }
+  var searchCache = {};
   // Businesses of one kind (contractor, services, landlord, realtor) in the directory near a point, for one category.
   function findProviders(db, lat, lng, radius, cat, product) {
     product = product || 'contractor';
-    return db.collection('directory').where('cell', 'in', cellsAround(lat, lng, radius)).where('listed', '==', true).limit(100).get().then(function (s) {
+    var ck = [product, lat, lng, radius, cat].join('|'), hit = searchCache[ck];
+    if (hit && Date.now() - hit.t < 120000) return Promise.resolve(hit.v.slice());
+    return db.collection('directory').where('cell', 'in', cellsAround(lat, lng, radius)).where('listed', '==', true).limit(60).get().then(function (s) {
       var out = [];
       s.docs.forEach(function (d) { var x = d.data(); x.id = d.id; if ((x.product || 'contractor') !== product) return; var mi = miles(lat, lng, x.lat, x.lng); x.miles = mi;
         if (mi > radius) return; if (mi > (x.radius || MAX_MILES)) return;   // they only want work inside their own range
         if (cat && cat !== 'Other' && (x.trades || []).indexOf(cat) < 0) return; out.push(x); });
       out.sort(function (a, b) { return a.miles - b.miles; });
       // Drop listings left behind by a business that no longer exists.
-      return Promise.all(out.map(function (x) { return db.collection('alive').doc(x.id).get().then(function () { return true; }, function (e) { return !(e && e.code === 'permission-denied'); }); })).then(function (oks) { return out.filter(function (x, i) { return oks[i]; }); });
+      out = out.slice(0, 40);   // the nearest 40 are plenty to choose from
+      return Promise.all(out.map(function (x) { if (aliveCached(x.id)) return true; return db.collection('alive').doc(x.id).get().then(function () { aliveNote(x.id); return true; }, function (e) { return !(e && e.code === 'permission-denied'); }); })).then(function (oks) { var v = out.filter(function (x, i) { return oks[i]; }); searchCache[ck] = { t: Date.now(), v: v }; return v.slice(); });
     });
   }
   // Completed community jobs and average rating for a set of businesses, in one query (people only see jobs the requester marked done).
@@ -157,5 +165,5 @@
       }).catch(function () { /* alerts are optional */ });
     } catch (e) { return Promise.resolve(); }
   }
-  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, badge: badge, trust: trust, trustFor: trustFor, canPost: canPost, notePost: notePost, report: report, openThread: openThread, notify: notify, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
+  window.VQCommunity = { TRADES: TRADES, CATS: CATS, NAMES: NAMES, NOUNS: NOUNS, NEED: NEED, ORDER: ORDER, stats: stats, MAX_MILES: MAX_MILES, r2: r2, cellOf: cellOf, miles: miles, cellsAround: cellsAround, geocode: geocode, here: here, ago: ago, phoneHref: phoneHref, findProviders: findProviders, aliveCached: aliveCached, aliveNote: aliveNote, badge: badge, trust: trust, trustFor: trustFor, canPost: canPost, notePost: notePost, report: report, openThread: openThread, notify: notify, findContractors: function (db, a, b, c, d) { return findProviders(db, a, b, c, d, 'contractor'); } };
 })();
