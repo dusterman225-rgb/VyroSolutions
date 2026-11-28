@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Stops - Vyqil Food Truck</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a><div class="tag">Stops</div></div>
+
+  <div class="card" style="margin-top:0" id="now"></div>
+  <div class="card"><h2>Your spots</h2><div id="list"></div><div class="note" id="none"></div></div>
+  <div class="card"><h2 id="fTitle">Add a spot</h2>
+    <label class="field"><span>Spot name</span><input id="nm" maxlength="60" placeholder="e.g. Downtown lunch, Brewery on 5th"></label>
+    <label class="field"><span>Address or where exactly</span><input id="ad" maxlength="120" placeholder="Street, lot or landmark"></label>
+    <label class="field"><span>Fee per visit ($) - permit, lot rent, event fee</span><input id="fee" inputmode="decimal" placeholder="0.00"></label>
+    <label class="field"><span>Usual hours</span><input id="hrs" maxlength="40" placeholder="e.g. 11am - 2pm"></label>
+    <div class="note" style="text-align:left">Usual days (so the app can show "today's plan")</div>
+    <div id="days" style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px"></div>
+    <label class="field"><span>Notes (parking, power, who to call)</span><input id="nt" maxlength="200"></label>
+    <button class="btn" id="save" type="button">Save spot</button> <button class="btn ghost" id="cancel" type="button" style="display:none">Cancel edit</button>
+    <div class="note" id="msg"></div>
+  </div>
+  <div class="card"><h2>Food cost</h2>
+    <div class="note" style="text-align:left">Your food cost as a percent of sales (what the ingredients cost). The app uses it to work out profit at each spot. Most trucks are 25 to 35.</div>
+    <label class="field"><span>Food cost %</span><input id="fc" inputmode="decimal" placeholder="30"></label>
+    <button class="btn ghost" id="fcSave" type="button">Save</button> <span class="note" id="fcMsg"></span>
+  </div>
+  <div class="card"><h2>Recent stops</h2><div id="recent"></div></div>
+  <a class="btn ghost" href="bestspots.html">See which spot makes the most money</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyApp(ctx) { if (ctx.biz.product && ctx.biz.product !== 'foodtruck' && !(ctx.biz.apps && ctx.biz.apps.foodtruck)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+  function ms(ts, fb) { return ts && ts.toMillis ? ts.toMillis() : (fb || 0); }
+  function dkeyOf(ms0) { var d = new Date(ms0); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  vyro.start(async function (ctx) {
+    if (!onlyApp(ctx)) return;
+    if (!vroles.isStaff(ctx)) { deny('Stops are for the owner and managers.'); return; }
+    var scol = ctx.bizRef.collection('spots'), vcol = ctx.bizRef.collection('spotVisits'), spots = [], cfg = { foodCostPct: 30 }, openV = null, editId = null, chosen = {};
+    DAYS.forEach(function (d, i) { var b = vyro.el('button', 'btn ghost', d); b.type = 'button'; b.style.cssText = 'min-height:40px;padding:0 12px'; b.onclick = function () { chosen[i] = !chosen[i]; paintDays(); }; $('days').appendChild(b); });
+    function paintDays() { Array.prototype.forEach.call($('days').children, function (b, i) { b.style.outline = chosen[i] ? '2px solid #4B9CD3' : 'none'; b.style.background = chosen[i] ? 'rgba(75,156,211,.25)' : ''; }); }
+    function say(m, bad) { $('msg').textContent = m || ''; $('msg').className = 'note' + (bad ? ' err' : ''); }
+    async function load() {
+      try {
+        var s = await scol.limit(100).get(); spots = []; s.docs.forEach(function (d) { if (d.id === '_cfg') { cfg = Object.assign(cfg, d.data()); return; } var x = d.data(); x.id = d.id; spots.push(x); });
+        spots.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+        var o = await vcol.where('open', '==', true).limit(1).get(); openV = o.docs.length ? Object.assign({ id: o.docs[0].id }, o.docs[0].data()) : null;
+      } catch (e) { $('err').textContent = vyro.friendly(e); }
+      $('fc').value = cfg.foodCostPct != null ? cfg.foodCostPct : 30; drawNow(); drawList(); drawRecent();
+    }
+    // ----- orders inside a window of time (reads only that day's orders) -----
+    async function totals(fromMs, toMs) {
+      var keys = {}; keys[dkeyOf(fromMs)] = 1; keys[dkeyOf(toMs)] = 1; var sales = 0, n = 0, tips = 0;
+      for (var k in keys) {
+        var s = await ctx.bizRef.collection('orders').where('dateKey', '==', k).get();
+        s.docs.forEach(function (d) { var o = d.data(); if (o.status !== 'Paid') return; var t = ms(o.createdAt, o.clientAt); if (t < fromMs || t > toMs) return;
+          var rr = o.totalCents ? Math.min(1, (o.refundedCents || 0) / o.totalCents) : 0; sales += Math.round((o.subtotalCents || 0) * (1 - rr)); tips += o.tipCents || 0; n++; });
+      }
+      return { sales: sales, n: n, tips: tips };
+    }
+    function drawNow() {
+      var box = $('now'); box.textContent = '';
+      if (openV) {
+        var since = new Date(ms(openV.openedAt, Date.now())), stale = openV.date !== vutil.todayStr();
+        box.appendChild(vyro.el('h2', '', 'Open at ' + openV.spotName));
+        box.appendChild(vyro.el('div', 'note', 'Since ' + since.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + '. Orders you ring up now count for this spot.'));
+        if (stale) box.appendChild(vyro.el('div', 'note err', 'This stop was left open from an earlier day. Close it so the numbers are right.'));
+        var live = vyro.el('div', 'note', ''); box.appendChild(live);
+        totals(ms(openV.openedAt, Date.now()), Date.now()).then(function (t) { live.textContent = 'So far: ' + vutil.fmt(t.sales) + ' from ' + t.n + (t.n === 1 ? ' order' : ' orders') + '.'; }, function () { /* ignore */ });
+        var ex = vyro.el('input'); ex.inputMode = 'decimal'; ex.placeholder = '0.00'; var l1 = vyro.el('label', 'field'); l1.appendChild(vyro.el('span', '', 'Other costs for this stop ($): fuel, helper pay, ice')); l1.appendChild(ex);
+        var nt = vyro.el('input'); nt.maxLength = 200; nt.placeholder = 'How did it go?'; var l2 = vyro.el('label', 'field'); l2.appendChild(vyro.el('span', '', 'Notes (optional)')); l2.appendChild(nt);
+        var fe = vyro.el('input'); fe.inputMode = 'decimal'; fe.value = ((openV.feeCents || 0) / 100).toFixed(2); var l3 = vyro.el('label', 'field'); l3.appendChild(vyro.el('span', '', 'Spot fee today ($)')); l3.appendChild(fe);
+        box.appendChild(l3); box.appendChild(l1); box.appendChild(l2);
+        var cl = vyro.el('button', 'btn', 'Close this stop'); cl.type = 'button'; var m = vyro.el('div', 'note'); 
+        cl.onclick = async function () {
+          cl.disabled = true; m.textContent = 'Adding up your sales...';
+          try {
+            var from = ms(openV.openedAt, Date.now()), to = stale ? new Date(openV.date + 'T23:59:59').getTime() : Date.now(), t = await totals(from, to);
+            var fee = vutil.toCents(fe.value), extra = vutil.toCents(ex.value), pct = +cfg.foodCostPct || 0, food = Math.round(t.sales * pct / 100), profit = t.sales - food - fee - extra;
+            await vcol.doc(openV.id).update({ open: false, closedAt: firebase.firestore.Timestamp.fromMillis(to), salesCents: t.sales, orders: t.n, tipsCents: t.tips, feeCents: fee, extraCostCents: extra, foodCostPct: pct, foodCostCents: food, profitCents: profit, notes: nt.value.trim().slice(0, 200), closedBy: vyro.who(ctx) });
+            m.textContent = 'Closed. Sales ' + vutil.fmt(t.sales) + ', profit ' + vutil.fmt(profit) + '.'; await load();
+          } catch (e) { cl.disabled = false; m.textContent = vyro.friendly(e); m.className = 'note err'; }
+        };
+        box.appendChild(cl); box.appendChild(m); return;
+      }
+      box.appendChild(vyro.el('h2', '', 'Where are you today?'));
+      var today = DAYS[new Date().getDay()], plan = spots.filter(function (x) { return (x.days || []).indexOf(new Date().getDay()) > -1; });
+      if (plan.length) box.appendChild(vyro.el('div', 'note', 'Today\'s plan (' + today + '): ' + plan.map(function (x) { return x.name + (x.hours ? ' ' + x.hours : ''); }).join(', ')));
+      if (!spots.length) { box.appendChild(vyro.el('div', 'note', 'Add your first spot below, then open it here.')); return; }
+      var sel = vyro.el('select'); spots.forEach(function (x) { var o = vyro.el('option', '', x.name); o.value = x.id; sel.appendChild(o); }); if (plan[0]) sel.value = plan[0].id;
+      var l = vyro.el('label', 'field'); l.appendChild(vyro.el('span', '', 'Spot')); l.appendChild(sel); box.appendChild(l);
+      var op = vyro.el('button', 'btn', 'Open at this spot'), m2 = vyro.el('div', 'note'); op.type = 'button';
+      op.onclick = async function () {
+        var sp = spots.filter(function (x) { return x.id === sel.value; })[0]; if (!sp) return; op.disabled = true;
+        try { var ref = vcol.doc(); await ref.set({ spotId: sp.id, spotName: sp.name, date: vutil.todayStr(), openedAt: firebase.firestore.FieldValue.serverTimestamp(), open: true, feeCents: sp.feeCents || 0, byUid: ctx.user.uid, by: vyro.who(ctx) }); await load(); }
+        catch (e) { op.disabled = false; m2.textContent = vyro.friendly(e); m2.className = 'note err'; }
+      };
+      box.appendChild(op); box.appendChild(m2);
+    }
+    function drawList() {
+      var box = $('list'); box.textContent = ''; $('none').textContent = spots.length ? '' : 'No spots yet.';
+      spots.forEach(function (x) {
+        var r = vyro.el('div', 'row'), m = vyro.el('div'); m.appendChild(vyro.el('b', '', x.name));
+        var bits = [x.address, x.hours, (x.days || []).map(function (d) { return DAYS[d]; }).join(' '), x.feeCents ? 'Fee ' + vutil.fmt(x.feeCents) : ''].filter(Boolean).join(' \u00b7 ');
+        if (bits) m.appendChild(vyro.el('div', 'note', bits)); if (x.notes) m.appendChild(vyro.el('div', 'note', x.notes)); r.appendChild(m);
+        var ed = vyro.el('button', 'btn ghost', 'Edit'); ed.type = 'button'; ed.onclick = function () { editId = x.id; $('nm').value = x.name || ''; $('ad').value = x.address || ''; $('fee').value = x.feeCents ? (x.feeCents / 100).toFixed(2) : ''; $('hrs').value = x.hours || ''; $('nt').value = x.notes || ''; chosen = {}; (x.days || []).forEach(function (d) { chosen[d] = true; }); paintDays(); $('fTitle').textContent = 'Edit spot'; $('cancel').style.display = ''; window.scrollTo(0, $('fTitle').offsetTop); };
+        var rm = vyro.el('button', 'btn ghost', 'Remove'); rm.type = 'button'; rm.onclick = async function () { if (!confirm('Remove ' + x.name + '? Past stops here keep their numbers.')) return; try { await scol.doc(x.id).delete(); await load(); } catch (e) { $('err').textContent = vyro.friendly(e); } };
+        var b = vyro.el('div'); b.appendChild(ed); b.appendChild(rm); r.appendChild(b); box.appendChild(r);
+      });
+    }
+    async function drawRecent() {
+      var box = $('recent'); box.textContent = '';
+      try {
+        var s = await vcol.where('open', '==', false).limit(40).get(), rows = s.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).sort(function (a, b) { return ms(b.openedAt) - ms(a.openedAt); }).slice(0, 10);
+        if (!rows.length) { box.appendChild(vyro.el('div', 'note', 'No finished stops yet.')); return; }
+        rows.forEach(function (v) { var r = vyro.el('div', 'row'), m = vyro.el('div'); m.appendChild(vyro.el('b', '', v.spotName)); m.appendChild(vyro.el('div', 'note', v.date + ' \u00b7 ' + (v.orders || 0) + ' orders \u00b7 sales ' + vutil.fmt(v.salesCents))); r.appendChild(m); var p = vyro.el('b', '', vutil.fmt(v.profitCents)); p.style.color = (v.profitCents || 0) < 0 ? '#ff8a8a' : '#7fe3b0'; r.appendChild(p); box.appendChild(r); });
+      } catch (e) { /* ignore */ }
+    }
+    $('save').onclick = async function () {
+      var nm = $('nm').value.trim(); if (!nm) { say('Give the spot a name.', true); return; }
+      var d = { name: nm.slice(0, 60), address: $('ad').value.trim().slice(0, 120), feeCents: vutil.toCents($('fee').value), hours: $('hrs').value.trim().slice(0, 40), notes: $('nt').value.trim().slice(0, 200), days: Object.keys(chosen).filter(function (k) { return chosen[k]; }).map(Number), updatedAt: vyro.stamp() };
+      try { if (editId) await scol.doc(editId).update(d); else { d.createdAt = vyro.stamp(); await scol.add(d); } editId = null; $('nm').value = $('ad').value = $('fee').value = $('hrs').value = $('nt').value = ''; chosen = {}; paintDays(); $('fTitle').textContent = 'Add a spot'; $('cancel').style.display = 'none'; say('Saved.'); await load(); }
+      catch (e) { say(vyro.friendly(e), true); }
+    };
+    $('cancel').onclick = function () { editId = null; $('nm').value = $('ad').value = $('fee').value = $('hrs').value = $('nt').value = ''; chosen = {}; paintDays(); $('fTitle').textContent = 'Add a spot'; $('cancel').style.display = 'none'; };
+    $('fcSave').onclick = async function () { var v = Math.max(0, Math.min(100, parseFloat($('fc').value) || 0)); try { await scol.doc('_cfg').set({ foodCostPct: v, updatedAt: vyro.stamp() }, { merge: true }); cfg.foodCostPct = v; $('fcMsg').textContent = 'Saved. Applies to stops you close from now on.'; } catch (e) { $('fcMsg').textContent = vyro.friendly(e); } };
+    load();
+  });
+</script>
+</body>
+</html>

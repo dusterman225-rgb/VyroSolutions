@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Best spots - Vyqil Food Truck</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><a href="index.html"><img class="mark-small" src="images/logo.svg" alt="Back to home"></a><div class="tag">Best spots</div></div>
+  <div class="card" style="margin-top:0">
+    <label class="field"><span>Show</span><select id="range"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last 12 months</option></select></label>
+  </div>
+  <div class="card" id="ins"></div>
+  <div class="card"><h2>Spot by spot</h2><div class="note" style="text-align:left">Profit = sales (before tax and tips) minus food cost, the spot fee, and other costs you entered when closing the stop. Tap a spot for its best days.</div><div id="tbl"></div></div>
+  <div class="card"><h2>Best day of the week</h2><div id="dow"></div></div>
+  <div class="note">These come from the stops you open and close in Stops, so numbers only cover time you opened a spot. Sales are only orders marked Paid in Vyqil. Food cost uses the percent you set. This is not accounting or tax advice.</div>
+  <a class="btn ghost" href="spots.html">Open or close a stop</a>
+  <a class="back" href="index.html">Back to home</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/roles.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function onlyApp(ctx) { if (ctx.biz.product && ctx.biz.product !== 'foodtruck' && !(ctx.biz.apps && ctx.biz.apps.foodtruck)) { location.replace('/contractor/app.html'); return false; } vtheme.load(ctx); return true; }
+  function deny(msg) { Array.prototype.forEach.call(document.querySelectorAll('.wrap > *'), function (n) { if (!n.classList.contains('brand') && !n.classList.contains('back') && n.id !== 'err') n.style.display = 'none'; }); $('err').textContent = msg || 'You do not have access to this page.'; }
+  function ms(ts, fb) { return ts && ts.toMillis ? ts.toMillis() : (fb || 0); }
+  function dkeyOf(ms0) { var d = new Date(ms0); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  var DN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  vyro.start(async function (ctx) {
+    if (!onlyApp(ctx)) return;
+    if (!vroles.isStaff(ctx)) { deny('Best spots is for the owner and managers.'); return; }
+    function row(box, a, b, color) { var r = vyro.el('div', 'row'); r.appendChild(vyro.el('span', '', a)); var x = vyro.el('b', '', b); if (color) x.style.color = color; r.appendChild(x); box.appendChild(r); }
+    async function load() {
+      var days = parseInt($('range').value, 10), from = new Date(); from.setDate(from.getDate() - days + 1); var fk = dkeyOf(from.getTime()), rows = [];
+      try { var s = await ctx.bizRef.collection('spotVisits').where('date', '>=', fk).limit(800).get(); rows = s.docs.map(function (d) { return d.data(); }).filter(function (v) { return v.open === false; }); } catch (e) { $('err').textContent = vyro.friendly(e); }
+      var by = {}, dow = {};
+      rows.forEach(function (v) {
+        var k = v.spotName || 'Unknown', o = by[k] || (by[k] = { name: k, visits: 0, sales: 0, orders: 0, hours: 0, fees: 0, extra: 0, food: 0, profit: 0, dow: {} });
+        var hrs = Math.max(0.25, (ms(v.closedAt) - ms(v.openedAt)) / 36e5); o.visits++; o.sales += v.salesCents || 0; o.orders += v.orders || 0; o.hours += hrs; o.fees += v.feeCents || 0; o.extra += v.extraCostCents || 0; o.food += v.foodCostCents || 0; o.profit += v.profitCents || 0;
+        var wd = new Date(ms(v.openedAt)).getDay(), dd = o.dow[wd] || (o.dow[wd] = { n: 0, p: 0 }); dd.n++; dd.p += v.profitCents || 0; var g = dow[wd] || (dow[wd] = { n: 0, p: 0, s: 0 }); g.n++; g.p += v.profitCents || 0; g.s += v.salesCents || 0;
+      });
+      var list = Object.keys(by).map(function (k) { return by[k]; });
+      var ins = $('ins'); ins.textContent = ''; ins.appendChild(vyro.el('h2', '', 'What this says'));
+      if (!list.length) { ins.appendChild(vyro.el('div', 'note', 'No finished stops in this period yet. Open a spot in Stops when you park, ring up orders, then close the stop. After a few stops this page shows which spot pays best.')); $('tbl').textContent = ''; $('dow').textContent = ''; return; }
+      function top(fn) { return list.slice().sort(function (a, b) { return fn(b) - fn(a); })[0]; }
+      var bt = top(function (x) { return x.profit; }), bv = top(function (x) { return x.profit / x.visits; }), bh = top(function (x) { return x.profit / x.hours; });
+      var loss = list.filter(function (x) { return x.profit < 0; });
+      function line(t) { var d = vyro.el('div', 'note', t); d.style.textAlign = 'left'; ins.appendChild(d); }
+      line('Most profit overall: ' + bt.name + ' (' + vutil.fmt(bt.profit) + ' over ' + bt.visits + (bt.visits === 1 ? ' visit' : ' visits') + ').');
+      if (list.length > 1) { line('Best profit per visit: ' + bv.name + ' (' + vutil.fmt(Math.round(bv.profit / bv.visits)) + ' each time).'); line('Best profit per hour: ' + bh.name + ' (' + vutil.fmt(Math.round(bh.profit / bh.hours)) + ' an hour).'); }
+      if (loss.length) line('Losing money: ' + loss.map(function (x) { return x.name + ' (' + vutil.fmt(x.profit) + ')'; }).join(', ') + '. Check the fee and hours, or skip it.');
+      var few = list.filter(function (x) { return x.visits < 3; }); if (few.length) line('Too few visits to be sure: ' + few.map(function (x) { return x.name; }).join(', ') + '. Visit a spot 3 or more times before you decide.');
+      var t = $('tbl'); t.textContent = '';
+      list.sort(function (a, b) { return b.profit - a.profit; }).forEach(function (x, i) {
+        var d = vyro.el('details'); d.style.cssText = 'border-top:1px solid rgba(201,209,217,.14);padding:8px 0';
+        var s = vyro.el('summary'); s.style.cssText = 'display:flex;justify-content:space-between;gap:10px;cursor:pointer'; s.appendChild(vyro.el('b', '', (i + 1) + '. ' + x.name)); var p = vyro.el('b', '', vutil.fmt(x.profit)); p.style.color = x.profit < 0 ? '#ff8a8a' : '#7fe3b0'; s.appendChild(p); d.appendChild(s);
+        row(d, 'Visits', String(x.visits)); row(d, 'Sales', vutil.fmt(x.sales)); row(d, 'Orders', x.orders + (x.orders ? ' (avg ' + vutil.fmt(Math.round(x.sales / x.orders)) + ')' : '')); row(d, 'Hours open', x.hours.toFixed(1));
+        row(d, 'Sales per hour', vutil.fmt(Math.round(x.sales / x.hours))); row(d, 'Food cost', '-' + vutil.fmt(x.food)); row(d, 'Spot fees', '-' + vutil.fmt(x.fees)); row(d, 'Other costs', '-' + vutil.fmt(x.extra));
+        row(d, 'Profit per visit', vutil.fmt(Math.round(x.profit / x.visits)), x.profit < 0 ? '#ff8a8a' : '#7fe3b0'); row(d, 'Profit per hour', vutil.fmt(Math.round(x.profit / x.hours)));
+        var bd = Object.keys(x.dow).sort(function (a, b) { return x.dow[b].p / x.dow[b].n - x.dow[a].p / x.dow[a].n; })[0]; if (bd != null) row(d, 'Best day here', DN[bd] + ' (' + vutil.fmt(Math.round(x.dow[bd].p / x.dow[bd].n)) + ' a visit)');
+        t.appendChild(d);
+      });
+      var dw = $('dow'); dw.textContent = ''; Object.keys(dow).sort(function (a, b) { return dow[b].p / dow[b].n - dow[a].p / dow[a].n; }).forEach(function (k) { row(dw, DN[k] + ' \u00b7 ' + dow[k].n + (dow[k].n === 1 ? ' stop' : ' stops'), vutil.fmt(Math.round(dow[k].p / dow[k].n)) + ' avg profit'); });
+    }
+    $('range').addEventListener('change', load); load();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>Order here</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+<style>.tabs button{background:transparent;color:inherit}.tabs button.on{background:#4B9CD3;border-color:#4B9CD3;color:#05070A;font-weight:700}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img class="mark-small" src="images/logo.svg" alt=""><div class="tag" id="tag">Order</div></div>
+  <div id="shop">
+    <div class="note" id="tbl" style="font-size:1.1rem"></div>
+    <div class="tabs" id="cats" style="flex-wrap:wrap"></div>
+    <div class="pos-grid" id="items"></div>
+    <div class="card"><div id="cart"></div><div class="note" id="cartEmpty">Tap what you would like.</div>
+      <div class="total-row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
+      <div class="total-row"><span id="taxLbl">Tax</span><b id="tTax">$0.00</b></div>
+      <div class="total-row big"><span>Total</span><b id="tTot">$0.00</b></div>
+      <label class="field"><span>Your name (optional, so we can call you)</span><input id="nm" maxlength="30"></label>
+      <button class="btn" id="place" type="button">Place order</button>
+      <div class="note" id="msg"></div></div>
+  </div>
+  <div id="done" style="display:none" class="card">
+    <h2>Order placed</h2><div class="note" style="font-size:1.6rem" id="num"></div>
+    <div class="note" id="doneNote">Your server will confirm it and bring it to your table. You pay your server. Nothing is charged here.</div>
+    <button class="btn ghost" id="again" type="button">Order something else</button>
+  </div>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="js/mods.js"></script>
+<script src="js/avail.js"></script>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function el(t, c, x) { var n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
+  function fmt(c) { return '$' + (c / 100).toFixed(2); }
+  (async function () {
+    var q = new URLSearchParams(location.search), bid = q.get('b') || '', tname = (q.get('t') || '').slice(0, 20), bname = (q.get('n') || '').slice(0, 60);
+    if (!bid || !window.VYRO_FIREBASE_CONFIG) { $('err').textContent = 'This link is not complete. Please ask your server.'; $('shop').style.display = 'none'; return; }
+    $('tag').textContent = bname || 'Order'; $('tbl').textContent = tname ? 'Table ' + tname : '';
+    firebase.initializeApp(window.VYRO_FIREBASE_CONFIG); var auth = firebase.auth(), db = firebase.firestore();
+    var user, menu = [], cart = {}, taxPct = 0, cat = '', byId = {}, placing = false;
+    try { user = (await auth.signInAnonymously()).user; } catch (e) { $('err').textContent = 'Ordering from your phone is not switched on yet. Please ask your server.'; $('shop').style.display = 'none'; return; }
+    try {
+      var ref = db.collection('businesses').doc(bid);
+      var ts = await ref.collection('settings').doc('pos').get(); if (ts.exists) taxPct = Number(ts.data().taxPct) || 0;
+      var ms = await ref.collection('menu').get();
+      menu = ms.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(function (m) { return m.active !== false; });
+      menu.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
+    } catch (e) { $('err').textContent = 'Could not load the menu. Please ask your server.'; return; }
+    menu.forEach(function (m) { byId[m.id] = m; }); $('taxLbl').textContent = 'Tax' + (taxPct ? ' (' + taxPct + '%)' : '');
+    var cats = []; menu.forEach(function (m) { var c = m.category || 'Menu'; if (cats.indexOf(c) < 0) cats.push(c); }); cats.sort(); cat = cats[0] || '';
+    function totals() { var sub = 0; Object.keys(cart).forEach(function (k) { sub += cart[k].priceCents * cart[k].qty; }); var tax = Math.round(sub * taxPct / 100); return { sub: sub, tax: tax, total: sub + tax }; }
+    function add(id, n, mods) {
+      mods = mods || []; var k = id + '|' + vmods.sig(mods), m = byId[id];
+      var c = cart[k] || { id: id, name: m.name, priceCents: m.priceCents + vmods.add(mods), qty: 0, mods: mods, modText: vmods.text(mods) };
+      c.qty += n; if (c.qty <= 0) delete cart[k]; else if (c.qty <= 20) cart[k] = c; drawCart();
+    }
+    function drawMenu() {
+      var tabs = $('cats'); tabs.textContent = ''; cats.forEach(function (c) { var b = el('button', c === cat ? 'on' : '', c); b.type = 'button'; b.addEventListener('click', function () { cat = c; drawMenu(); }); tabs.appendChild(b); });
+      var g = $('items'); g.textContent = '';
+      menu.filter(function (m) { return (m.category || 'Menu') === cat; }).forEach(function (m) {
+        var t = el('div', 'pos-item'); t.setAttribute('role', 'button'); t.tabIndex = 0; t.appendChild(el('b', '', m.name)); t.appendChild(el('span', '', fmt(m.priceCents)));
+        var nope = vavail.why(m, {}); if (nope) { t.style.opacity = '.4'; t.appendChild(el('small', '', nope)); } else t.addEventListener('click', function () { add(m.id, 1, []); });
+        g.appendChild(t);
+      });
+    }
+    function drawCart() {
+      var box = $('cart'); box.textContent = ''; var ids = Object.keys(cart); $('cartEmpty').style.display = ids.length ? 'none' : 'block';
+      ids.forEach(function (k) {
+        var c = cart[k], row = el('div', 'item'), left = el('div', 'grow'); left.appendChild(el('b', '', c.name));
+        if (c.modText) { var mt = el('small', '', c.modText); mt.style.cssText = 'color:#ffb25c;display:block'; left.appendChild(mt); }
+        var mi = byId[c.id]; if (mi && (mi.ingredients || []).length) { var vi = el('button', 'link', 'View ingredients (extra / no)'); vi.type = 'button'; vi.style.display = 'block'; vi.addEventListener('click', function () { vmods.open(mi, c.mods, function (mods) { add(c.id, -1, c.mods); add(c.id, 1, mods); }); }); left.appendChild(vi); }
+        row.appendChild(left);
+        var qq = el('div', 'qty'), mi2 = el('button', '', '\u2212'), pl = el('button', '', '+'); mi2.type = pl.type = 'button';
+        mi2.addEventListener('click', function () { add(c.id, -1, c.mods); }); pl.addEventListener('click', function () { add(c.id, 1, c.mods); });
+        qq.appendChild(mi2); qq.appendChild(el('b', '', String(c.qty))); qq.appendChild(pl); row.appendChild(qq); row.appendChild(el('b', '', fmt(c.priceCents * c.qty))); box.appendChild(row);
+      });
+      var t = totals(); $('tSub').textContent = fmt(t.sub); $('tTax').textContent = fmt(t.tax); $('tTot').textContent = fmt(t.total);
+    }
+    $('place').addEventListener('click', async function () {
+      var ids = Object.keys(cart); if (!ids.length || placing) { $('msg').textContent = 'Tap something first.'; $('msg').className = 'note err'; return; }
+      placing = true; this.disabled = true; var t = totals(), num = 'Q' + String(Date.now() % 10000).padStart(4, '0');
+      var d = { label: tname ? 'Table ' + tname : 'Customer', counter: !tname, tableName: tname, guestName: $('nm').value.trim().slice(0, 30),
+        items: ids.map(function (k) { var c = cart[k]; return { menuId: c.id, name: c.name, qty: c.qty, priceCents: c.priceCents, round: 1, mods: c.mods || [], modText: c.modText || '' }; }),
+        subtotalCents: t.sub, taxPct: taxPct, taxCents: t.tax, totalCents: t.total, status: 'Open', kitchenStatus: 'Hold', source: 'qr', number: num, dateKey: (function () { var x = new Date(); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); })(),
+        byUid: user.uid, byName: 'Guest', clientAt: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      try { await db.collection('businesses').doc(bid).collection('orders').doc().set(d); cart = {}; drawCart(); $('shop').style.display = 'none'; $('done').style.display = 'block'; $('num').textContent = (tname ? 'Your order number: ' : 'Your customer number: ') + num; if (!tname) $('doneNote').textContent = 'Tell the cashier this number. They will collect your payment and send your order to the kitchen. Nothing is charged here.'; }
+      catch (e) { $('msg').textContent = 'Could not send the order. Please ask your server.'; $('msg').className = 'note err'; }
+      placing = false; this.disabled = false;
+    });
+    $('again').addEventListener('click', function () { $('done').style.display = 'none'; $('shop').style.display = 'block'; $('msg').textContent = ''; });
+    drawMenu(); drawCart();
+  })();
+</script>
+</body>
+</html>
