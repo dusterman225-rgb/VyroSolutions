@@ -88,3 +88,6 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   };
 })();
+
+/* Vyqil dropdowns: every list looks the same (blue and black) */
+(function () { if (window.__vqSelLoad) return; window.__vqSelLoad = 1; var s = document.createElement('script'); s.src = '/shared/vqselect.js'; document.head.appendChild(s); })();
