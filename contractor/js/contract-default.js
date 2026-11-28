@@ -1,4 +1,4 @@
-// Default contract template text. Words in {{double braces}} are filled in by Vyqil; [square brackets] are for you to complete.
+// Default contract template text. Words in {{double braces}} are filled in by Vyro; [square brackets] are for you to complete.
 // IMPORTANT: have an attorney review this and insert the exact required legal notices before real use.
 window.VYRO_CONTRACT_DEFAULT = {
   name: 'Home improvement contract (starter)',
@@ -28,7 +28,6 @@ window.VYRO_CONTRACT_DEFAULT = {
 '',
 '6. DOWN PAYMENT AND PAYMENT SCHEDULE',
 'Down payment: {{deposit_amount}}, due at signing. [California: the down payment may not exceed the lesser of $1,000 or 10% of the Contract Price.]',
-'Payment plan details: {{payment_plan}}',
 'Payment schedule (each payment and the work it covers):',
 '  Payment 1: [amount], due when [work, materials or milestone] is complete.',
 '  Payment 2: [amount], due when [work, materials or milestone] is complete.',
@@ -69,7 +68,7 @@ window.VYRO_CONTRACT_DEFAULT = {
 '[ATTORNEY: INSERT THE EXACT STATUTORY TEXT OF EACH REQUIRED NOTICE HERE, IN THE REQUIRED TYPE SIZE AND FORMAT. DO NOT PARAPHRASE. For California this includes the Mechanics Lien Warning, the Owner\'s right to cancel with the notice of cancellation form, and any Contractors State License Board notice. For Colorado, include any notices your attorney requires.]',
 '',
 '18. GENERAL TERMS',
-'This Contract, with any signed change orders, is the entire agreement and replaces all earlier discussions and proposals. It may be changed only in writing signed by both parties. If any part is found unenforceable, the rest remains in effect. This Contract is governed by the laws of the State of [California / Colorado]. Notices must be in writing and delivered to the addresses above.',
+'This Contract, with any signed change orders, is the entire agreement and replaces all earlier discussions and proposals. It may be changed only in writing signed by both parties. If any part is found unenforceable, the rest remains in effect. This Contract is governed by the laws of the State of {{job_state}}. Notices must be in writing and delivered to the addresses above.',
 '',
 '19. SIGNATURES',
 'By signing, each party confirms they have read and understood this Contract, that it includes all promises made, and that the Owner received a completely filled-in copy of this Contract and any required notices at the time of signing.',
@@ -182,7 +181,7 @@ window.VYRO_FINAL_RECEIPT_DEFAULT = {
 'Total received to date: {{paid_to_date}}',
 'Balance remaining: {{balance_due}}',
 '',
-'Final payment received today: [amount]     Method: [cash / check no. / card / Vyqil crypto]',
+'Final payment received today: [amount]     Method: [cash / check no. / card / Vyro crypto]',
 '',
 'The Contractor acknowledges receipt of the payment above. [If the balance remaining is $0.00: This receipt confirms the contract has been paid in full.]',
 '',
