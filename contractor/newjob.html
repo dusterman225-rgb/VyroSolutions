@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070A">
+<title>New job card - Vyqil Contractor</title>
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/clean.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
+    <div class="tag">New job card</div>
+  </div>
+  <div class="note" style="text-align:left">Fill this in once. Vyqil saves the customer, then opens an estimate with everything filled in. Contracts, invoices and forms use the same details, including the state.</div>
+
+  <form class="card" id="f">
+    <h2>Customer</h2>
+    <label class="field"><span>Existing customer (optional)</span><select id="pick"></select></label>
+    <label class="field"><span>Name</span><input id="name" type="text" maxlength="120" required></label>
+    <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40" autocomplete="off"></label>
+    <label class="field"><span>Email</span><input id="email" type="email" maxlength="120" autocomplete="off"></label>
+    <label class="field"><span>Customer mailing address</span><textarea id="addr" rows="2" maxlength="300"></textarea></label>
+    <label class="field"><span>Customer state</span><select id="st"></select></label>
+    <h2>Job</h2>
+    <label class="field"><span>Job name</span><input id="title" type="text" maxlength="80" placeholder="e.g. Kitchen remodel"></label>
+    <label class="field"><span>What is the work?</span><textarea id="desc" rows="3" maxlength="200" placeholder="Short description of the work"></textarea></label>
+    <label class="field" style="flex-direction:row;gap:10px;align-items:center"><input id="same" type="checkbox" checked style="width:auto"><span>The job is at the customer's address</span></label>
+    <div id="jobLoc" style="display:none">
+      <label class="field"><span>Job address</span><textarea id="jaddr" rows="2" maxlength="300"></textarea></label>
+      <label class="field"><span>Job state</span><select id="jst"></select></label>
+    </div>
+    <button class="btn" id="go" type="submit">Save and make the estimate</button>
+    <button class="btn ghost" id="only" type="button">Save the customer only</button>
+    <div class="note" id="msg"></div>
+  </form>
+  <a class="back" href="app.html">Back to dashboard</a>
+  <div class="note err" id="err"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/states.js"></script>
+<script>
+  var $ = function (i) { return document.getElementById(i); };
+  vyro.start(async function (ctx) {
+    var col = ctx.bizRef.collection('customers'), custs = {};
+    vstates.fill($('st')); vstates.fill($('jst'));
+    function say(m, bad) { $('msg').textContent = m || ''; $('msg').className = 'note' + (bad ? ' err' : ''); }
+    try {
+      var s = await col.limit(300).get(); var arr = [];
+      s.forEach(function (d) { var x = d.data(); if (x.archived) return; x.id = d.id; custs[d.id] = x; arr.push(x); });
+      arr.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+      var o0 = vyro.el('option', '', 'New customer'); o0.value = ''; $('pick').appendChild(o0);
+      arr.forEach(function (c) { var o = vyro.el('option', '', c.name); o.value = c.id; $('pick').appendChild(o); });
+    } catch (e) { $('err').textContent = vyro.friendly(e); }
+    $('pick').addEventListener('change', function () {
+      var c = custs[$('pick').value]; if (!c) return;
+      $('name').value = c.name || ''; $('phone').value = c.phone || ''; $('email').value = c.email || ''; $('addr').value = c.address || '';
+      vstates.fill($('st'), c.state || vstates.fromAddress(c.address));
+    });
+    $('addr').addEventListener('blur', function () { if (!$('st').value) { var g = vstates.fromAddress($('addr').value); if (g) vstates.fill($('st'), g); } });
+    $('jaddr').addEventListener('blur', function () { if (!$('jst').value) { var g = vstates.fromAddress($('jaddr').value); if (g) vstates.fill($('jst'), g); } });
+    $('same').addEventListener('change', function () { $('jobLoc').style.display = $('same').checked ? 'none' : 'block'; });
+
+    async function save(goEstimate) {
+      var name = $('name').value.trim(); if (!name) { say('Type the customer name.', true); return; }
+      var addr = $('addr').value.trim(), st = $('st').value || vstates.fromAddress(addr);
+      var jaddr = $('same').checked ? addr : $('jaddr').value.trim(), jst = $('same').checked ? st : ($('jst').value || vstates.fromAddress(jaddr));
+      $('go').disabled = $('only').disabled = true; say('Saving...');
+      try {
+        var cid = $('pick').value, c = { name: name, nameLower: name.toLowerCase(), phone: $('phone').value.trim(), email: $('email').value.trim().toLowerCase(), address: addr, state: st, updatedAt: vyro.stamp() };
+        if (cid) await col.doc(cid).update(c);
+        else { c.language = 'en'; c.notes = ''; c.createdAt = vyro.stamp(); c.createdBy = ctx.user.uid; var ref = col.doc(); await ref.set(c); cid = ref.id; try { vyro.audit(ctx, 'customer created from job card', name); } catch (e) { /* optional */ } }
+        if (!goEstimate) { say('Customer saved.'); $('go').disabled = $('only').disabled = false; return; }
+        location.href = 'estimate.html?customer=' + encodeURIComponent(cid) + '&addr=' + encodeURIComponent(jaddr) + '&st=' + encodeURIComponent(jst || '') + '&title=' + encodeURIComponent($('title').value.trim()) + '&desc=' + encodeURIComponent($('desc').value.trim());
+      } catch (e) { say(vyro.friendly(e), true); $('go').disabled = $('only').disabled = false; }
+    }
+    $('f').addEventListener('submit', function (ev) { ev.preventDefault(); save(true); });
+    $('only').addEventListener('click', function () { save(false); });
+  });
+</script>
+</body>
+</html>

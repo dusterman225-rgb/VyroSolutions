@@ -4,18 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Documents - Vyqil Business</title>
+<title>Documents - Vyro Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
 <div class="wrap">
   <div class="brand">
     <a href="app.html"><img class="mark-small" src="images/logo.svg" alt="Back to dashboard"></a>
-    <div class="tag">Contracts</div>
+    <div class="tag">Documents</div>
   </div>
 
   <div id="mainView">
@@ -23,9 +21,19 @@
       <h2>Contracts</h2>
       <div id="cList"></div>
       <div class="note" id="cNone"></div>
-      <div class="note">Contracts are made from each job. Open a job and tap Create contract.</div>
+      <button class="btn" id="newC" type="button">New contract, change order or waiver</button>
     </div>
 
+    <details class="sec" id="scanSec">
+      <summary>Scan a paper contract</summary>
+      <div class="in">
+        <div class="note" style="text-align:left">Take a clear, straight-on photo of each page of a paper contract. Vyqil reads the words and makes an editable contract you can fix, fill in, send to the customer's portal and have signed. Check every word before you use it. Use a job so the customer details can be filled in.</div>
+        <label class="field"><span>Job</span><select id="sJob"></select></label>
+        <label class="field"><span>Photos (one per page, up to 6)</span><input id="sFile" type="file" accept="image/*" multiple></label>
+        <button class="btn" id="sGo" type="button">Read and make the contract</button>
+        <div class="note" id="sMsg"></div>
+      </div>
+    </details>
     <details class="sec">
       <summary>Contract templates</summary>
       <div class="in">
@@ -52,7 +60,7 @@
     <label class="field"><span>Wording</span><textarea id="tpBody" rows="22" style="font-family:ui-monospace,Menlo,monospace;font-size:.8rem"></textarea></label>
     <div class="note">Words like {{customer_name}} are filled in automatically. Available: contract_date, estimate_number, business_name, business_address, business_phone, business_email, license_number, customer_name, customer_address, customer_phone, customer_email, job_address, project_title, scope, contract_total, deposit_amount, start_date, target_end_date. Anything in [square brackets] is for you to complete per job.</div>
     <button class="btn" id="tpSave" type="button">Save template</button>
-    <button class="btn ghost" id="tpReset" type="button">Replace with Vyqil starter wording</button>
+    <button class="btn ghost" id="tpReset" type="button">Replace with Vyro starter wording</button>
     <button class="btn ghost" id="tpBack" type="button">Back</button>
     <button class="link" id="tpDel" type="button" style="display:none;color:#ff8a8a">Delete template</button>
     <div class="note" id="tpMsg"></div>
@@ -64,17 +72,18 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="../shared/firebase-config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/util.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/contract-default.js"></script>
+<script src="js/states.js"></script>
 <script src="js/contracts.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
   function cls(s) { return (s || '').replace(/ /g, ''); }
 
   vyro.start(async function (ctx) {
-    if (ctx.role === 'employee') { $('mainView').style.display = 'none'; $('err').textContent = 'Only the owner or a supervisor can use Contracts.'; return; }
+    if (ctx.role === 'employee') { $('mainView').style.display = 'none'; $('err').textContent = 'Only the owner or a supervisor can use Documents.'; return; }
     var isOwner = ctx.role === 'owner';
     var tplCol = ctx.bizRef.collection('templates'), conCol = ctx.bizRef.collection('contracts');
     var templates = [], editingId = null;
@@ -115,42 +124,16 @@
     async function loadContracts() {
       var s = await conCol.get();
       var list = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
-      var jobCust = {}, custs = {};
-      try { (await ctx.bizRef.collection('jobs').get()).forEach(function (d) { jobCust[d.id] = d.data().customerId || ''; }); } catch (e) { /* optional */ }
-      try { (await ctx.bizRef.collection('customers').get()).forEach(function (d) { custs[d.id] = d.data(); }); } catch (e) { /* optional */ }
       list.sort(function (a, b) { return (b.createdAt ? b.createdAt.toMillis() : 0) - (a.createdAt ? a.createdAt.toMillis() : 0); });
       $('cNone').textContent = list.length ? '' : 'No contracts yet.';
-      var box = $('cList'); box.textContent = '';
-      // group by customer; contracts of archived (removed) customers go to the Archived customers section
-      var groups = {}, arch = {};
+      $('cList').textContent = '';
       list.forEach(function (c) {
-        var cid = jobCust[c.jobId] || '', cu = custs[cid];
-        var name = (cu && cu.name) || c.customerName || 'No customer';
-        var key = (cid || name).toLowerCase();
-        var target = cu && cu.archived ? arch : groups;
-        (target[key] = target[key] || { name: name, items: [] }).items.push(c);
-      });
-      function row(c, parent) {
-        var r = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
+        var row = vyro.el('div', 'item'), left = vyro.el('div', 'grow');
         var top = vyro.el('b'); top.appendChild(vyro.el('span', 'pill ' + cls(c.status), c.status)); top.appendChild(document.createTextNode(c.title || 'Contract'));
-        left.appendChild(top);
-        if (c.approvedBy) left.appendChild(vyro.el('small', '', 'Approved online by ' + c.approvedBy));
+        left.appendChild(top); left.appendChild(vyro.el('small', '', c.customerName || ''));
         left.addEventListener('click', function () { location.href = 'contract.html?id=' + c.id; });
-        r.appendChild(left); parent.appendChild(r);
-      }
-      function paint(g, parent) {
-        Object.keys(g).sort(function (a, b) { return g[a].name.toLowerCase() < g[b].name.toLowerCase() ? -1 : 1; }).forEach(function (k) {
-          var d = vyro.el('details', 'sec'); d.style.marginTop = '8px';
-          d.appendChild(vyro.el('summary', '', g[k].name + ' (' + g[k].items.length + ')'));
-          var inn = vyro.el('div', 'in'); g[k].items.forEach(function (c) { row(c, inn); }); d.appendChild(inn); parent.appendChild(d);
-        });
-      }
-      paint(groups, box);
-      if (Object.keys(arch).length) {
-        var ad = vyro.el('details', 'sec'); ad.style.marginTop = '14px';
-        ad.appendChild(vyro.el('summary', '', 'Archived customers'));
-        var ai = vyro.el('div', 'in'); paint(arch, ai); ad.appendChild(ai); box.appendChild(ad);
-      }
+        row.appendChild(left); $('cList').appendChild(row);
+      });
     }
 
     function openTemplate(t) {
@@ -161,7 +144,7 @@
     }
     $('newT').addEventListener('click', function () { openTemplate(null); });
     $('tpBack').addEventListener('click', function () { show('mainView'); });
-    $('tpReset').addEventListener('click', function () { if (confirm('Replace the wording in the box with Vyqil\'s starter wording? Your edits in the box are lost until you save.')) $('tpBody').value = VYRO_CONTRACT_DEFAULT.body; });
+    $('tpReset').addEventListener('click', function () { if (confirm('Replace the wording in the box with Vyro\'s starter wording? Your edits in the box are lost until you save.')) $('tpBody').value = VYRO_CONTRACT_DEFAULT.body; });
     $('tpSave').addEventListener('click', async function () {
       var name = $('tpName').value.trim(), body = $('tpBody').value;
       if (!name || body.trim().length < 20) { $('tpMsg').textContent = 'Give the template a name and some wording.'; $('tpMsg').className = 'note err'; return; }
@@ -190,6 +173,7 @@
       $('nMsg').textContent = jobs.length ? '' : 'You need a job first (a job is created when an estimate is approved).';
       show('newView');
     }
+    $('newC').addEventListener('click', openNew);
     $('nCancel').addEventListener('click', function () { show('mainView'); });
     $('nGo').addEventListener('click', async function () {
       var jid = $('nJob').value, tid = $('nTpl').value;
@@ -205,6 +189,47 @@
         location.href = 'contract.html?id=' + ref.id;
       } catch (e) { $('nMsg').textContent = vyro.friendly(e); $('nMsg').className = 'note err'; this.disabled = false; }
     });
+
+    // ---------- scan a paper contract into an editable contract ----------
+    function shrinkPhoto(file) {
+      return new Promise(function (res, rej) {
+        var fr = new FileReader(); fr.onerror = function () { rej(new Error('Could not read that photo.')); };
+        fr.onload = function () { var im = new Image(); im.onerror = function () { rej(new Error('That file is not a photo. Use a JPG or PNG picture.')); };
+          im.onload = function () { var m = 1800, k = Math.min(1, m / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.82)); };
+          im.src = fr.result; }; fr.readAsDataURL(file);
+      });
+    }
+    async function scanApi(img) {
+      var tok = await firebase.auth().currentUser.getIdToken();
+      var base = String(window.VYQIL_ASSISTANT_URL || 'https://vyqil-assistant.dusterman225.workers.dev').replace(/\/$/, '');
+      var r = await fetch(base + '/scan', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ app: 'contractor', bizId: ctx.bizId, schema: { contract: { label: 'Contract', fields: [] } }, image: img, today: vutil.todayStr(), hint: 'contract' }) });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.result) throw new Error(j.detail || (j.error === 'access' ? 'You do not have access.' : 'The scan did not work. Check that the Assistant is on for this business, then try a clearer photo.'));
+      return j.result;
+    }
+    async function fillScanJobs() {
+      var js = await ctx.bizRef.collection('jobs').get(), jobs = js.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
+      jobs.sort(function (a, b) { return (b.createdAt ? b.createdAt.toMillis() : 0) - (a.createdAt ? a.createdAt.toMillis() : 0); });
+      $('sJob').textContent = ''; jobs.forEach(function (j) { var o = document.createElement('option'); o.value = j.id; o.textContent = (j.customerName || '') + ' - ' + (j.title || j.estimateNumber || 'Job'); $('sJob').appendChild(o); });
+      if (preJob) $('sJob').value = preJob;
+    }
+    $('sGo').addEventListener('click', async function () {
+      var files = Array.prototype.slice.call($('sFile').files || [], 0, 6), jid = $('sJob').value, m = $('sMsg'), btn = this;
+      if (!jid) { m.textContent = 'Pick a job first.'; m.className = 'note err'; return; }
+      if (!files.length) { m.textContent = 'Choose at least one photo.'; m.className = 'note err'; return; }
+      btn.disabled = true; m.className = 'note';
+      try {
+        var parts = [], title = '';
+        for (var i = 0; i < files.length; i++) { m.textContent = 'Reading page ' + (i + 1) + ' of ' + files.length + '...'; var r = await scanApi(await shrinkPhoto(files[i])); if (!title && r.title) title = r.title; parts.push(String(r.text || '').trim()); }
+        var body = parts.filter(Boolean).join('\n\n');
+        if (body.length < 30) throw new Error('Could not read any words. Try a clearer, straight-on photo with good light.');
+        var job = {}; try { var js = await ctx.bizRef.collection('jobs').doc(jid).get(); if (js.exists) job = js.data(); } catch (e) { /* optional */ }
+        try { var rf = await vcontract.refill(ctx, jid, body); if (rf && rf.text) body = rf.text; } catch (e) { /* keep as read */ }
+        var ref = await conCol.add({ jobId: jid, customerName: job.customerName || '', title: 'Scanned contract - ' + (title || job.title || 'Contract'), templateName: 'Scanned from photo', body: body, status: 'Draft', scanned: true, createdAt: vyro.stamp(), updatedAt: vyro.stamp(), createdBy: ctx.user.uid });
+        location.href = 'contract.html?id=' + ref.id;
+      } catch (e) { m.textContent = (e && e.message) || vyro.friendly(e); m.className = 'note err'; btn.disabled = false; }
+    });
+    try { await fillScanJobs(); } catch (e) { /* optional */ }
 
     try { await loadTemplates(); await loadContracts(); if (preJob) openNew(); } catch (e) { $('err').textContent = vyro.friendly(e); }
   });

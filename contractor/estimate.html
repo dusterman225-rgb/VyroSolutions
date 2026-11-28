@@ -4,12 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Estimate - Vyqil Business</title>
+<title>Estimate - Vyro Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
 <div class="wrap">
@@ -25,13 +23,16 @@
       <summary>Customer <small id="custSum"></small></summary>
       <div class="in">
       <label class="field"><span>Customer</span><select id="cust"><option value="">Choose a customer...</option></select></label>
-      <label class="field" id="nameRow"><span>Customer name</span><input id="cname" type="text" maxlength="120"></label>
+      <label class="field" id="nameRow"><span>Name (no customer record yet)</span><input id="cname" type="text" maxlength="120"></label>
       <div id="newCustBox">
         <label class="field"><span>Customer email</span><input id="cemail" type="email" maxlength="120" autocomplete="off"></label>
         <label class="field"><span>Customer phone</span><input id="cphone" type="tel" maxlength="40" autocomplete="off"></label>
+        <button class="btn ghost" id="mkCust" type="button">Save as a customer</button>
+        <div class="note" id="mkMsg"></div>
       </div>
       <a class="link" id="viewCust" href="#" style="display:none">View customer page</a>
       <label class="field"><span>Job address</span><textarea id="caddr" rows="2" maxlength="300"></textarea></label>
+      <label class="field"><span>Job state (picked from the address, change if wrong)</span><select id="cstate"></select></label>
       </div>
     </details>
 
@@ -41,27 +42,23 @@
       <label class="field"><span>Valid until</span><input id="validUntil" type="date"></label>
     </div>
 
-    <details class="sec" open>
-      <summary>Line items</summary>
-      <div class="in">
+    <div class="card">
+      <h2>Line items</h2>
       <div id="lines"></div>
       <button class="btn ghost" id="addLine" type="button">Add line</button>
       <label class="field"><span>Discount ($)</span><input id="discount" type="text" inputmode="decimal" placeholder="0.00"></label>
       <label class="field"><span>Sales tax (%)</span><input id="taxPct" type="text" inputmode="decimal" placeholder="0"></label>
       <label class="field"><span>Deposit requested (%)</span><input id="depositPct" type="text" inputmode="decimal" placeholder="0"></label>
-      </div>
-    </details>
+    </div>
 
-    <details class="sec totals" open>
-      <summary>Totals <small id="sumTot"></small></summary>
-      <div class="in">
+    <div class="card totals">
+      <h2>Totals</h2>
       <div class="row"><span>Subtotal</span><b id="tSub">$0.00</b></div>
       <div class="row"><span>Discount</span><b id="tDisc">$0.00</b></div>
       <div class="row"><span>Tax</span><b id="tTax">$0.00</b></div>
       <div class="row big"><span>Total</span><b id="tTotal">$0.00</b></div>
       <div class="row"><span>Deposit due</span><b id="tDep">$0.00</b></div>
-      </div>
-    </details>
+    </div>
 
     <details class="sec" id="secTerms" open>
       <summary>Terms <small>shown to customer</small></summary>
@@ -90,18 +87,20 @@
     </div>
     <div id="askModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px;overflow:auto">
       <div class="card" style="max-width:420px;width:100%;margin:auto">
-        <h2>Send by email</h2>
-        <p>The estimate goes to your customer's portal automatically. Now tap <b>Open my email app</b> to send the short message that tells them to look. If the subject or message comes up empty, use <b>Share</b> or <b>Copy</b>.</p>
-        <a class="btn" id="askAgain" href="#">Open my email app</a>
-        <button class="btn ghost" id="askShare" type="button">Share to Gmail or any app</button>
-        <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
-        <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
-        <div class="note" id="askMsg"></div>
-        <div class="note" id="portalMsg">Adding it to the customer's portal...</div>
-        <h2 style="margin-top:18px">Was it sent?</h2>
+        <h2>Was the email sent?</h2>
+        <p>Press Send in your mail app, then check it shows in <b>Sent</b>, not Outbox.</p>
         <button class="btn" id="askYes" type="button">Yes, it was sent</button>
         <button class="btn ghost" id="askHand" type="button">I'm handing it over myself</button>
         <button class="btn ghost" id="askNo" type="button">No, not yet</button>
+        <details class="more">
+          <summary>Having trouble?</summary>
+          <div class="in">
+            <button class="btn ghost" id="askAgain" type="button">Open the email again</button>
+            <button class="btn ghost" id="askGmail" type="button">Open in Gmail (browser)</button>
+            <button class="btn ghost" id="askCopy" type="button">Copy the email text</button>
+          </div>
+        </details>
+        <div class="note" id="askMsg"></div>
       </div>
     </div>
   </form>
@@ -113,39 +112,20 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="../shared/firebase-config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/util.js"></script>
-<script src="js/compose.js"></script>
-<script src="js/flow.js"></script>
-<script src="js/needs.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/public.js"></script>
+<script src="js/states.js"></script>
 <script>
   var TYPES = ['Labor', 'Materials', 'Other'];
   var DEFAULT_TERMS = 'Balance is due on completion unless agreed otherwise in writing. This estimate is valid until the date shown. Prices may change if the scope of work changes.';
   var $ = function (id) { return document.getElementById(id); };
   function pct(v) { return Math.min(100, Math.max(0, parseFloat(v) || 0)); }
 
-  // Starting points for jobs that come from the Vyqil community. Scope only: you set the prices.
-  var STARTERS = {
-    'Plumbing': [['Labor', 'Diagnose the leak or clog and repair', 2], ['Materials', 'Fittings, pipe and supplies', 1]],
-    'Electrical': [['Labor', 'Diagnose and repair the electrical fault', 2], ['Materials', 'Wire, outlets, switches and breakers', 1]],
-    'HVAC (heating and cooling)': [['Labor', 'Service call and system check', 1.5], ['Materials', 'Parts and refrigerant or filters', 1]],
-    'Roofing': [['Labor', 'Roof inspection and repair', 4], ['Materials', 'Shingles, flashing and sealant', 1]],
-    'Painting': [['Labor', 'Prep, prime and paint', 8], ['Materials', 'Paint, primer and supplies', 1]],
-    'Flooring': [['Labor', 'Remove old flooring and install new', 8], ['Materials', 'Flooring and underlayment', 1]],
-    'Carpentry': [['Labor', 'Carpentry and repair work', 4], ['Materials', 'Lumber and hardware', 1]],
-    'Appliance repair': [['Labor', 'Diagnose and repair the appliance', 1.5], ['Materials', 'Replacement parts', 1]],
-    'Handyman / general repair': [['Labor', 'General repair work', 3], ['Materials', 'Materials and supplies', 1]],
-    'Locksmith': [['Labor', 'Lock repair, rekey or replacement', 1], ['Materials', 'Locks and hardware', 1]],
-    'Pest control': [['Labor', 'Inspection and treatment', 2], ['Materials', 'Treatment products', 1]],
-    'Landscaping and trees': [['Labor', 'Landscaping or tree work', 4], ['Materials', 'Plants, mulch or disposal fees', 1]],
-    'Cleaning and turnover': [['Labor', 'Cleaning', 4], ['Materials', 'Supplies', 1]],
-    'Windows and doors': [['Labor', 'Remove and install', 3], ['Materials', 'Window or door and trim', 1]],
-    'Other': [['Labor', 'Labor', 2], ['Materials', 'Materials', 1]]
-  };
-  function priceKey(t) { return String(t || '').replace(/\W+/g, '_').slice(0, 60); }
   vyro.start(async function (ctx) {
+    vstates.fill($('cstate'));
+    $('caddr').addEventListener('blur', function () { if (!$('cstate').value) { var g = vstates.fromAddress($('caddr').value); if (g) vstates.fill($('cstate'), g); } });
     var params = new URLSearchParams(location.search);
     var id = params.get('id');
     var leadId = params.get('lead') || '';
@@ -167,21 +147,13 @@
       var desc = vyro.el('input'); desc.type = 'text'; desc.maxLength = 200; desc.placeholder = 'Description'; desc.value = it.description || '';
       r1.appendChild(type); r1.appendChild(desc); row.appendChild(r1);
 
-      // Labor can be priced by the hour (hours x rate) or as one flat total.
-      var mrow = vyro.el('div', 'field'); mrow.style.margin = '8px 0 0';
-      mrow.appendChild(vyro.el('small', '', 'How is this labor priced?'));
-      var mode = vyro.el('select');
-      [['hourly', 'By the hour (rate x hours)'], ['flat', 'One flat total']].forEach(function (m) { var o = vyro.el('option', '', m[1]); o.value = m[0]; mode.appendChild(o); });
-      mode.value = it.laborMode === 'flat' ? 'flat' : 'hourly';
-      mrow.appendChild(mode); row.appendChild(mrow);
-
       var r = vyro.el('div', 'r');
-      var w1 = vyro.el('div'); var l1 = vyro.el('small', '', 'Qty'); w1.appendChild(l1);
+      var w1 = vyro.el('div'); w1.appendChild(vyro.el('small', '', 'Qty'));
       var qty = vyro.el('input'); qty.type = 'text'; qty.inputMode = 'decimal'; qty.value = it.qty == null ? 1 : it.qty; w1.appendChild(qty);
-      var w2 = vyro.el('div'); var l2 = vyro.el('small', '', 'Unit price $'); w2.appendChild(l2);
+      var w2 = vyro.el('div'); w2.appendChild(vyro.el('small', '', 'Unit price $'));
       var price = vyro.el('input'); price.type = 'text'; price.inputMode = 'decimal'; price.placeholder = '0.00';
       price.value = it.unitCents ? (it.unitCents / 100).toFixed(2) : ''; w2.appendChild(price);
-      var w3 = vyro.el('div'); var l3 = vyro.el('small', '', 'Amount'); w3.appendChild(l3);
+      var w3 = vyro.el('div'); w3.appendChild(vyro.el('small', '', 'Amount'));
       var amt = vyro.el('div', 'amt', '$0.00'); w3.appendChild(amt);
       r.appendChild(w1); r.appendChild(w2); r.appendChild(w3); row.appendChild(r);
 
@@ -189,24 +161,9 @@
       rm.addEventListener('click', function () { row.remove(); recalc(); });
       row.appendChild(rm);
 
-      function labels() {
-        var labor = type.value === 'Labor';
-        mrow.style.display = labor ? 'block' : 'none';
-        if (labor && mode.value === 'flat') { w1.style.display = 'none'; l2.textContent = 'Flat labor total $'; }
-        else if (labor) { w1.style.display = ''; l1.textContent = 'Approx. hours'; l2.textContent = 'Rate $ per hour'; l3.textContent = 'Total labor'; }
-        else { w1.style.display = ''; l1.textContent = 'Qty'; l2.textContent = 'Unit price $'; l3.textContent = 'Amount'; }
-        if (labor && mode.value === 'flat') l3.textContent = 'Total labor';
-      }
-      labels();
-      mode.addEventListener('change', function () { labels(); recalc(); });
-      type.addEventListener('change', labels);
-
       [type, desc, qty, price].forEach(function (x) { x.addEventListener('input', recalc); });
       row._read = function () {
-        var flat = type.value === 'Labor' && mode.value === 'flat';
-        var o = { type: type.value, description: desc.value.trim(), qty: flat ? 1 : (parseFloat(qty.value) || 0), unitCents: vutil.toCents(price.value) };
-        if (type.value === 'Labor') o.laborMode = mode.value;
-        return o;
+        return { type: type.value, description: desc.value.trim(), qty: parseFloat(qty.value) || 0, unitCents: vutil.toCents(price.value) };
       };
       row._amt = amt;
       $('lines').appendChild(row);
@@ -261,20 +218,35 @@
       var cid = $('cust').value, c = customers[cid];
       if (c) {
         $('cname').value = c.name; $('cemail').value = c.email || ''; $('cphone').value = c.phone || '';
-        $('caddr').value = c.address || '';
+        $('caddr').value = c.address || ''; vstates.fill($('cstate'), c.state || vstates.fromAddress(c.address));
       } else {
         $('cemail').value = ''; $('cphone').value = '';
       }
       syncCustomerUi();
     }
     $('cust').addEventListener('change', pickCustomer);
-    // Customers are created automatically when an estimate is approved.
+    // Make a customer record from what is typed on this estimate, then pick it.
+    $('mkCust').addEventListener('click', async function () {
+      var name = $('cname').value.trim(), btn = this, mm = $('mkMsg');
+      if (!name) { mm.textContent = 'Type the customer name first.'; mm.className = 'note err'; return; }
+      btn.disabled = true; mm.textContent = 'Saving...'; mm.className = 'note';
+      try {
+        var ref = ctx.bizRef.collection('customers').doc();
+        var c = { name: name, nameLower: name.toLowerCase(), phone: $('cphone').value.trim(), email: $('cemail').value.trim().toLowerCase(),
+          address: $('caddr').value.trim(), state: $('cstate').value || vstates.fromAddress($('caddr').value), language: 'en', notes: '', fromEstimate: true, createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp() };
+        await ref.set(c);
+        customers[ref.id] = c; var o = vyro.el('option', '', c.name); o.value = ref.id; $('cust').appendChild(o); $('cust').value = ref.id;
+        syncCustomerUi(); mm.textContent = ''; vyro.audit(ctx, 'customer created from estimate', c.name);
+        say('Customer saved. Their details will fill in on future estimates.', '');
+      } catch (e) { mm.textContent = vyro.friendly(e); mm.className = 'note err'; }
+      btn.disabled = false;
+    });
 
     // ---------- load ----------
     function fill(e) {
       $('cust').value = e.customerId || '';
       $('cname').value = e.customerName || ''; $('cemail').value = e.customerEmail || '';
-      $('cphone').value = e.customerPhone || ''; $('caddr').value = e.address || '';
+      $('cphone').value = e.customerPhone || ''; $('caddr').value = e.address || ''; vstates.fill($('cstate'), e.state || vstates.fromAddress(e.address));
       $('title').value = e.title || ''; $('validUntil').value = e.validUntil || '';
       $('lines').textContent = '';
       (e.lineItems || []).forEach(addRow);
@@ -298,47 +270,23 @@
       var custParam = params.get('customer');
       if (custParam && customers[custParam]) {
         $('cust').value = custParam; pickCustomer();
+        if (params.get('addr')) { $('caddr').value = params.get('addr'); vstates.fill($('cstate'), params.get('st') || vstates.fromAddress(params.get('addr'))); }
+        if (params.get('title')) $('title').value = params.get('title').slice(0, 80);
+        if (params.get('desc')) { var d0 = document.querySelector('.line input[type=text]'); if (d0) d0.value = params.get('desc').slice(0, 200); }
       } else if (leadId) {
         try {
           var ls = await ctx.bizRef.collection('leads').doc(leadId).get();
           if (ls.exists) {
             var l = ls.data();
             $('cname').value = l.name || ''; $('cemail').value = l.email || ''; $('cphone').value = l.phone || '';
-            $('caddr').value = l.address || ''; $('title').value = (l.jobDetails || '').slice(0, 80);
+            $('caddr').value = l.address || ''; vstates.fill($('cstate'), vstates.fromAddress(l.address)); $('title').value = (l.jobDetails || '').slice(0, 80);
             if (l.customerId && customers[l.customerId]) $('cust').value = l.customerId;
-            var tp = STARTERS[params.get('tpl') || ''];
-            if (tp) {
-              $('lines').textContent = '';
-              var kept = null;
-              try { var ps = await ctx.bizRef.collection('quotePrices').doc(priceKey(params.get('tpl'))).get(); if (ps.exists && ps.data().items && ps.data().items.length) kept = ps.data().items; } catch (e0) { /* no remembered prices yet */ }
-              if (kept) kept.forEach(function (x) { addRow({ type: x.type, description: x.description, qty: x.qty, unitCents: x.unitCents, laborMode: x.laborMode }); });
-              else tp.forEach(function (x) { addRow(x[0] === 'Labor' ? { type: 'Labor', description: x[1], qty: x[2], unitCents: 0, laborMode: 'hourly' } : { type: x[0], description: x[1], qty: x[2], unitCents: 0 }); });
-              $('title').value = (params.get('tpl') + ': ' + ((l.jobDetails || '').split(':').slice(1).join(':').replace(/\s*\(Vyqil community request\)\s*$/, '').trim() || 'job')).slice(0, 80);
-            }
           }
         } catch (e) { /* ignore */ }
       }
       syncCustomerUi();
     }
     recalc();
-
-    // ---------- VyqilAssistant: fill by voice ----------
-    function applyEstimate(f) {
-      if (f.customerName) {
-        var nm = f.customerName.toLowerCase(), hit = Object.keys(customers).filter(function (k) { return (customers[k].name || '').toLowerCase() === nm; })[0];
-        if (hit) { $('cust').value = hit; pickCustomer(); } else { $('cust').value = ''; $('cname').value = f.customerName; syncCustomerUi(); }
-      }
-      if (f.title) $('title').value = f.title;
-      if (f.items && f.items.length) {
-        $('lines').textContent = '';
-        f.items.forEach(function (it) { addRow({ type: it.type, description: it.description, qty: it.qty, unitCents: Math.round((it.unitDollars || 0) * 100), laborMode: it.laborMode }); });
-      }
-      if (f.depositPct) $('depositPct').value = f.depositPct; if (f.taxPct) $('taxPct').value = f.taxPct;
-      if (f.discountDollars) $('discount').value = Number(f.discountDollars).toFixed(2);
-      recalc();
-    }
-    if (!id) window.VYRO_FILL = { kind: 'estimate', apply: applyEstimate, anchor: '#form', hint: 'For example: estimate for Ann Lee, deck repair, 40 hours at 50 dollars an hour, 800 dollars of lumber, 25 percent deposit' };
-    if (window.vvoice && !id) vvoice.attachFill();
 
     // ---------- state / buttons ----------
     var status = est ? est.status : 'Draft';
@@ -383,7 +331,7 @@
       }
       var data = {
         customerId: $('cust').value || '', customerName: name, customerEmail: $('cemail').value.trim(),
-        customerPhone: $('cphone').value.trim(), address: $('caddr').value.trim(), leadId: leadId,
+        customerPhone: $('cphone').value.trim(), address: $('caddr').value.trim(), state: $('cstate').value || vstates.fromAddress($('caddr').value), leadId: leadId,
         title: $('title').value.trim(), validUntil: $('validUntil').value,
         lineItems: items, discountCents: t.discountCents, taxPct: parseFloat($('taxPct').value) || 0,
         depositPct: pct($('depositPct').value), subtotalCents: t.subtotalCents, taxCents: t.taxCents,
@@ -416,13 +364,6 @@
           });
           savedId = ref.id;
         }
-        // remember these prices for the next job of the same trade (best effort)
-        if (leadId && data.lineItems && data.lineItems.some(function (x) { return x.unitCents > 0; })) {
-          try {
-            var ls2 = await ctx.bizRef.collection('leads').doc(leadId).get(), tr = ls2.exists ? String(ls2.data().jobDetails || '').split(':')[0] : '';
-            if (STARTERS[tr]) await ctx.bizRef.collection('quotePrices').doc(priceKey(tr)).set({ trade: tr, items: data.lineItems.slice(0, 12).map(function (x) { var o = { type: x.type, description: String(x.description || '').slice(0, 200), qty: x.qty, unitCents: x.unitCents }; if (x.laborMode) o.laborMode = x.laborMode; return o; }), updatedAt: vyro.stamp() });
-          } catch (e1) { /* the estimate is saved either way */ }
-        }
         // online accept link: publish when sending, close it when voided, rejected or approved by hand
         if (openSend) {
           try { await vpublic.publishEstimate(ctx, savedId, data, token); }
@@ -450,7 +391,7 @@
               await jref.set({
                 estimateId: savedId, estimateNumber: est ? est.number : data.number,
                 customerId: data.customerId, customerName: data.customerName, customerEmail: data.customerEmail,
-                customerPhone: data.customerPhone, address: data.address, title: data.title,
+                customerPhone: data.customerPhone, address: data.address, state: data.state || '', title: data.title,
                 contractCents: data.totalCents, depositPct: data.depositPct, status: 'Not Started',
                 startDate: '', targetEndDate: '', internalNotes: '',
                 createdAt: vyro.stamp(), createdBy: ctx.user.uid, updatedAt: vyro.stamp()
@@ -465,7 +406,6 @@
               }
             }
           } catch (e) { /* estimate is saved; the Jobs page will create a missing job */ }
-          try { await vpublic.afterApproval(ctx, savedId, Object.assign({}, data, { id: savedId })); } catch (e) { /* the Jobs page repairs this later */ }
           location.replace('job.html?id=' + savedId); return;
         }
         if (st === 'Voided' && status === 'Approved') {
@@ -485,8 +425,21 @@
     }
 
     $('form').addEventListener('submit', function (e) { e.preventDefault(); save(null); });
-    vneeds.watch([['#cust', '#cname'], '#cemail', '#title', '#validUntil', '.line .r1 input[type=text]', '.line input[placeholder="0.00"]']);
-    function emailParts() { return vflow.message(ctx, $('cemail').value.trim()); }
+    function emailParts() {
+      var t = calc(), to = $('cemail').value.trim();
+      var dep = Math.round(t.totalCents * pct($('depositPct').value) / 100);
+      var phone = (ctx.biz.phone || '').trim();
+      var link = est.publicToken ? location.origin + '/accept.html?t=' + est.publicToken : '';
+      var subject = 'Estimate ' + est.number + ' from ' + ctx.biz.name;
+      var body = 'Hi ' + $('cname').value.trim() + ',\n\nThank you for the opportunity. Here is estimate ' + est.number +
+        ($('title').value.trim() ? ' for ' + $('title').value.trim() : '') + '. The total is ' + vutil.fmt(t.totalCents) +
+        (dep ? ', with a deposit of ' + vutil.fmt(dep) + ' to get started' : '') +
+        ($('validUntil').value ? '. This estimate is valid until ' + $('validUntil').value : '') + '.\n\n' +
+        (link ? 'ACCEPT YOUR ESTIMATE HERE:\n<' + link + '>\n\n(If it does not open, copy the whole line above into your browser.)\n\n' : '') +
+        (phone ? 'Questions? Call ' + ctx.biz.name + ': ' + phone : 'Questions? Just reply to this email.') +
+        '\n\nThank you,\n' + ctx.biz.name;
+      return { to: to, subject: subject, body: body };
+    }
     function ask(t, cls) { $('askMsg').textContent = t; $('askMsg').className = 'note ' + (cls || ''); }
     function afterEmail(p) {
       var warn = [];
@@ -496,11 +449,13 @@
     }
     function openEmail() {
       var p = emailParts(); afterEmail(p);
-      vcompose.open(p);
+      window.location.href = 'mailto:' + encodeURIComponent(p.to).replace('%40', '@') + '?subject=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body.replace(/\n/g, '\r\n'));
     }
     function openGmail() {
       var p = emailParts(); afterEmail(p);
-      vcompose.gmail(p);
+      window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(p.to) + '&su=' + encodeURIComponent(p.subject) +
+        '&body=' + encodeURIComponent(p.body), '_blank');
     }
     async function copyEmail() {
       var p = emailParts();
@@ -513,24 +468,14 @@
     function askSent() {
       $('askModal').style.display = 'flex';
       $('askHand').style.display = status === 'Draft' ? 'block' : 'none';
-      var p0 = emailParts(); afterEmail(p0); $('askAgain').href = vcompose.href(p0);
-      sendToPortal();
-    }
-    // Every estimate goes to the customer's portal first; the email only tells them to look there.
-    async function sendToPortal() {
-      var r = await vflow.estimateToPortal(ctx, est);
-      var m = $('portalMsg');
-      if (r.ok) { m.textContent = 'Added to the customer\'s portal. They can Approve, Request changes or Decline there.'; m.className = 'note ok'; }
-      else if (r.reason === 'no-email') { m.textContent = 'This customer has no email on file, so it could not go to their portal. Add their email, then send again.'; m.className = 'note err'; }
-      else { m.textContent = 'Could not add it to the portal yet' + (r.message ? ': ' + r.message : '.') + ' You can still email the customer.'; m.className = 'note err'; }
+      openEmail();
     }
     function markDone() { if (status === 'Draft') save('Sent'); else location.replace('estimate.html?id=' + est.id); }
     $('askYes').addEventListener('click', markDone);
     $('askHand').addEventListener('click', markDone);
     $('askNo').addEventListener('click', function () { location.replace('estimate.html?id=' + est.id); });
-    $('askAgain').addEventListener('click', function () { var p1 = emailParts(); afterEmail(p1); this.href = vcompose.href(p1); });
+    $('askAgain').addEventListener('click', openEmail);
     $('askGmail').addEventListener('click', openGmail);
-    $('askShare').addEventListener('click', async function () { var p = emailParts(); afterEmail(p); if (!(await vcompose.share(p))) ask('Sharing is not available here. Use Copy instead.', 'err'); });
     $('askCopy').addEventListener('click', copyEmail);
     $('bApprove').addEventListener('click', function () { save('Approved'); });
     $('bReject').addEventListener('click', function () { save('Rejected'); });
@@ -562,13 +507,6 @@
     if (tries > 16) clearInterval(t);
   }, 250);
 })();
-</script>
-<script>
-  // Keep the collapsed summaries up to date.
-  (function () {
-    function mirror(from, to) { var f = document.getElementById(from), t = document.getElementById(to); if (!f || !t) return; var go = function () { t.textContent = f.textContent; }; go(); new MutationObserver(go).observe(f, { childList: true, characterData: true, subtree: true }); }
-    mirror('tTotal', 'sumTot');
-  })();
 </script>
 </body>
 </html>

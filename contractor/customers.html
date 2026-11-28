@@ -4,12 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Customers - Vyqil Business</title>
+<title>Customers - Vyro Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
 <div class="wrap">
@@ -21,20 +19,11 @@
   <div id="listView">
     <div class="tabs"><a class="on" href="customers.html">Active</a><a id="viewArch" href="archived.html">Archived</a></div>
     <div class="card">
-      <div id="pbar" style="display:none;margin-bottom:10px"><button class="btn" id="inviteAll" type="button"></button><div class="note">New customers are emailed a link to set their password. Anyone who already has a Vyqil account gets no email; you are shown their portal link to send.</div></div>
-      <div class="note" id="pmsg"></div>
       <input class="search" id="q" type="search" placeholder="Search name, phone or email" autocomplete="off">
       <div id="list"></div>
       <div class="note" id="empty"></div>
     </div>
-    <div class="card">
-      <h2 style="margin:0 0 4px">Customer portal link</h2>
-      <div class="note">Customers sign in here to see their project, invoices and documents. Share this link or send it from their customer page.</div>
-      <div class="note"><b id="portalUrl" style="word-break:break-all"></b></div>
-      <button class="btn ghost" id="copyUrl" type="button">Copy link</button>
-      <div class="note" id="copyMsg"></div>
-    </div>
-    <div class="note">Customers are added automatically when an estimate is approved.</div>
+    <button class="btn" id="add" type="button">Add customer</button>
     <a class="back" href="app.html">Back to dashboard</a>
   </div>
 
@@ -44,6 +33,7 @@
     <label class="field"><span>Phone</span><input id="phone" type="tel" maxlength="40" autocomplete="off"></label>
     <label class="field"><span>Email</span><input id="email" type="email" maxlength="120" autocomplete="off"></label>
     <label class="field"><span>Address</span><textarea id="address" rows="2" maxlength="300"></textarea></label>
+    <label class="field"><span>State</span><select id="cstate"></select></label>
     <label class="field"><span>Preferred language</span><select id="lang"></select></label>
     <label class="field"><span>Notes</span><textarea id="notes" rows="3" maxlength="1000"></textarea></label>
     <button class="btn" id="save" type="submit">Save customer</button>
@@ -58,10 +48,10 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="../shared/firebase-config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/cascade.js"></script>
-<script src="js/portal.js"></script>
+<script src="js/states.js"></script>
 <script>
   var LANGS = [['en','English'],['es','Spanish'],['pt','Portuguese'],['fr','French'],['zh','Chinese'],
                ['vi','Vietnamese'],['tl','Tagalog'],['ar','Arabic'],['ru','Russian'],['ko','Korean'],['other','Other']];
@@ -91,88 +81,13 @@
       $('phone').value = c ? (c.phone || '') : '';
       $('email').value = c ? (c.email || '') : '';
       $('address').value = c ? (c.address || '') : '';
+      vstates.fill($('cstate'), c ? (c.state || vstates.fromAddress(c.address)) : '');
       $('lang').value = c && c.language ? c.language : 'en';
       $('notes').value = c ? (c.notes || '') : '';
       $('del').style.display = (c && canDelete) ? 'block' : 'none';
       $('listView').style.display = 'none'; $('form').style.display = 'block';
       window.scrollTo(0, 0);
     }
-
-    // Portal status per customer: 'yes' has a portal, 'no' has a job but no portal yet, 'nojobs' cannot have one yet.
-    var pstate = {}, pRun = 0;
-    function okMail(c) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.email || '').trim()); }
-    function pending() { return all.filter(function (c) { return !c.archived && okMail(c) && pstate[c.id] === 'no'; }); }
-    function pnote(t, bad) { $('pmsg').textContent = t || ''; $('pmsg').className = 'note' + (bad ? ' err' : ''); }
-    async function checkPortals() {
-      var run = ++pRun, list = all.filter(function (c) { return !c.archived && okMail(c); });
-      for (var i = 0; i < list.length; i++) {
-        var c = list[i]; if (run !== pRun) return;
-        if (pstate[c.id] === 'yes') continue;
-        try {
-          var em = String(c.email).trim().toLowerCase();
-          if (await vportal.hasForCustomer(ctx, c.id, em, c.email)) pstate[c.id] = 'yes';
-          else { var js = await vportal.findJobs(ctx, c.id, em, c.email); pstate[c.id] = js.filter(function (d) { return d.data().status !== 'Cancelled'; }).length ? 'no' : 'nojobs'; }
-        } catch (e) { /* leave unknown */ }
-        if (i % 4 === 3) render();
-      }
-      if (run === pRun) render();
-    }
-    // Someone who already has a Vyqil account is NOT sent a password email. The contractor gets this notice to send their portal link.
-    async function showExisting(list) {
-      var link = ''; try { link = await vportal.portalUrl(ctx, ''); } catch (e) { link = ''; }
-      var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center';
-      var sh = document.createElement('div'); sh.style.cssText = 'background:#0C1117;color:#eef3f8;border:1px solid #27405c;border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:520px;max-height:85vh;overflow:auto';
-      var h = document.createElement('h3'); h.textContent = list.length === 1 ? list[0].name + ' already has a Vyqil account' : list.length + ' customers already have a Vyqil account'; sh.appendChild(h);
-      var p = document.createElement('p'); p.textContent = 'No email was sent. A set-your-password email goes only to people who are new to Vyqil. Please send each of them their portal link yourself. They sign in with the password they already use (if they never set one, they can tap "Forgot your password?" on the sign-in page).'; sh.appendChild(p);
-      list.forEach(function (c) {
-        var row = document.createElement('div'); row.style.cssText = 'border-top:1px solid #27405c;padding:10px 0';
-        var nm = document.createElement('b'); nm.textContent = c.name || c.email; row.appendChild(nm);
-        var msg = 'Hi ' + String(c.name || '').split(/\s+/)[0] + ', your customer portal is ready. Sign in here with your Vyqil email and password: ' + link;
-        var bx = document.createElement('div'); bx.style.marginTop = '6px';
-        function btn(t, href) { var a = document.createElement('a'); a.className = 'btn'; a.textContent = t; a.href = href; a.style.cssText = 'display:inline-block;margin:0 6px 6px 0;text-decoration:none'; bx.appendChild(a); return a; }
-        if (c.email) btn('Email the link', 'mailto:' + encodeURIComponent(c.email) + '?subject=' + encodeURIComponent('Your customer portal') + '&body=' + encodeURIComponent(msg));
-        if (c.phone) btn('Text the link', 'sms:' + String(c.phone).replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent(msg));
-        var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'btn ghost'; cp.textContent = 'Copy link'; cp.onclick = async function () { try { await navigator.clipboard.writeText(link); cp.textContent = 'Copied'; } catch (e) { window.prompt('Copy this link', link); } }; bx.appendChild(cp);
-        row.appendChild(bx); sh.appendChild(row);
-      });
-      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn'; ok.textContent = 'Done'; ok.onclick = function () { ov.remove(); }; sh.appendChild(ok);
-      ov.appendChild(sh); document.body.appendChild(ov);
-    }
-    async function inviteOne(c) {
-      var em = String(c.email || '').trim().toLowerCase();
-      var r = await vportal.ensureForCustomer(ctx, c.id, em, c.name, c.email);
-      if (r && r.ok) { pstate[c.id] = 'yes'; return { ok: true, emailed: !!r.emailed, existing: r.created === false }; }
-      if (r && r.reason === 'no-jobs') pstate[c.id] = 'nojobs';
-      return { ok: false, msg: (r && r.message) || 'Could not create the portal.' };
-    }
-    async function inviteCustomer(c) {
-      if (!confirm('Create a portal for ' + c.email + '? New members are emailed a link to set a password. If they already have a Vyqil account, you will get their portal link to send instead.')) return;
-      pnote('Inviting ' + c.name + '...');
-      try {
-        var x = await inviteOne(c);
-        if (x.ok && x.existing && !x.emailed) { pnote('Portal added for ' + c.name + '. They already have a Vyqil account, so no email was sent.'); showExisting([c]); }
-        else if (x.ok) pnote(x.emailed ? 'Invite emailed to ' + c.email + '. It often lands in Spam or Junk.' : 'Portal is ready for ' + c.name + '. They already had a login, so no new email was needed; send them the portal link below.');
-        else pnote(c.name + ': ' + x.msg, true);
-      } catch (e) { pnote(vyro.friendly(e), true); }
-      render();
-    }
-    async function inviteAllCustomers() {
-      var todo = pending(); if (!todo.length) return;
-      if (!confirm('Create portals and invite ' + todo.length + ' customer' + (todo.length === 1 ? '' : 's') + '? New members are emailed a link to set a password. Anyone who already has a Vyqil account is shown a notice so you can send them their portal link.')) return;
-      var ok = 0, noMail = 0, bad = [], exist = [];
-      $('inviteAll').disabled = true;
-      for (var i = 0; i < todo.length; i++) {
-        pnote('Inviting ' + (i + 1) + ' of ' + todo.length + '...');
-        try { var x = await inviteOne(todo[i]); if (x.ok) { ok++; if (!x.emailed) { noMail++; exist.push(todo[i]); } } else bad.push(todo[i].name + ': ' + x.msg); }
-        catch (e) { bad.push(todo[i].name + ': ' + vyro.friendly(e)); }
-        if (i < todo.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
-      }
-      $('inviteAll').disabled = false;
-      pnote('Invited ' + ok + ' customer' + (ok === 1 ? '' : 's') + (noMail ? ' (' + noMail + ' already have a Vyqil account, so NO email was sent: send them their portal link from the notice)' : '') + '. The email often lands in Spam or Junk.' + (bad.length ? ' Not done: ' + bad.join(' | ') : ''), bad.length > 0);
-      render();
-      if (exist.length) showExisting(exist);
-    }
-    $('inviteAll').addEventListener('click', inviteAllCustomers);
 
     function render() {
       var q = $('q').value.trim().toLowerCase();
@@ -187,9 +102,7 @@
                cleanPhone(c.phone).indexOf(cleanPhone(q) || '\u0000') > -1;
       });
       $('empty').textContent = shown.length ? '' :
-        (active.length ? 'No customers match your search.' : 'No customers yet. They appear here automatically when an estimate is approved.');
-      var np = pending().length;
-      $('pbar').style.display = np ? 'block' : 'none'; $('inviteAll').textContent = 'Invite all ' + np + ' customer' + (np === 1 ? '' : 's') + ' to portal';
+        (active.length ? 'No customers match your search.' : 'No customers yet. Tap Add customer to start.');
       shown.forEach(function (c) {
         var row = vyro.el('div', 'item');
         var left = vyro.el('div', 'grow');
@@ -198,15 +111,9 @@
         if (c.phone) bits.push(c.phone);
         if (c.email) bits.push(c.email);
         if (c.language && c.language !== 'en') bits.push(langName(c.language));
-        if (pstate[c.id] === 'yes') bits.push('Portal on');
         left.appendChild(vyro.el('small', '', bits.join(' \u00b7 ') || 'No contact details'));
         left.addEventListener('click', function () { location.href = 'customer.html?id=' + c.id; });
         row.appendChild(left);
-        if (pstate[c.id] === 'no' && okMail(c)) {
-          var iv = vyro.el('a', 'mini', 'Invite to portal'); iv.href = '#';
-          iv.addEventListener('click', function (ev) { ev.preventDefault(); inviteCustomer(c); });
-          row.appendChild(iv);
-        }
         if (cleanPhone(c.phone)) {
           var call = vyro.el('a', 'mini', 'Call'); call.href = 'tel:' + cleanPhone(c.phone); row.appendChild(call);
         }
@@ -241,14 +148,11 @@
     async function load() {
       var snap = await col.orderBy('nameLower').get();
       all = snap.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; });
-      render(); checkPortals();
+      render();
     }
 
-    vportal.portalUrl(ctx, '').then(function (u) {
-      $('portalUrl').textContent = u;
-      $('copyUrl').addEventListener('click', async function () { try { await navigator.clipboard.writeText(u); $('copyMsg').textContent = 'Copied.'; } catch (e) { $('copyMsg').textContent = 'Press and hold the link to copy it.'; } });
-    }).catch(function () { $('portalUrl').textContent = ''; });
     $('q').addEventListener('input', render);
+    $('add').addEventListener('click', function () { showForm(null); });
     $('cancel').addEventListener('click', showList);
 
     $('form').addEventListener('submit', async function (e) {
@@ -268,7 +172,7 @@
 
       var data = {
         name: name, nameLower: name.toLowerCase(), phone: phone, email: email,
-        address: $('address').value.trim(), language: $('lang').value,
+        address: $('address').value.trim(), state: $('cstate').value || vstates.fromAddress($('address').value), language: $('lang').value,
         notes: $('notes').value.trim(), updatedAt: vyro.stamp()
       };
       var btn = $('save'); btn.disabled = true; $('msg').className = 'note'; $('msg').textContent = 'Saving...';

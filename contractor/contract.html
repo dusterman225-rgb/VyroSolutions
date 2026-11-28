@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#05070A">
-<title>Contract - Vyqil Business</title>
+<title>Contract - Vyro Business</title>
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/clean.css">
@@ -17,8 +17,6 @@
     #paper{display:block!important;position:absolute;left:0;top:0;width:100%;border-radius:0;padding:0;font-size:11.5pt}
   }
 </style>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
 <div class="wrap">
@@ -39,7 +37,7 @@
     <h2>Edit this contract</h2>
     <div class="note">Fill in anything in [square brackets] before sharing.</div>
     <textarea id="body" rows="26" style="font-family:ui-monospace,Menlo,monospace;font-size:.85rem;width:100%;background:#fff;color:#111;border:1px solid #ccc;border-radius:10px;padding:12px;line-height:1.45"></textarea>
-    <button class="btn ghost" id="bAuto" type="button">Fill in what Vyqil already knows</button>
+    <button class="btn ghost" id="bAuto" type="button">Fill in what Vyro already knows</button>
     <button class="btn" id="bSave" type="button">Save changes</button>
     <div class="note" id="sMsg"></div>
   </div>
@@ -50,7 +48,7 @@
     <button class="btn ghost" id="bEmail" type="button" style="display:none">Email customer the portal link</button>
     <button class="btn ghost" id="bUnshare" type="button" style="display:none">Stop sharing</button>
     <button class="btn ghost" id="bPrint" type="button">Preview and print</button>
-    <details class="more"><summary>How signing works</summary><div class="in"><div class="note">The customer opens it in their portal, prints and signs it, and returns it to you. Vyqil does not collect signatures online. Keep the signed original and give them a copy.</div></div></details>
+    <details class="more"><summary>How signing works</summary><div class="in"><div class="note">The customer opens it in their portal, prints and signs it, and returns it to you. Vyro does not collect signatures online. Keep the signed original and give them a copy.</div></div></details>
     <div class="note" id="shMsg"></div>
   </div>
 
@@ -65,7 +63,7 @@
     <a class="link" id="jobLink" href="#">Open the job</a>
     <button class="link" id="bDel" type="button" style="color:#ff8a8a">Delete this contract</button>
   </div>
-  <a class="back" href="documents.html">Back to contracts</a>
+  <a class="back" href="documents.html">Back to documents</a>
   <div class="note err" id="err"></div>
   <div id="paper"></div>
 </div>
@@ -73,11 +71,10 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="../shared/firebase-config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/util.js"></script>
-<script src="js/compose.js"></script>
-<script src="js/flow.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/states.js"></script>
 <script src="js/contracts.js"></script>
 <script src="js/portal.js"></script>
 <script>
@@ -108,25 +105,11 @@
       $('cWarn').className = n ? 'note late' : 'note';
     }
     paint();
-    // Has the customer approved this online from their portal?
-    try {
-      if (c.status !== 'Draft') {
-        var ps = await vyro.db.collection('portals').doc(c.jobId).collection('documents').doc(id).get();
-        if (ps.exists && !ps.data().approvedAt && ps.data().response) {
-          var rs = ps.data(), rw = rs.respondedAt && rs.respondedAt.toDate ? rs.respondedAt.toDate().toLocaleString() : '';
-          $('cWarn').textContent = (rs.response === 'declined' ? 'Customer DECLINED' : 'Customer asked for CHANGES') + (rs.respondedBy ? ' (' + rs.respondedBy + ')' : '') + (rw ? ' on ' + rw : '') + '. Reason: ' + (rs.responseReason || '') + (rs.response === 'revise' ? ' Edit the contract, then tap Update the shared copy; they can approve the new version.' : '');
-          $('cWarn').className = 'note late';
-        }
-        if (ps.exists && ps.data().approvedAt) {
-          var ap = ps.data(), when = ap.approvedAt.toDate ? ap.approvedAt.toDate().toLocaleString() : '';
-          $('cWarn').textContent = 'Approved online by ' + ap.approvedBy + (when ? ' on ' + when : '') + '.'; $('cWarn').className = 'note ok';
-          if (!c.approvedBy) { try { await cref.update({ approvedBy: ap.approvedBy, approvedAt: ap.approvedAt }); c.approvedBy = ap.approvedBy; } catch (e) { /* optional */ } }
-        }
-      }
-    } catch (e) { /* approval check is optional */ }
     $('jobLink').href = 'job.html?id=' + c.jobId;
     $('pageTag').textContent = 'Contract';
-    if (job.depositPct && job.contractCents) {
+    var stc = window.vstates ? (vstates.code(job.state) || vstates.fromAddress(job.address)) : '', stn = stc ? vstates.name(stc) : '';
+    if (stn && stc !== 'CA') { $('cDep').textContent = 'This is a ' + stn + ' job. Have your attorney confirm that section 17 (Required Notices) has every notice ' + stn + ' requires before you send it.'; $('cDep').className = 'note'; }
+    if (job.depositPct && job.contractCents && (!stc || stc === 'CA')) {
       var dep = Math.round(job.contractCents * job.depositPct / 100), cap = Math.min(100000, Math.round(job.contractCents * 0.10));
       if (dep > cap) { $('cDep').textContent = 'California jobs: the down payment on this job is ' + vutil.fmt(dep) + ', but the legal limit is the lesser of $1,000 or 10% (' + vutil.fmt(cap) + '). Adjust the down payment in section 6 if this is a California job.'; $('cDep').className = 'note late'; }
     }
@@ -136,7 +119,7 @@
       try {
         var r = await vcontract.refill(ctx, c.jobId, $('body').value);
         if (r.filled) { $('body').value = r.text; var n = vcontract.blanks(r.text); $('cWarn').textContent = n ? n + ' [bracketed] item' + (n === 1 ? ' is' : 's are') + ' still to complete or delete.' : ''; $('cWarn').className = n ? 'note late' : 'note'; smsg('Filled in ' + r.filled + ' item' + (r.filled === 1 ? '' : 's') + ' from your job, customer and business info. Tap Save changes to keep them.'); }
-        else if (manual) smsg('Nothing more to fill in. What is left in brackets is not in Vyqil yet.');
+        else if (manual) smsg('Nothing more to fill in. What is left in brackets is not in Vyro yet.');
       } catch (e) { if (manual) smsg(vyro.friendly(e), 'err'); }
     }
     $('bAuto').addEventListener('click', function () { autoFill(true); });
@@ -188,8 +171,12 @@
 
     $('bEmail').addEventListener('click', function () {
       var em = (job.customerEmail || '').trim();
-      var m = vflow.message(ctx, em), subject = m.subject, body = m.body;
-      vcompose.open({ to: em, subject: subject, body: body });
+      var first = (c.customerName || '').split(' ')[0] || 'there';
+      var subject = 'Your contract from ' + ctx.biz.name;
+      var body = 'Hello ' + first + ',\r\n\r\nYour contract for ' + (job.title || 'your project') + ' is ready. Sign in to your project portal to read it and print it:\r\n' +
+        location.origin + '/portal-login.html\r\n\r\nPlease print it, sign it, and return it to me. We can arrange a time to meet, or call with any questions' +
+        (ctx.biz.phone ? ': ' + ctx.biz.phone : '.') + '\r\n\r\nThank you,\r\n' + ctx.biz.name;
+      location.href = 'mailto:' + encodeURIComponent(em).replace('%40', '@') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
     });
 
     $('bPrint').addEventListener('click', function () {
@@ -200,11 +187,7 @@
     $('bSigned').addEventListener('click', async function () {
       var d = $('signedOn').value;
       if (!d) { $('sgMsg').textContent = 'Pick the date first.'; $('sgMsg').className = 'note err'; return; }
-      try {
-        await cref.update({ status: 'Signed', signedOn: d, autoInvoice: true, updatedAt: vyro.stamp() }); c.status = 'Signed'; c.signedOn = d; c.autoInvoice = true; paint();
-        var fr = null; try { fr = await vflow.afterSigned(ctx, id); } catch (fe) { fr = null; }
-        $('sgMsg').textContent = fr && fr.invoice ? 'Marked signed. The dates are recorded and draft invoice ' + fr.invoice.number + ' was created (see Invoices).' : 'Marked signed. The date is recorded.'; $('sgMsg').className = 'note';
-      }
+      try { await cref.update({ status: 'Signed', signedOn: d, updatedAt: vyro.stamp() }); c.status = 'Signed'; c.signedOn = d; paint(); $('sgMsg').textContent = 'Marked signed.'; $('sgMsg').className = 'note'; }
       catch (e) { $('sgMsg').textContent = vyro.friendly(e); $('sgMsg').className = 'note err'; }
     });
 
