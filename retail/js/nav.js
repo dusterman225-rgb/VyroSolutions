@@ -131,10 +131,10 @@
 
 
   // ---- switch business: one tap from any page ----
-  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
+  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', foodtruck: 'VyqilFoodTruck', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
   function homeFor(w) {
     var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
-    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
+    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'foodtruck' ? '/foodtruck/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
   }
   function switchSheet(ctx) {
     sheet(function (b) {

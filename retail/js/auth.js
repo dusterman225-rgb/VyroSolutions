@@ -173,7 +173,7 @@
   }
   function homeFor(w) {
     var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
-    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
+    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'foodtruck' ? '/foodtruck/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
   }
   async function switchWorkplace(id, fromId) {
     var add = [id]; if (fromId) add.push(fromId);
@@ -198,7 +198,7 @@
         list.sort(function (x, y) { return x.name.localeCompare(y.name); });
         var c2 = el('div', 'card'); c2.appendChild(el('div', 'note', chain ? 'Your locations. Pick one to work in, or see them all together.' : 'You work at more than one business. Switch workplace:'));
         var sel = document.createElement('select'); sel.style.width = '100%';
-        list.forEach(function (w) { var o = document.createElement('option'); o.value = w.id; o.textContent = w.name + ({ restaurant: ' \u00b7 Restaurant', takeout: ' \u00b7 Takeout', retail: ' \u00b7 Retail', contractor: ' \u00b7 Contractor' }[w.product] || '') + (w.id === ctx.bizId ? ' (current)' : ''); if (w.id === ctx.bizId) o.selected = true; sel.appendChild(o); });
+        list.forEach(function (w) { var o = document.createElement('option'); o.value = w.id; o.textContent = w.name + ({ restaurant: ' \u00b7 Restaurant', takeout: ' \u00b7 Takeout', foodtruck: ' \u00b7 Food Truck', retail: ' \u00b7 Retail', contractor: ' \u00b7 Contractor' }[w.product] || '') + (w.id === ctx.bizId ? ' (current)' : ''); if (w.id === ctx.bizId) o.selected = true; sel.appendChild(o); });
         if (chain) { var oa = document.createElement('option'); oa.value = '__all'; oa.textContent = 'All locations (summary)'; sel.appendChild(oa); }
         sel.addEventListener('change', async function () {
           if (sel.value === '__all') { location.href = opts.chainUrl; return; }
@@ -218,7 +218,7 @@
   var APP = 'retail'; // the retail build changes this one word
 
   // ---- staff sign-in link: /login?r=<name>. The name comes from the business name and the owner can change it. ----
-  var RESERVED = ['login', 'logout', 'signup', 'admin', 'api', 'app', 'www', 'help', 'support', 'restaurant', 'takeout', 'contractor', 'network', 'vyro', 'vyrosystems', 'index', 'portal', 'settings', 'home', 'static', 'css', 'js', 'images', 'shared', 'docs', 'workers', 'retail', 'crm', 'account', 'dashboard', 'business', 'legal', 'go', 'index', 'pricing', 'about', 'packages', 'privacy', 'terms', 'security', 'contact', 'status', 'icons', 'tests', 'sw', 'manifest'];
+  var RESERVED = ['login', 'logout', 'signup', 'admin', 'api', 'app', 'www', 'help', 'support', 'restaurant', 'takeout', 'foodtruck', 'contractor', 'network', 'vyro', 'vyrosystems', 'index', 'portal', 'settings', 'home', 'static', 'css', 'js', 'images', 'shared', 'docs', 'workers', 'retail', 'crm', 'account', 'dashboard', 'business', 'legal', 'go', 'index', 'pricing', 'about', 'packages', 'privacy', 'terms', 'security', 'contact', 'status', 'icons', 'tests', 'sw', 'manifest'];
   function slugify(n) { var s = String(n || '').toLowerCase().replace(/['\u2019]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '').slice(0, 26); if (s.length < 3) s = (s + 'biz').slice(0, 3) + Math.floor(100 + Math.random() * 900); return s; }
   async function brandFree(slug, bizId) {
     if (RESERVED.indexOf(slug) >= 0) return false;
