@@ -2,6 +2,7 @@
 window.VYRO_APP_URLS = {
   restaurant: '/restaurant/index.html',
   takeout: '/takeout/index.html',
+  foodtruck: '/foodtruck/index.html',
   retail: '/retail/index.html',
   portal: '/contractor/portal-login.html',
   contractor: '/contractor/app.html'
@@ -9,4 +10,4 @@ window.VYRO_APP_URLS = {
 
 /* Planned monthly price per business for each app, in US dollars. Shown on the Plan tab. Nothing is charged yet.
    Leave a price as null until you decide it. */
-window.VYRO_PRICES = { restaurant: 20, takeout: 10, retail: 20, contractor: 10 };
+window.VYRO_PRICES = { restaurant: 20, takeout: 10, foodtruck: 10, retail: 20, contractor: 10 };

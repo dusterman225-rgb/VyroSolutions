@@ -12,6 +12,7 @@
 
   var APPS = [
     { id: 'restaurant', name: 'VyqilRestaurant', desc: 'Tables, point of sale, kitchen, team, Pay with Vyqil.', live: true },
+    { id: 'foodtruck', name: 'VyqilFoodTruck', desc: 'For food trucks. Track every stop, and see which spot makes you the most profit.', live: true },
     { id: 'takeout', name: 'VyqilTakeout', desc: 'Takeout and fast food only. No tables or table QR codes. Costs less.', live: true },
     { id: 'contractor', name: 'VyqilContractor', desc: 'Estimates, jobs, invoices, customer portal.', live: true },
     { id: 'retail', name: 'VyqilRetail', desc: 'Products, inventory, checkout, purchasing, team and schedule for shops.', live: true },
@@ -25,13 +26,13 @@
     { id: 'events', name: 'VyqilEvents', desc: 'Clients, events, guests, vendors, budgets and a day-of schedule for wedding and event planners.', live: true }
   ];
   // Monthly price per business, in US dollars. Every app is $7 except Restaurant at $20. Nothing is charged until billing is switched on.
-  var PRICES = { restaurant: 20, takeout: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 };
+  var PRICES = { restaurant: 20, takeout: 7, foodtruck: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 };
   window.VYRO_PRICES = PRICES;
   // Where each app opens when the owner has not set an address in js/net-config.js.
   var DEFAULT_URLS = { landlord: 'landlord/index.html', realtor: 'realtor/index.html', services: 'services/index.html', salon: 'salon/index.html', auto: 'auto/index.html', photo: 'photo/index.html', lessons: 'lessons/index.html', events: 'events/index.html' };
   // What the owner picks when making a business. The first app comes with it.
   var CATEGORIES = [
-    ['Restaurant or cafe', 'restaurant'], ['Takeout or fast food', 'takeout'], ['Contractor or trades', 'contractor'], ['Retail shop', 'retail'], ['Landlord or property manager', 'landlord'],
+    ['Restaurant or cafe', 'restaurant'], ['Takeout or fast food', 'takeout'], ['Food truck', 'foodtruck'], ['Contractor or trades', 'contractor'], ['Retail shop', 'retail'], ['Landlord or property manager', 'landlord'],
     ['Realtor', 'realtor'], ['Cleaning, landscaping or home services', 'services'], ['Salon or barber', 'salon'], ['Auto shop', 'auto'], ['Photographer', 'photo'], ['Lessons or tutoring', 'lessons'], ['Event or wedding planner', 'events'], ['Other', 'contractor']
   ];
   // Defaults are names. The real power comes from the rules, not these labels.
