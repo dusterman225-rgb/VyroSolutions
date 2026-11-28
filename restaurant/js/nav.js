@@ -148,10 +148,10 @@
 
 
   // ---- switch business: one tap from any page ----
-  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
+  var PRODUCT_NAME = { restaurant: 'VyqilRestaurant', takeout: 'VyqilTakeout', foodtruck: 'VyqilFoodTruck', retail: 'VyqilRetail', contractor: 'VyqilContractor' };
   function homeFor(w) {
     var p = w.product || Object.keys(w.apps || {}).filter(function (k) { return w.apps[k]; })[0] || '';
-    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
+    return p === 'restaurant' ? '/restaurant/index.html' : p === 'takeout' ? '/takeout/index.html' : p === 'foodtruck' ? '/foodtruck/index.html' : p === 'retail' ? '/retail/index.html' : p === 'contractor' ? '/contractor/app.html' : '/dashboard.html';
   }
   function switchSheet(ctx) {
     sheet(function (b) {
@@ -170,7 +170,7 @@
       var all = el('a', 'btn ghost', 'Vyqil owner account: all businesses, plan and billing'); all.href = '/dashboard.html'; all.style.cssText = 'display:block;text-align:center;margin-top:10px'; b.appendChild(all);
       var inst = el('span'); inst.id = 'vInstall2'; inst.style.cssText = 'display:block;text-align:center;margin:10px 0'; b.appendChild(inst);
       if (window.vinstall) { var ib = el('button', 'btn ghost', 'Install this app on your home screen'); ib.type = 'button'; ib.addEventListener('click', function () { window.vinstall.open(); }); inst.appendChild(ib); }
-      var so = el('button', 'btn ghost', 'Sign out'); so.type = 'button'; so.addEventListener('click', async function () { try { await window.vyro.signOut(); } catch (e) {} location.href = '/dashboard.html'; }); b.appendChild(so);
+      var so = el('button', 'btn ghost', 'Sign out'); so.type = 'button'; so.addEventListener('click', async function () { try { await window.vyro.signOut(); } catch (e) {} location.href = (window.vyro && window.vyro.loginUrl ? window.vyro.loginUrl() : 'login.html'); }); b.appendChild(so);
       var c = el('button', 'btn', 'Close'); c.type = 'button'; c.addEventListener('click', function () { bg.classList.remove('open'); }); b.appendChild(c);
     });
   }
