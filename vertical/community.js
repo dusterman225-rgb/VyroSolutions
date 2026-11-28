@@ -26,7 +26,7 @@
   function watchMine() {
     db().collection('communityLeads').where('fromBiz', '==', S.biz.id).onSnapshot(function (snap) {
       myLeads = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); myLeads.sort(function (a, b) { return ms(b.createdAt) - ms(a.createdAt); });
-      myLeads.forEach(watchOffers); refresh();
+      myLeads.forEach(function (l) { if (l.status === 'open' || l.status === 'assigned') watchOffers(l); }); refresh();
     }, function () { /* the rest of the app keeps working without it */ });
     setTimeout(function () { firstLoad = false; }, 5000);
   }
@@ -47,7 +47,7 @@
     if (watched[l.id]) return;
     watched[l.id] = db().collection('communityLeads').doc(l.id).collection('offers').onSnapshot(function (snap) {
       offers[l.id] = snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }).filter(function (o) { return !bizGone[o.bizId]; });
-      offers[l.id].forEach(function (o) { if (!o.bizId || bizChecked[o.bizId]) return; bizChecked[o.bizId] = 1; db().collection('alive').doc(o.bizId).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { bizGone[o.bizId] = true; Object.keys(offers).forEach(function (k) { offers[k] = offers[k].filter(function (z) { return !bizGone[z.bizId]; }); }); inLeads = inLeads.filter(function (z) { return !bizGone[z.fromBiz]; }); refresh(); } }); });
+      offers[l.id].forEach(function (o) { if (!o.bizId || bizChecked[o.bizId]) return; bizChecked[o.bizId] = 1; if (V.aliveCached(o.bizId)) return; db().collection('alive').doc(o.bizId).get().then(function () { V.aliveNote(o.bizId); }, function (e) { if (e && e.code === 'permission-denied') { bizGone[o.bizId] = true; Object.keys(offers).forEach(function (k) { offers[k] = offers[k].filter(function (z) { return !bizGone[z.bizId]; }); }); inLeads = inLeads.filter(function (z) { return !bizGone[z.fromBiz]; }); refresh(); } }); });
       var n = offers[l.id].length;
       if (!firstLoad && n > (replyCount[l.id] || 0)) Q.toast('Someone replied to "' + (l.title || 'your request') + '". See More > Community.');
       replyCount[l.id] = n; refresh();
@@ -228,7 +228,7 @@
   }
   // Requests from a business that no longer exists are hidden (checked once per business).
   function checkAlive(list) {
-    list.forEach(function (l) { var b = l.fromBiz; if (!b || bizChecked[b]) return; bizChecked[b] = 1; db().collection('alive').doc(b).get().then(function () { /* still here */ }, function (e) { if (e && e.code === 'permission-denied') { bizGone[b] = true; inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); refresh(); } }); });
+    list.forEach(function (l) { var b = l.fromBiz; if (!b || bizChecked[b]) return; bizChecked[b] = 1; if (V.aliveCached(b)) return; db().collection('alive').doc(b).get().then(function () { V.aliveNote(b); }, function (e) { if (e && e.code === 'permission-denied') { bizGone[b] = true; inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); refresh(); } }); });
   }
   function inView(l) {
     if (!dir || dir.lat == null) return false;
@@ -238,9 +238,9 @@
   }
   function watchInbox() {
     if (inUnsub) { inUnsub(); inUnsub = null; } if (!dir || dir.lat == null || !dir.listed) { inLeads = []; return; }
-    inUnsub = db().collection('communityLeads').where('cell', 'in', V.cellsAround(dir.lat, dir.lng, dir.radius || 100)).where('status', '==', 'open').limit(150).onSnapshot(function (s) {
+    inUnsub = db().collection('communityLeads').where('cell', 'in', V.cellsAround(dir.lat, dir.lng, dir.radius || 100)).where('status', '==', 'open').limit(80).onSnapshot(function (s) {
       inLeads = s.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).filter(inView); inLeads = inLeads.filter(function (x) { return !bizGone[x.fromBiz]; }); checkAlive(inLeads);
-      inLeads.forEach(function (l) { if (inAsked[l.id]) return; inAsked[l.id] = 1; db().collection('communityLeads').doc(l.id).collection('offers').doc(S.biz.id).get().then(function (o) { if (o.exists) { inReplied[l.id] = true; refresh(); } }, function () { /* ignore */ }); });
+      inLeads.forEach(function (l) { if (inAsked[l.id]) return; inAsked[l.id] = 1; var rk = 'vq_repl_' + S.biz.id + '_' + l.id; try { if (localStorage.getItem(rk)) { inReplied[l.id] = true; return; } } catch (e) { /* ignore */ } db().collection('communityLeads').doc(l.id).collection('offers').doc(S.biz.id).get().then(function (o) { if (o.exists) { inReplied[l.id] = true; try { localStorage.setItem(rk, '1'); } catch (e) { /* optional */ } refresh(); } }, function () { /* ignore */ }); });
       refresh();
     }, function () { /* ignore */ });
   }
