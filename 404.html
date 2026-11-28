@@ -22,7 +22,7 @@
     var parts = location.pathname.split('/').filter(Boolean), slug = (parts[0] || '').toLowerCase(), rest = (parts[1] || '').toLowerCase();
     var t = document.getElementById('t'), m = document.getElementById('m');
     function none() { t.textContent = 'Page not found'; m.textContent = 'Check the address, or ask the business for their Vyqil sign-in link.'; }
-    if (/^(restaurant|takeout|retail|contractor)$/.test(slug) || /^(restaurant|takeout|retail|contractor)$/.test(slug.replace(/\.html$/, ''))) {
+    if (/^(restaurant|takeout|foodtruck|retail|contractor)$/.test(slug) || /^(restaurant|takeout|foodtruck|retail|contractor)$/.test(slug.replace(/\.html$/, ''))) {
       t.textContent = 'This page is missing from the website';
       m.textContent = 'The "' + slug + '" folder (with all its files) did not get uploaded to GitHub, or Cloudflare has not finished deploying it. Open your GitHub repository and check that the folder "' + slug + '" is there and has files inside, then wait a minute for Cloudflare to redeploy.';
       return;
@@ -32,7 +32,7 @@
       if (!firebase.apps.length) firebase.initializeApp(window.VYRO_FIREBASE_CONFIG);
       firebase.firestore().collection('publicBrands').doc(slug).get().then(function (d) {
         if (!d.exists) { none(); return; }
-        var p = d.data().product; if (p !== 'takeout' && p !== 'contractor' && p !== 'retail') p = 'restaurant';
+        var p = d.data().product; if (p !== 'takeout' && p !== 'foodtruck' && p !== 'contractor' && p !== 'retail') p = 'restaurant';
         location.replace('/' + p + '/login.html?r=' + encodeURIComponent(slug));
       }).catch(none);
     } catch (e) { none(); }

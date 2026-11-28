@@ -150,11 +150,12 @@
   var $ = function (i) { return document.getElementById(i); };
   $('yr').textContent = new Date().getFullYear();
   // Monthly price per business: every app is $7, Restaurant is $20. Shown here so this page never depends on another file.
-  var P = Object.assign({}, window.VYRO_PRICES || {}, { restaurant: 20, takeout: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 });
+  var P = Object.assign({}, window.VYRO_PRICES || {}, { restaurant: 20, takeout: 7, foodtruck: 7, contractor: 7, retail: 7, landlord: 7, realtor: 7, services: 7, salon: 7, auto: 7, photo: 7, lessons: 7, events: 7 });
   var APPS = [
     { id: 'contractor', name: 'VyqilContractor', who: 'Contractors and trades', items: ['Leads, estimates and invoices', 'Active jobs with progress updates', 'Customer portal: approve estimates, message you, pay', 'Time and mileage, expenses and bills', 'Contracts and documents'] },
     { id: 'restaurant', name: 'VyqilRestaurant', who: 'Sit-down restaurants', items: ['Point of sale with tables and tabs', 'Kitchen screen with ready timers', 'Reservations and QR table ordering', 'Menu, ingredients and supply tracking', 'Staff schedule, shift swaps and time clock'] },
     { id: 'takeout', name: 'VyqilTakeout', who: 'Takeout and fast food', items: ['Fast counter checkout and customer kiosk', 'Order board and kitchen screen', 'Same menu as your restaurant, or its own', 'Coupons and discounts with manager approval', 'Staff schedule and end of day close'] },
+    { id: 'foodtruck', name: 'VyqilFoodTruck', who: 'Food trucks', items: ['Fast window checkout and order screen', 'Open and close each stop at your spots', 'See which spot, day and hours make the most profit', 'Spot fees, food cost and extra costs built in', 'Menu, coupons, staff schedule and end of day close'] },
     { id: 'retail', name: 'VyqilRetail', who: 'Shops and stores', items: ['Checkout with barcode scanning and product photos', 'Inventory, low stock alerts and stock counts', 'Suppliers and purchase orders', 'Customers and loyalty points', 'Photo to inventory: snap an invoice, check it, save'] }
   ];
   function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); }
