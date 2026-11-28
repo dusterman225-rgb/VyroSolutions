@@ -2,7 +2,7 @@ window.VQ_APP = {
   id: 'landlord', name: 'VyqilLandlord', who: 'For landlords and property managers', tag: 'Properties, tenants, rent and repairs.', alertText: 'rent due dates, lease ends and repair visits',
   tabKinds: ['tenant', 'repair', 'unit'],
   kinds: {
-    property: { label: 'Property', plural: 'Properties', icon: '🏢', fields: [{ k: 'name', l: 'Name or address', t: 'text', req: 1, drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'city', l: 'City', t: 'text', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'insuranceDue', l: 'Insurance renews', t: 'date', cal: 1, alert: { hour: 9 }, lbl: 'Insurance renews', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Property details', dropOpenNew: true, dropClosed: true }],
+    property: { label: 'Property', plural: 'Properties', icon: '🏢', fields: [{ k: 'name', l: 'Name or address', t: 'text', req: 1, drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'city', l: 'City', t: 'text', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'state', l: 'State (used on leases and notices)', t: 'select', o: ["Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "District of Columbia", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"], drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'insuranceDue', l: 'Insurance renews', t: 'date', cal: 1, alert: { hour: 9 }, lbl: 'Insurance renews', drop: 'Property details', dropOpenNew: true, dropClosed: true }, { k: 'notes', l: 'Notes', t: 'area', drop: 'Property details', dropOpenNew: true, dropClosed: true }],
       actions: [{ l: 'New repair order', saveFirst: true, run: function (r) { Q.openForm('repair', null, { property: r.id, status: 'New' }); } }, { l: 'Add a unit', saveFirst: true, run: function (r) { Q.openForm('unit', null, { property: r.id, status: 'Vacant' }); } }],
       onSaved: function (r, prev) { if (prev && r.lat != null && (prev.name !== r.name || prev.city !== r.city)) Q.recs().doc(r.id).update({ lat: Q.FV.delete(), lng: Q.FV.delete(), loc: Q.FV.delete() }).catch(function () { /* looked up again next time */ }); },
       sub: function (r, rs) { var n = rs.filter(function (x) { return x.kind === 'unit' && x.property === r.id; }).length; return n + ' unit' + (n === 1 ? '' : 's'); } },
@@ -156,6 +156,7 @@ window.VQ_APP = {
     { l: 'Record rent payment', show: isActive, run: recordPayment },
     { l: 'Receipt or rent reminder', run: receiptOrReminder },
     { l: 'Renew lease', show: isActive, run: renewLease },
+    { l: 'Lease agreement (sign online)', run: function (r) { leaseModal(r); } },
     { l: 'Invite to tenant portal', show: function (r) { return !r.portalId; }, run: function (r) { invite(r); } },
     { l: 'Update tenant portal now', show: function (r) { return !!r.portalId; }, run: function (r) { syncOne(r, true).then(function () { Q.toast('Tenant portal updated.'); }, function (e) { Q.toast(Q.friendly(e)); }); } },
     { l: 'Copy tenant portal link', show: function (r) { return !!r.portalId; }, run: function (r) { VQ_LL.portal.copyLink(r); } },
@@ -170,6 +171,59 @@ window.VQ_APP = {
         Q.recs().doc(r.id).update({ status: 'Done', cost: c || null, doneOn: dt.value || U().today(), vendor: ve.value.trim().slice(0, 80), updatedAt: Q.FV.serverTimestamp() }).then(function () { close(); Q.toast('Repair done.'); }, function (e) { go.disabled = false; msg.textContent = Q.friendly(e); }); };
     });
   } });
+
+  // ----- lease agreement: write it, share it in the tenant's portal, the tenant signs it electronically
+  function leaseText(t) {
+    var U2 = Q.u, unit = t.unit ? Q.get(t.unit) : null, rent = t.rent ? U2.money(t.rent) : '[RENT AMOUNT]';
+    var prop = unit && unit.property ? Q.get(unit.property) : null, stateName = prop && prop.state ? prop.state : '';
+    return ['RESIDENTIAL LEASE AGREEMENT', '',
+      'This lease is between ' + bizName() + ' ("Landlord") and ' + (t.name || '[TENANT NAME]') + ' ("Tenant").', '',
+      '1. Property. Landlord rents to Tenant the home at: ' + (unit ? Q.title(unit) : '[PROPERTY ADDRESS AND UNIT]') + '.',
+      '2. Term. The lease starts ' + (t.leaseStart ? U2.fmtDate(t.leaseStart) : '[START DATE]') + ' and ends ' + (t.leaseEnd ? U2.fmtDate(t.leaseEnd) : '[END DATE]') + '.',
+      '3. Rent. Tenant pays ' + rent + ' per month, due on day ' + (t.dueDay || 1) + ' of each month. ' + (t.lateFee ? 'A late fee of ' + U2.money(t.lateFee) + ' applies if rent is more than ' + (t.graceDays || 0) + ' day(s) late.' : '[LATE FEE TERMS]'),
+      '4. Security deposit. [DEPOSIT AMOUNT AND HOW IT IS HELD AND RETURNED, AS REQUIRED BY ' + (stateName ? 'THE STATE OF ' + stateName.toUpperCase() : 'YOUR STATE') + '].',
+      '5. Use. The home is for residential use by the Tenant and the people listed here: [OCCUPANTS]. No illegal activity. No subletting without written permission.',
+      '6. Utilities and services. [WHO PAYS WHICH UTILITIES].', '7. Pets and smoking. [PET AND SMOKING RULES].',
+      '8. Care of the home and repairs. Tenant keeps the home clean and reports problems promptly through the tenant portal. Landlord makes repairs as the law requires.',
+      '9. Entry. Landlord may enter with the notice the law requires, or at once in an emergency.',
+      '10. Ending the lease. Notice and move-out rules: [NOTICE REQUIRED]. Tenant returns the home in the condition received, apart from normal wear.',
+      '11. Required disclosures. [ADD ANY DISCLOSURES ' + (stateName ? 'THE STATE OF ' + stateName.toUpperCase() : 'YOUR STATE') + ' OR YOUR CITY REQUIRES, FOR EXAMPLE LEAD PAINT FOR HOMES BUILT BEFORE 1978].',
+      '12. Governing law. This lease is governed by the laws of the State of ' + (stateName || '[STATE]') + '.',
+      '13. Other terms. [ANYTHING ELSE YOU AGREE ON].', '',
+      'By signing electronically, Landlord and Tenant agree to this lease and to use electronic records and signatures.'].join('\n');
+  }
+  function leaseModal(t) {
+    if (!t.portalId) { Q.toast('Invite ' + (t.name || 'the tenant') + ' to the tenant portal first, so they can sign it there.'); return; }
+    var U2 = Q.u, el = U2.el, ref = Q.db.collection('tenantPortals').doc(t.portalId).collection('leases').doc('current');
+    Q.modal(function (s, close) {
+      s.appendChild(el('h3', '', 'Lease agreement'));
+      s.appendChild(el('p', 'hint', 'This is a starting outline, not legal advice. Fill in every [BRACKET], add what your state requires, and have an attorney check it. Then share it. ' + (t.name || 'The tenant') + ' reads and signs it in their portal.'));
+      var ta = el('textarea'); ta.style.cssText = 'width:100%;min-height:300px'; ta.maxLength = 40000; ta.value = leaseText(t); s.appendChild(ta);
+      var st = el('p', 'hint'); s.appendChild(st);
+      var sh = el('button', 'btn', 'Share for signing'); sh.type = 'button';
+      function blanks() { return (ta.value.match(/\[[A-Z][^\]]*\]/g) || []).length; }
+      function hashTxt(x) { return crypto.subtle.digest('SHA-256', new TextEncoder().encode(x)).then(function (d) { return Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }); }
+      sh.onclick = function () {
+        var n = blanks(); if (n && !confirm(n + ' [BRACKET] item' + (n === 1 ? ' is' : 's are') + ' still unfinished. Share anyway?')) return;
+        if (ref._signed && !confirm('This lease is already signed. Sharing again replaces it and removes the signature. Continue?')) return;
+        sh.disabled = true; st.textContent = 'Sharing...';
+        hashTxt(ta.value).then(function (h) { return ref.set({ title: 'Lease agreement', body: ta.value, bodyHash: h, needsSignature: true, landlordName: bizName(), sharedAt: Q.FV.serverTimestamp() }); })
+          .then(function () { ref._signed = false; st.textContent = 'Shared. Tell the tenant to open their portal and sign.'; sh.disabled = false; }, function (e) { st.textContent = 'Could not share: ' + Q.friendly(e); sh.disabled = false; });
+      };
+      s.appendChild(sh);
+      var dn = el('button', 'btn ghost', 'Close'); dn.type = 'button'; dn.onclick = close; dn.style.marginLeft = '8px'; s.appendChild(dn);
+      ref.get().then(function (d) {
+        if (!d.exists) return; var x = d.data(); ta.value = x.body || ta.value;
+        if (x.sig) {
+          ref._signed = true; hashTxt(x.body || '').then(function (h) {
+            var when = x.signedAt && x.signedAt.toDate ? x.signedAt.toDate().toLocaleString() : '';
+            st.textContent = 'Signed electronically by ' + x.sig.name + (when ? ' on ' + when : '') + (h === x.sig.docHash ? '. The signed text matches this lease.' : '. The text differs from what was signed.');
+            if (!t.leaseSigned) Q.recs().doc(t.id).update({ leaseSigned: true, updatedAt: Q.FV.serverTimestamp() }).catch(function () { });
+          });
+        } else st.textContent = 'Shared. Waiting for the tenant to sign.';
+      }, function () { /* not shared yet */ });
+    });
+  }
 
   // ----- tenant portal: a login for the tenant, a copy of their rent info, and repair requests that come back to you
   function portalBase() { return location.origin + location.pathname.replace(/[^\/]*$/, '') + 'tenant.html'; }
